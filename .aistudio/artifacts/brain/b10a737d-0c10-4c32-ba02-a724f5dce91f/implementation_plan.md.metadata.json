@@ -1,0 +1,6 @@
+{
+  "summary": "Architectural plan for the nanobot full-stack enhancement, including Supabase authentication, settings modal with plugins and custom instructions, client-side AES-GCM chat encryption, 30-day auto-purge, universal file reader with Python script analyzer, Tavily Deep Research, Incognito mode, crawler unblocking, and smooth streaming.",
+  "updatedAt": "2026-10-12T17:39:13.445318139Z",
+  "requestFeedback": true,
+  "userFacing": true
+}
