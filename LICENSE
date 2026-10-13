@@ -1,0 +1,83 @@
+NANOBOT SOURCE-AVAILABLE LIMITED USE LICENSE
+Version 1.0 — October 2026
+
+Copyright (c) 2026 [Copyright Holder / Legal Name] <privatedevelopersonic@gmail.com>
+All Rights Reserved.
+
+Repository: https://github.com/anvilgabimpartduckcom/nanobot
+
+IMPORTANT NOTICE: THIS SOFTWARE IS PROPRIETARY AND SOURCE-AVAILABLE. IT IS NOT OPEN-SOURCE SOFTWARE AS DEFINED BY THE OPEN SOURCE INITIATIVE (OSI) AND IS NOT LICENSED UNDER THE MIT LICENSE, APACHE LICENSE 2.0, GNU GENERAL PUBLIC LICENSE, OR ANY OTHER PERMISSIVE REDISTRIBUTION LICENSE.
+
+--------------------------------------------------------------------------------
+1. GRANT OF LIMITED RIGHTS
+--------------------------------------------------------------------------------
+Subject to the terms and restrictions set forth in this Agreement, the Copyright
+Holder hereby grants to any individual or entity ("You" or "User") a non-exclusive,
+non-transferable, revocable license to:
+
+  a) Inspect and Study: View, read, study, evaluate, and inspect the source code
+     and accompanying documentation for informational and educational purposes.
+  b) Private Download: Download and maintain a private, local copy of the source
+     code solely for your own personal, private, non-commercial, or internal
+     evaluation use.
+  c) Private Modification: Modify, adapt, or alter the source code solely for
+     your own personal, private, or internal use, provided that neither the
+     resulting derivative works nor any part thereof are published, shared, or
+     redistributed.
+
+--------------------------------------------------------------------------------
+2. RESTRICTIONS AND PROHIBITIONS
+--------------------------------------------------------------------------------
+Except as expressly permitted in Section 1, all other rights are reserved by the
+Copyright Holder. Without limiting the generality of the foregoing, You SHALL NOT:
+
+  a) No Redistribution: Distribute, publish, republish, broadcast, syndicate,
+     mirror, transmit, transfer, or otherwise make available the original source
+     code, modified source code, or any compiled binaries to any third party,
+     public repository, website, forum, or network.
+  b) No Public Forks: Host, maintain, or publish any public fork, mirror, or
+     repository containing this software or derivative works on GitHub, GitLab,
+     or any other hosting platform without explicit written authorization.
+  c) No Commercial Exploitation or Sale: Sell, license, sublicense, rent, lease,
+     monetize, charge fees for, or offer this software as a paid service, SaaS,
+     or managed deployment to any third party.
+  d) No Removal of Notices: Remove, alter, obscure, or delete any copyright
+     notices, authorship attributions, or license terms appearing in the source
+     code or documentation.
+
+--------------------------------------------------------------------------------
+3. REQUESTING PERMISSION
+--------------------------------------------------------------------------------
+If You wish to redistribute, publicly publish, fork, commercially use, or license
+any portion of this software beyond the scope expressly authorized herein, You
+must obtain prior written authorization from the Copyright Holder.
+
+To request permission, please contact:
+  Name:  [Copyright Holder / Legal Name]
+  Email: privatedevelopersonic@gmail.com
+  Subject: nanobot License Permission Request
+
+Any permission granted must be delivered in an explicit written document signed or
+transmitted directly by the Copyright Holder.
+
+--------------------------------------------------------------------------------
+4. DISCLAIMER OF WARRANTY
+--------------------------------------------------------------------------------
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS",
+WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE,
+AND NON-INFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
+DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+--------------------------------------------------------------------------------
+5. LEGAL NOTICE
+--------------------------------------------------------------------------------
+This license represents a custom, proprietary licensing agreement. Users and the
+Copyright Holder are advised that custom restrictive licenses should be reviewed
+by a qualified legal professional to assess enforceability within specific
+jurisdictions.

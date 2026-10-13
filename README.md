@@ -1,72 +1,214 @@
-<!-- {Created comprehensive production README for GitHub export and Netlify-Supabase deployment} [Commented by: Sonic on 10/13/2026 03:22 AM] -->
+<!-- {Created comprehensive production README with custom source-available license and accurate architecture} [Commented by: Sonic on 10/13/2026 10:35 AM] -->
 
 # nanobot 🕷️
 
 > Autonomous AI Assistant with Real-Time Web Grounding, Deep Research, Universal File Reading, and Zero-Knowledge Client-Side Encryption.
 
-[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com)
+**Repository:** [https://github.com/anvilgabimpartduckcom/nanobot](https://github.com/anvilgabimpartduckcom/nanobot)
 
 ---
 
-## 🌟 Key Capabilities
+## 📸 Interface Preview
 
-- **Two-Stage Supabase Authentication**: Email verification workflow paired with globally unique username, password, OpenRouter, and Tavily key requirements.
-- **Client-Side Zero-Knowledge Encryption**: All chat transcripts and titles are encrypted using **Web Crypto AES-GCM (256-bit)** derived via PBKDF2 from the user's password before leaving the client. Database administrators cannot read chat transcripts.
-- **Universal Code-Driven File Reader**: Non-image documents (PDF, CSV, JSON, TXT, PY, XLSX, etc.) trigger dynamic script analysis and extraction with an animated `"Reading Files"` indicator, while images stream directly into multimodal vision.
-- **Tavily Deep Research**:
-  - `# <query>`: Fast mini research with live source synthesis.
-  - `## <query>`: Comprehensive multi-angle pro research report.
-- **Incognito Sessions**: One-click sunglasses/sun toggle (`🕶️`/`☀️`) that omits database persistence and passes `data_collection: "deny"` to OpenRouter.
-- **Two-Column Settings Suite**:
-  - **Account**: Credential management, hyperlinked key editors, account deletion.
-  - **AI Configuration**: Custom system instructions (Enter saves, Shift+Enter newline), and model training data toggle.
-  - **MCP Plugins**: Google Drive, Gmail, Google Docs, Notion, Firecrawl, and Tavily.
-  - **About nanobot**: Official documentation viewer link.
-- **SEO & Open Crawling**: Fully indexable by search engines, featuring Schema.org structured metadata and KaTeX math typesetting.
-- **30-Day Auto Purge**: Chats inactive for 30 days are automatically deleted.
-
----
-
-## 🚀 Deployment to Netlify & Supabase
-
-### 1. Supabase Database Setup
-Execute the SQL schema located in `supabase/schema.sql` inside your [Supabase SQL Editor](https://app.supabase.com):
-```bash
-# Contains:
-# - public.user_profiles table (with uniqueness constraints)
-# - public.chats table (ciphertext and IV storage)
-# - purge_inactive_chats() stored procedure
-# - Row Level Security (RLS) policies
 ```
+┌────────────────────────────────────────────────────────────────────────┐
+│  ◴  💬                                              [Sign In] [Sign Up]│
+│                                                                        │
+│                                nanobot                                 │
+│                                                                        │
+│         ┌────────────────────────────────────────────────────┐         │
+│         │ Ask Anything...                                    │         │
+│         │ ➕                                              ? │         │
+│         └────────────────────────────────────────────────────┘         │
+└────────────────────────────────────────────────────────────────────────┘
+```
+*(Screenshot placeholder: place your application screenshot in `/public/preview.png`)*
 
-### 2. Netlify Environment Variables
-In **Netlify Site Configuration -> Environment Variables**, configure:
+---
+
+## ✨ Features
+
+- **Bring-Your-Own-Key (BYOK) Model**: Users provide their own OpenRouter and Tavily API keys during registration or within Account settings. Keys are validated for global uniqueness, encrypted, and stored per account.
+- **Client-Side Zero-Knowledge Encryption**: Chat transcripts and titles are encrypted in the browser using **Web Crypto AES-GCM (256-bit)** with keys derived via PBKDF2 (100,000 iterations of SHA-256) from the user's password. Stored database records are ciphertext-only; neither the server nor database administrators can read user chats.
+- **Universal Code-Driven File Reader**: Non-image documents (PDF, CSV, JSON, TXT, PY, XLSX, etc.) trigger dynamic script analysis and extraction with an animated `"Reading Files"` indicator, while images stream directly to multimodal vision.
+- **Tavily Deep Research**:
+  - `# <query>`: Initiates fast Mini Deep Research with live source synthesis.
+  - `## <query>`: Initiates comprehensive Pro Deep Research with multi-angle reporting.
+- **Fluid Token Streaming**: Utilizes a `requestAnimationFrame` token smoothing ticker buffer to deliver smooth reading streams without choppy network packet bursts.
+- **Mathematical Typesetting & Code Highlighting**: Full LaTeX math formula parsing (`\[...\]`, `$$...$$`, `\(...\)`, `$..$`) via KaTeX alongside syntax-highlighted code blocks via Highlight.js.
+- **Two-Column Settings Suite**:
+  - **Account**: Update username, password, hyperlinked OpenRouter/Tavily keys, or delete account.
+  - **AI Configuration**: Custom system instructions (Enter saves, Shift+Enter newline) and an "Enable Model Training" toggle (default ON; sends `data_collection: "deny"` when OFF).
+  - **MCP Plugins Hub**: Integration hooks for Google Drive, Gmail, Google Docs, Notion, Firecrawl, and Tavily.
+  - **About nanobot**: Direct link to official Notion documentation.
+- **Incognito Mode (`🕶️` / `☀️`)**: Signed-in users can toggle ephemeral incognito sessions that omit database persistence and automatically opt out of model training data collection.
+- **30-Day Auto Purge**: Inactive chats older than 30 days are automatically pruned via client filters and PostgreSQL routines.
+- **Crawler Indexing & SEO**: Crawlers are unblocked with rich OpenGraph, Twitter Cards, and Schema.org WebApplication structured data.
+
+---
+
+## 🛠️ Technology Stack
+
+| Layer | Technologies |
+| :--- | :--- |
+| **Frontend Framework** | React 19, TypeScript, Vite 8 |
+| **Styling & Effects** | Tailwind CSS v4, Lucide React, Motion |
+| **Cryptography** | Web Crypto API (`window.crypto.subtle`, PBKDF2, AES-GCM 256-bit) |
+| **Typography & Parsers** | MarkdownIt, KaTeX, DOMPurify, Highlight.js |
+| **Backend & Persistence** | Supabase (PostgreSQL, Row Level Security, Auth OTP) |
+| **AI Models & Search** | OpenRouter API (`nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`), Tavily Search & Research API |
+| **Deployment** | Netlify (Single-Page Application build with SPA redirects) |
+
+---
+
+## 📋 Prerequisites
+
+- **Node.js**: Version 18.0.0 or higher
+- **npm**: Version 9.0.0 or higher
+- A [Supabase](https://supabase.com) project (free or paid)
+- A [Netlify](https://netlify.com) account for deployment (optional for local use)
+
+---
+
+## 🚀 Installation & Local Development
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/anvilgabimpartduckcom/nanobot.git
+   cd nanobot
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Configure environment variables:**
+   Copy the example environment file:
+   ```bash
+   cp .env.example .env
+   ```
+   Fill in your Supabase credentials (see [Environment Variables](#-environment-variables)).
+
+4. **Start development server:**
+   ```bash
+   npm run dev
+   ```
+   Open your browser at `http://localhost:3000`.
+
+5. **Run type checks and linter:**
+   ```bash
+   npm run lint
+   ```
+
+6. **Build for production:**
+   ```bash
+   npm run build
+   ```
+
+---
+
+## ⚙️ Environment Variables
+
+Create a `.env` file in the project root with your project credentials:
+
 ```env
-VITE_SUPABASE_URL="https://<your-project-id>.supabase.co"
+# Supabase Project URL (found in Supabase Dashboard -> Project Settings -> API)
+VITE_SUPABASE_URL="https://your-project-id.supabase.co"
+
+# Supabase Anonymous/Public API Key (found in Supabase Dashboard -> Project Settings -> API)
 VITE_SUPABASE_ANON_KEY="eyJhbGciOi..."
 ```
 
-*(Note: If using Netlify's official Supabase integration extension, these variables are injected automatically).*
+> **Security Note:** Never commit `.env` containing live credentials to public version control. Never expose secret keys (such as `SUPABASE_SERVICE_ROLE_KEY`) in frontend code.
 
 ---
 
-## 💻 Local Development
+## 🗄️ Backend & Deployment Setup
 
-```bash
-# Install dependencies
-npm install
+### 1. Supabase Setup
+1. In your [Supabase Dashboard](https://app.supabase.com), open the **SQL Editor**.
+2. Run the migration script located at `supabase/schema.sql` to create:
+   - `public.user_profiles` table (with global uniqueness constraints on email, username, OpenRouter key, and Tavily key).
+   - `public.chats` table (stores encrypted ciphertexts, IVs, and salts).
+   - Row Level Security (RLS) policies.
+   - `purge_inactive_chats()` automated 30-day cleanup function.
+3. *Free Plan Email Note:* On Supabase free tier plans, custom SMTP email templates are restricted. Supabase will send its default email verification confirmation link, allowing users to verify and complete their profile setup.
 
-# Start development server on port 3000
-npm run dev
+### 2. Netlify Deployment
+1. Connect your repository to [Netlify](https://app.netlify.com).
+2. The provided `netlify.toml` automatically configures:
+   - Build Command: `npm run build`
+   - Publish Directory: `dist`
+   - Single-Page Application (SPA) redirects (`/*` to `/index.html`)
+3. Under **Site Configuration -> Environment Variables**, add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (or connect using Netlify's official Supabase integration extension).
 
-# Verify TypeScript compilation and linter
-npm run lint
+---
 
-# Build production bundle
-npm run build
+## 📂 Project Structure
+
+```
+nanobot/
+├── index.html              # HTML entry point with SEO, KaTeX & Highlight.js CSS
+├── metadata.json           # Application identity metadata
+├── netlify.toml            # Netlify SPA build and redirect rules
+├── package.json            # Node.js dependencies and scripts
+├── tsconfig.json           # TypeScript configuration
+├── vite.config.ts          # Vite build configuration with Tailwind CSS plugin
+├── README.md               # Project documentation
+├── LICENSE                 # Custom source-available license
+├── supabase/
+│   └── schema.sql          # PostgreSQL tables, RLS policies, and purge functions
+└── src/
+    ├── main.tsx            # React application mount point
+    ├── App.tsx             # Main chat interface, sidebar, incognito, and stream handlers
+    ├── index.css           # Tailwind CSS imports, neon aura glow, and scrollbar styles
+    ├── components/
+    │   ├── AuthModal.tsx   # Two-stage signup and signin modal with uniqueness checks
+    │   └── SettingsModal.tsx # Two-column settings: Account, AI Config, Plugins, About
+    └── lib/
+        ├── crypto.ts       # Web Crypto PBKDF2 key derivation and AES-GCM encryption
+        ├── fileReader.ts   # Universal code-driven file analyzer for non-image files
+        ├── markdown.ts     # Markdown, KaTeX math parsing, and Highlight.js styling
+        ├── plugins.ts      # MCP plugins registry (Drive, Gmail, Docs, Notion, Firecrawl, Tavily)
+        ├── supabase.ts     # Supabase client with multi-prefix Netlify env var resolution
+        └── tavily.ts       # Tavily search and # / ## Deep Research runners
 ```
 
 ---
 
-## 📄 License
-Apache-2.0
+## 🔒 Security & Privacy
+
+- **Zero-Knowledge Encryption**: Chat content is encrypted locally using the Web Crypto API prior to transmission or persistence. Stored records consist exclusively of encrypted ciphertexts, initialization vectors (IVs), and salts.
+- **No Shared Keys**: API keys for OpenRouter and Tavily are supplied directly by each end user and stored in their encrypted account. The administrator does not provide or maintain shared keys for user queries.
+- **Client Security**: No private secret keys, master keys, or service-role keys are bundled into frontend assets.
+
+---
+
+## 🤝 Contribution Guidelines
+
+This repository is **source-available for private inspection and study**:
+- You are welcome to view, study, evaluate, and privately modify the code for personal, private, or internal use.
+- **Prohibited:** Publicly redistributing the original or modified source code, publishing public forks on GitHub or other platforms, and selling or sublicensing copies without prior explicit written permission.
+- If you would like to suggest changes or request permission for public distribution, please reach out via the contact information below.
+
+---
+
+## 📜 License
+
+This project is licensed under a **Custom Source-Available Limited Use License**.
+
+- It is **NOT** licensed under MIT, Apache 2.0, GPL, or another permissive open-source license.
+- It does **NOT** constitute open-source software under the Open Source Definition.
+- Review the complete terms in the [LICENSE](./LICENSE) file.
+
+> **Legal Notice:** This custom restrictive license is provided for source-available proprietary protection. Users and project maintainers are advised that custom licenses should be reviewed by a qualified legal professional before commercial publication.
+
+---
+
+## 📬 Contact & Inquiries
+
+For questions, permissions, or license inquiries:
+- **Project Maintainer:** [Copyright Holder / Legal Name]
+- **Contact Email:** `privatedevelopersonic@gmail.com`
+- **GitHub Repository:** [https://github.com/anvilgabimpartduckcom/nanobot](https://github.com/anvilgabimpartduckcom/nanobot)

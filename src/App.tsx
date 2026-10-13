@@ -1027,7 +1027,8 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                   handleSend();
                 }
               }}
-              placeholder="Ask Anything... (use # for Mini Deep Research, ## for Pro)"
+              /* {Updated composer input placeholder to clean 'Ask Anything...' label} [Commented by: Sonic on 10/13/2026 10:26 AM] */
+              placeholder="Ask Anything..."
               rows={1}
               className="w-full bg-transparent border-none text-white resize-none outline-none text-base leading-relaxed placeholder-neutral-500 min-h-[52px] max-h-[160px]"
             />
