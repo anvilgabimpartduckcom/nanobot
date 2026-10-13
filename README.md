@@ -2,7 +2,7 @@
 
 # nanobot 🕷️
 
-> Autonomous AI Assistant with Real-Time Web Grounding, Deep Research, Universal File Reading, and Zero-Knowledge Client-Side Encryption.
+> Open source AI chatbot with Real-Time Web Grounding, Deep Research, Universal File Reading, and Zero-Knowledge Client-Side Encryption.
 
 **Repository:** [https://github.com/anvilgabimpartduckcom/nanobot](https://github.com/anvilgabimpartduckcom/nanobot)
 
