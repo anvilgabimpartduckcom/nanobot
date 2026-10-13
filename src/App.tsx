@@ -9,6 +9,8 @@ import { deriveKeyFromPassword, encryptData, decryptData } from './lib/crypto';
 import { analyzeFileWithScript, ProcessedFile } from './lib/fileReader';
 import { performDynamicSearch, runDeepResearch } from './lib/tavily';
 import { markdownToHtml, escapeHtml, safeUrl } from './lib/markdown';
+// {Imported MCP_PLUGINS to equip the AI model with real tools from connected servers} [Commented by: Sonic on 10/13/2026 10:53 AM]
+import { MCP_PLUGINS } from './lib/plugins';
 
 interface ChatMessage {
   role: 'user' | 'ai';
@@ -411,13 +413,17 @@ export default function App() {
       return;
     }
 
-    // Build System Prompt with Outsider Persona Guardrail & Custom Instructions
+    // {Configured system prompt with real MCP server tool definitions and persona rules} [Commented by: Sonic on 10/13/2026 10:54 AM]
     const customInstructions = currentUser?.ai_instructions || '';
     const connectedPlugins = currentUser?.plugins_connected || {};
-    const pluginsContext = Object.entries(connectedPlugins)
-      .filter(([_, isConn]) => isConn)
-      .map(([id]) => id)
-      .join(', ');
+    const activePlugins = MCP_PLUGINS.filter((p) => connectedPlugins[p.id as keyof typeof connectedPlugins]);
+    const toolsContext = activePlugins
+      .map(
+        (p) =>
+          `[Server: ${p.mcpServerName} (${p.name})]:\n` +
+          p.tools.map((t) => `  * ${t.name}: ${t.description}`).join('\n')
+      )
+      .join('\n\n');
 
     const systemPrompt = `You are 'nanobot', an advanced, autonomous AI assistant. You can process text, images, and files seamlessly. Current Date/Time: ${getCurrentDateTime()}.
 Follow these guidelines strictly:
@@ -427,7 +433,7 @@ Follow these guidelines strictly:
 4. When you receive search results, analyze them carefully and provide a comprehensive final answer.
 5. Always cite your sources using inline citations in the format [1], [2], corresponding to the provided search results. Do not list the sources at the end of your response.
 6. If the user ever wants some help on personal stuff, you must reply as if you are an objective outsider on that matter.
-${pluginsContext ? `7. Connected MCP Plugins available upon user request: ${pluginsContext}.` : ''}
+${toolsContext ? `7. Connected MCP Server Tools: You have direct access to the following connected server tools:\n${toolsContext}\nWhen the user explicitly asks you to use a plugin, execute the tool action and synthesize the results for them.` : ''}
 ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
 
     const apiMessages: Array<{ role: string; content: unknown }> = [

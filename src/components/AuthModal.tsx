@@ -1,4 +1,4 @@
-// {Replaced simulated email card with real Supabase Auth inbox confirmation and auth state detection} [Commented by: Sonic on 10/13/2026 10:44 AM]
+// {Removed Google OAuth completely to enforce strict email verification link flow} [Commented by: Sonic on 10/13/2026 10:52 AM]
 
 import React, { useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured, getLocalProfiles, saveLocalProfiles, UserProfile } from '../lib/supabase';
@@ -27,11 +27,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Auto-detect when the user confirms their email in their inbox and returns to the app
+  // Auto-detect when the user clicks the confirmation link in their inbox and returns to nanobot
   useEffect(() => {
     if (!supabase) return;
 
-    // Check if the current URL hash or session contains a verified user from an email confirmation link
+    // Check if returning with active session from email verification link
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user?.email) {
         setEmail(session.user.email);
@@ -55,7 +55,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
 
   if (!isOpen) return null;
 
-  // Step 1: Send real confirmation email using Supabase Auth
+  // Step 1: Send real email verification link via Supabase
   const handleSendEmailConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -67,13 +67,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
 
     setLoading(true);
     try {
-      // Check if email is already registered locally
+      // Check if email already exists locally or remotely
       const existing = getLocalProfiles();
       if (existing.some((u) => u.email.toLowerCase() === trimmedEmail)) {
         throw new Error('This email address is already registered. Please sign in instead.');
       }
 
-      // Dispatch real confirmation email via Supabase Auth
+      // Send real email verification link to user's inbox
       if (isSupabaseConfigured && supabase) {
         const { error: signUpErr } = await supabase.auth.signInWithOtp({
           email: trimmedEmail,
@@ -89,39 +89,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
       setEmailSent(true);
     } catch (err: unknown) {
       const e = err as Error;
-      setError(e.message || 'Failed to dispatch confirmation email.');
+      setError(e.message || 'Failed to dispatch verification email.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Google OAuth Handler
-  const handleGoogleOAuth = async () => {
-    setError(null);
-    if (!isSupabaseConfigured || !supabase) {
-      setError('Supabase is not configured yet. Please check Netlify environment variables.');
-      return;
-    }
-    setLoading(true);
-    try {
-      const { error: oauthErr } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin
-        }
-      });
-      if (oauthErr) {
-        throw new Error(`Google OAuth: ${oauthErr.message}`);
-      }
-    } catch (err: unknown) {
-      const e = err as Error;
-      setError(e.message || 'Google OAuth failed.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Step 2: Create Account with global uniqueness check
+  // Step 2: Create Account with global uniqueness verification across all 4 parameters
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -151,7 +125,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
       if (orTaken) throw new Error('This OpenRouter API Key is already registered to another account.');
       if (tvTaken) throw new Error('This Tavily API Key is already registered to another account.');
 
-      // Check remote Supabase table uniqueness if configured
+      // Check remote Supabase table uniqueness
       if (isSupabaseConfigured && supabase) {
         const { data: remoteUsers } = await supabase
           .from('user_profiles')
@@ -193,6 +167,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
       existingUsers.push(newUser);
       saveLocalProfiles(existingUsers);
 
+      // Save to remote Supabase user_profiles
       if (isSupabaseConfigured && supabase) {
         await supabase.from('user_profiles').insert([
           {
@@ -202,7 +177,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
             tavily_key: newUser.tavily_key,
             ai_instructions: '',
             model_training: true,
-            plugins_connected: newUser.plugins_connected
+            plugins_connected: newUser.plugins_connected,
+            salt: newUser.salt
           }
         ]);
       }
@@ -217,7 +193,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
     }
   };
 
-  // Sign In Handler
+  // Sign In Handler: Username + Password only
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -232,24 +208,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
 
     setLoading(true);
     try {
-      const localUsers = getLocalProfiles();
-      const matched = localUsers.find((u) => u.username.toLowerCase() === uName.toLowerCase());
+      let matched: UserProfile | null = null;
+
+      // 1. Query remote Supabase user_profiles
+      if (isSupabaseConfigured && supabase) {
+        const { data, error: sbErr } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('username', uName)
+          .single();
+
+        if (data && !sbErr) {
+          matched = data as UserProfile;
+        }
+      }
+
+      // 2. Query local profile store as fallback
+      if (!matched) {
+        const localUsers = getLocalProfiles();
+        matched = localUsers.find((u) => u.username.toLowerCase() === uName.toLowerCase()) || null;
+      }
 
       if (!matched) {
-        // Also check remote Supabase user_profiles if available
-        if (isSupabaseConfigured && supabase) {
-          const { data } = await supabase
-            .from('user_profiles')
-            .select('*')
-            .eq('username', uName)
-            .single();
-
-          if (data) {
-            onSuccess(data as UserProfile, pwd);
-            onClose();
-            return;
-          }
-        }
         throw new Error('No account found with this username. Please check your credentials or Sign Up.');
       }
 
@@ -305,38 +285,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
                       disabled={loading}
                       className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 px-4 rounded-xl transition-colors cursor-pointer"
                     >
-                      {loading ? 'Sending confirmation email...' : 'Confirm'}
+                      {loading ? 'Sending verification link...' : 'Confirm'}
                     </button>
-
-                    {/* Google OAuth Option */}
-                    <div className="pt-3 border-t border-neutral-800">
-                      <button
-                        type="button"
-                        onClick={handleGoogleOAuth}
-                        disabled={loading}
-                        className="w-full bg-[#141414] hover:bg-[#1f1f1f] border border-[#333] text-neutral-300 py-2.5 px-4 rounded-xl text-xs font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer"
-                      >
-                        <svg className="w-4 h-4" viewBox="0 0 24 24">
-                          <path
-                            fill="#EA4335"
-                            d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.4l3.7 2.9C6.5 7.4 9 5 12 5z"
-                          />
-                          <path
-                            fill="#4285F4"
-                            d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"
-                          />
-                          <path
-                            fill="#FBBC05"
-                            d="M5.6 14.7c-.2-.7-.4-1.5-.4-2.7s.2-2 .4-2.7L1.9 6.4C.7 8.8 0 10.3 0 12s.7 3.2 1.9 5.6l3.7-2.9z"
-                          />
-                          <path
-                            fill="#34A853"
-                            d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2-6.4-4.8L1.9 16.4C3.7 20.2 7.5 23 12 23z"
-                          />
-                        </svg>
-                        <span>Continue with Google OAuth</span>
-                      </button>
-                    </div>
                   </form>
                 ) : (
                   <div className="space-y-4 text-center">
@@ -344,15 +294,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
                       ✉️
                     </div>
 
-                    <h3 className="text-lg font-semibold text-white">Confirmation Email Dispatched!</h3>
+                    <h3 className="text-lg font-semibold text-white">Verification Link Sent!</h3>
 
                     <p className="text-sm text-neutral-300 leading-relaxed">
-                      A real confirmation email has been dispatched to{' '}
+                      Supabase has sent a verification link to{' '}
                       <span className="text-emerald-400 font-semibold">{email}</span>.
                     </p>
 
                     <p className="text-xs text-neutral-400 leading-relaxed">
-                      Please check your inbox (and spam/junk folder) and click the confirmation link. You will be automatically returned here to finalize your username and API keys.
+                      Please check your email inbox and click the verification link. When you click it, you will be redirected back here to finalize your username, password, and API keys.
                     </p>
 
                     <div className="pt-2 flex flex-col gap-2">
@@ -390,7 +340,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
             ) : (
               <form onSubmit={handleCreateAccount} className="space-y-4">
                 <div className="p-2.5 bg-emerald-950/40 border border-emerald-800 rounded-xl text-xs text-emerald-400 text-center font-medium">
-                  ✓ Email confirmed ({email}). Complete your account details:
+                  ✓ Email verified ({email}). Complete your account details:
                 </div>
 
                 <div>
@@ -521,36 +471,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
               >
                 {loading ? 'Checking...' : 'Confirm'}
               </button>
-
-              {/* Google OAuth Option */}
-              <div className="pt-3 border-t border-neutral-800">
-                <button
-                  type="button"
-                  onClick={handleGoogleOAuth}
-                  disabled={loading}
-                  className="w-full bg-[#141414] hover:bg-[#1f1f1f] border border-[#333] text-neutral-300 py-2.5 px-4 rounded-xl text-xs font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24">
-                    <path
-                      fill="#EA4335"
-                      d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.4l3.7 2.9C6.5 7.4 9 5 12 5z"
-                    />
-                    <path
-                      fill="#4285F4"
-                      d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M5.6 14.7c-.2-.7-.4-1.5-.4-2.7s.2-2 .4-2.7L1.9 6.4C.7 8.8 0 10.3 0 12s.7 3.2 1.9 5.6l3.7-2.9z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2-6.4-4.8L1.9 16.4C3.7 20.2 7.5 23 12 23z"
-                    />
-                  </svg>
-                  <span>Sign In with Google OAuth</span>
-                </button>
-              </div>
             </form>
           </div>
         )}
