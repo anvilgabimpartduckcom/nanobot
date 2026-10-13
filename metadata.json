@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "nanobot",
+  "description": "An advanced, autonomous AI assistant with real-time web search, Deep Research, universal file reading, client-side encryption, and MCP plugin tools.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -1,1 +1,70 @@
+/* {Configured neon aura glow, custom scrollbars, and KaTeX code styling} [Commented by: Sonic on 10/12/2026 10:54 AM] */
 @import "tailwindcss";
+
+:root {
+  --aura-color: #39ff14;
+}
+
+body, html {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  min-width: 0;
+  background: #000000;
+  color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  overflow: hidden;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.neon-glow {
+  box-shadow: 0 0 34px var(--aura-color), 0 0 96px color-mix(in srgb, var(--aura-color) 36%, transparent), 0 0 180px color-mix(in srgb, var(--aura-color) 18%, transparent);
+}
+
+@keyframes pulse {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
+}
+
+.status-pulse {
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+/* Custom sleek scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #262626;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #404040;
+}
+
+/* Math rendering enhancements */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 8px 0;
+}
+
+/* Highlight.js code block styles */
+pre code.hljs {
+  padding: 12px;
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
