@@ -8,21 +8,10 @@
 
 ---
 
+<!-- {Updated Interface Preview in README.md with public/preview.png screenshot} [Commented by: Sonic on 10/13/2026 10:41 AM] -->
 ## 📸 Interface Preview
 
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│  ◴  💬                                              [Sign In] [Sign Up]│
-│                                                                        │
-│                                nanobot                                 │
-│                                                                        │
-│         ┌────────────────────────────────────────────────────┐         │
-│         │ Ask Anything...                                    │         │
-│         │ ➕                                              ? │         │
-│         └────────────────────────────────────────────────────┘         │
-└────────────────────────────────────────────────────────────────────────┘
-```
-*(Screenshot placeholder: place your application screenshot in `/public/preview.png`)*
+![nanobot Interface](./public/preview.png)
 
 ---
 

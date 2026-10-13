@@ -1,6 +1,6 @@
-// {Created AuthModal supporting two-stage signup with custom email confirmation, uniqueness validation, and signin} [Commented by: Sonic on 10/12/2026 10:55 AM]
+// {Replaced simulated email card with real Supabase Auth inbox confirmation and auth state detection} [Commented by: Sonic on 10/13/2026 10:44 AM]
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured, getLocalProfiles, saveLocalProfiles, UserProfile } from '../lib/supabase';
 import { generateSalt } from '../lib/crypto';
 
@@ -16,7 +16,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
   const [signupStep, setSignupStep] = useState<1 | 2>(1);
   const [email, setEmail] = useState('');
   const [emailSent, setEmailSent] = useState(false);
-  const [confirmLink, setConfirmLink] = useState('');
 
   // Credentials State
   const [username, setUsername] = useState('');
@@ -28,9 +27,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Auto-detect when the user confirms their email in their inbox and returns to the app
+  useEffect(() => {
+    if (!supabase) return;
+
+    // Check if the current URL hash or session contains a verified user from an email confirmation link
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.email) {
+        setEmail(session.user.email);
+        setSignupStep(2);
+      }
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        if (session?.user?.email) {
+          setEmail(session.user.email);
+          setSignupStep(2);
+        }
+      }
+    });
+
+    return () => {
+      authListener?.subscription?.unsubscribe();
+    };
+  }, []);
+
   if (!isOpen) return null;
 
-  // Step 1: Send confirmation email
+  // Step 1: Send real confirmation email using Supabase Auth
   const handleSendEmailConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -42,12 +67,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
 
     setLoading(true);
     try {
-      // Check if email already taken
+      // Check if email is already registered locally
       const existing = getLocalProfiles();
       if (existing.some((u) => u.email.toLowerCase() === trimmedEmail)) {
         throw new Error('This email address is already registered. Please sign in instead.');
       }
 
+      // Dispatch real confirmation email via Supabase Auth
       if (isSupabaseConfigured && supabase) {
         const { error: signUpErr } = await supabase.auth.signInWithOtp({
           email: trimmedEmail,
@@ -56,18 +82,40 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
           }
         });
         if (signUpErr) {
-          console.warn('Supabase OTP notice:', signUpErr.message);
+          throw new Error(`Supabase Auth: ${signUpErr.message}`);
         }
       }
 
-      // Generate verification link token for the custom email specification
-      const token = Math.random().toString(36).substring(2, 15);
-      const generatedLink = `${window.location.origin}#verify=${token}`;
-      setConfirmLink(generatedLink);
       setEmailSent(true);
     } catch (err: unknown) {
       const e = err as Error;
-      setError(e.message || 'Failed to initiate registration.');
+      setError(e.message || 'Failed to dispatch confirmation email.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Google OAuth Handler
+  const handleGoogleOAuth = async () => {
+    setError(null);
+    if (!isSupabaseConfigured || !supabase) {
+      setError('Supabase is not configured yet. Please check Netlify environment variables.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const { error: oauthErr } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
+      if (oauthErr) {
+        throw new Error(`Google OAuth: ${oauthErr.message}`);
+      }
+    } catch (err: unknown) {
+      const e = err as Error;
+      setError(e.message || 'Google OAuth failed.');
     } finally {
       setLoading(false);
     }
@@ -103,7 +151,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
       if (orTaken) throw new Error('This OpenRouter API Key is already registered to another account.');
       if (tvTaken) throw new Error('This Tavily API Key is already registered to another account.');
 
-      // Check Supabase if configured
+      // Check remote Supabase table uniqueness if configured
       if (isSupabaseConfigured && supabase) {
         const { data: remoteUsers } = await supabase
           .from('user_profiles')
@@ -188,6 +236,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
       const matched = localUsers.find((u) => u.username.toLowerCase() === uName.toLowerCase());
 
       if (!matched) {
+        // Also check remote Supabase user_profiles if available
+        if (isSupabaseConfigured && supabase) {
+          const { data } = await supabase
+            .from('user_profiles')
+            .select('*')
+            .eq('username', uName)
+            .single();
+
+          if (data) {
+            onSuccess(data as UserProfile, pwd);
+            onClose();
+            return;
+          }
+        }
         throw new Error('No account found with this username. Please check your credentials or Sign Up.');
       }
 
@@ -243,41 +305,94 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
                       disabled={loading}
                       className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 px-4 rounded-xl transition-colors cursor-pointer"
                     >
-                      {loading ? 'Sending...' : 'Confirm'}
+                      {loading ? 'Sending confirmation email...' : 'Confirm'}
                     </button>
+
+                    {/* Google OAuth Option */}
+                    <div className="pt-3 border-t border-neutral-800">
+                      <button
+                        type="button"
+                        onClick={handleGoogleOAuth}
+                        disabled={loading}
+                        className="w-full bg-[#141414] hover:bg-[#1f1f1f] border border-[#333] text-neutral-300 py-2.5 px-4 rounded-xl text-xs font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <svg className="w-4 h-4" viewBox="0 0 24 24">
+                          <path
+                            fill="#EA4335"
+                            d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.4l3.7 2.9C6.5 7.4 9 5 12 5z"
+                          />
+                          <path
+                            fill="#4285F4"
+                            d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"
+                          />
+                          <path
+                            fill="#FBBC05"
+                            d="M5.6 14.7c-.2-.7-.4-1.5-.4-2.7s.2-2 .4-2.7L1.9 6.4C.7 8.8 0 10.3 0 12s.7 3.2 1.9 5.6l3.7-2.9z"
+                          />
+                          <path
+                            fill="#34A853"
+                            d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2-6.4-4.8L1.9 16.4C3.7 20.2 7.5 23 12 23z"
+                          />
+                        </svg>
+                        <span>Continue with Google OAuth</span>
+                      </button>
+                    </div>
                   </form>
                 ) : (
-                  <div className="space-y-4">
-                    <div className="bg-[#111] border border-neutral-800 rounded-xl p-4 text-xs font-mono text-neutral-300 leading-relaxed">
-                      <div className="font-bold text-neutral-200 border-b border-neutral-800 pb-2 mb-2">
-                        Subject: Confirm Registering to nanobot
-                      </div>
-                      <p>Hey {email},</p>
-                      <p className="my-2">
-                        Thank You creating an account in nanobot. Please confirm below so that you can continue with the process and create your account:
-                      </p>
-                      <p className="my-2 text-emerald-400 break-all underline">
-                        {confirmLink}
-                      </p>
-                      <p className="my-2">If this isn&#39;t you, you can safely ignore.</p>
-                      <p className="mt-2 font-semibold">Regards, Sonic.</p>
+                  <div className="space-y-4 text-center">
+                    <div className="w-16 h-16 bg-[#141414] border border-[#333] rounded-2xl flex items-center justify-center mx-auto text-3xl">
+                      ✉️
                     </div>
 
-                    <p className="text-xs text-neutral-400 text-center">
-                      Email dispatch simulated. Click below to continue registration after confirmation.
+                    <h3 className="text-lg font-semibold text-white">Confirmation Email Dispatched!</h3>
+
+                    <p className="text-sm text-neutral-300 leading-relaxed">
+                      A real confirmation email has been dispatched to{' '}
+                      <span className="text-emerald-400 font-semibold">{email}</span>.
                     </p>
 
-                    <button
-                      onClick={() => setSignupStep(2)}
-                      className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 px-4 rounded-xl transition-colors cursor-pointer"
-                    >
-                      Proceed to Account Setup →
-                    </button>
+                    <p className="text-xs text-neutral-400 leading-relaxed">
+                      Please check your inbox (and spam/junk folder) and click the confirmation link. You will be automatically returned here to finalize your username and API keys.
+                    </p>
+
+                    <div className="pt-2 flex flex-col gap-2">
+                      <button
+                        onClick={async () => {
+                          setLoading(true);
+                          if (supabase) {
+                            const { data: { session } } = await supabase.auth.getSession();
+                            if (session?.user?.email) {
+                              setEmail(session.user.email);
+                            }
+                          }
+                          setSignupStep(2);
+                          setLoading(false);
+                        }}
+                        className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 px-4 rounded-xl transition-colors cursor-pointer"
+                      >
+                        I&#39;ve Confirmed in My Inbox →
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEmailSent(false);
+                          setError(null);
+                        }}
+                        className="text-xs text-neutral-400 hover:text-white"
+                      >
+                        ← Resend or change email
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
             ) : (
               <form onSubmit={handleCreateAccount} className="space-y-4">
+                <div className="p-2.5 bg-emerald-950/40 border border-emerald-800 rounded-xl text-xs text-emerald-400 text-center font-medium">
+                  ✓ Email confirmed ({email}). Complete your account details:
+                </div>
+
                 <div>
                   <label className="block text-xs uppercase tracking-wider text-neutral-400 mb-1">
                     Username
@@ -406,6 +521,36 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
               >
                 {loading ? 'Checking...' : 'Confirm'}
               </button>
+
+              {/* Google OAuth Option */}
+              <div className="pt-3 border-t border-neutral-800">
+                <button
+                  type="button"
+                  onClick={handleGoogleOAuth}
+                  disabled={loading}
+                  className="w-full bg-[#141414] hover:bg-[#1f1f1f] border border-[#333] text-neutral-300 py-2.5 px-4 rounded-xl text-xs font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24">
+                    <path
+                      fill="#EA4335"
+                      d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.4l3.7 2.9C6.5 7.4 9 5 12 5z"
+                    />
+                    <path
+                      fill="#4285F4"
+                      d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.6 14.7c-.2-.7-.4-1.5-.4-2.7s.2-2 .4-2.7L1.9 6.4C.7 8.8 0 10.3 0 12s.7 3.2 1.9 5.6l3.7-2.9z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2-6.4-4.8L1.9 16.4C3.7 20.2 7.5 23 12 23z"
+                    />
+                  </svg>
+                  <span>Sign In with Google OAuth</span>
+                </button>
+              </div>
             </form>
           </div>
         )}
