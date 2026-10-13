@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AuthModal } from './components/AuthModal';
 import { SettingsModal } from './components/SettingsModal';
-import { UserProfile, isSupabaseConfigured, supabase, getLocalEncryptedChats, saveLocalEncryptedChat, deleteLocalEncryptedChat } from './lib/supabase';
+// {Updated Supabase sync imports for remote and local encrypted chat operations} [Commented by: Sonic on 10/13/2026 03:21 AM]
+import { UserProfile, isSupabaseConfigured, supabase, fetchUserEncryptedChats, persistEncryptedChatRecord, removeEncryptedChatRecord } from './lib/supabase';
 import { deriveKeyFromPassword, encryptData, decryptData } from './lib/crypto';
 import { analyzeFileWithScript, ProcessedFile } from './lib/fileReader';
 import { performDynamicSearch, runDeepResearch } from './lib/tavily';
@@ -119,10 +120,10 @@ export default function App() {
     }
   }, [currentUser, passwordSecret]);
 
-  // Load and Decrypt user chats from Supabase / encrypted store
+  // {Integrated remote Supabase encrypted chat syncing with zero-knowledge AES-GCM} [Commented by: Sonic on 10/13/2026 03:18 AM]
   const loadEncryptedChats = async (userId: string, key: CryptoKey) => {
     try {
-      const records = getLocalEncryptedChats(userId);
+      const records = await fetchUserEncryptedChats(userId);
       const decryptedChats: ChatSession[] = [];
 
       for (const rec of records) {
@@ -149,7 +150,7 @@ export default function App() {
     }
   };
 
-  // Save active chat (Encrypted if signed in, plain if guest, skipped if Incognito)
+  // Save active chat (Encrypted to Supabase if signed in, skipped if Incognito)
   const persistChat = async (chat: ChatSession) => {
     if (isIncognito) return; // Do not save incognito chats
 
@@ -170,11 +171,7 @@ export default function App() {
           updated_at: new Date(chat.updated).toISOString()
         };
 
-        saveLocalEncryptedChat(record);
-
-        if (isSupabaseConfigured && supabase) {
-          await supabase.from('chats').upsert([record]);
-        }
+        await persistEncryptedChatRecord(record);
       } catch (err) {
         console.error('Failed to encrypt chat:', err);
       }
@@ -634,9 +631,9 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
     const remaining = chats.filter((c) => c.pinned);
     setChats(remaining);
 
-    // Delete unpinned local records
+    // {Synchronized chat deletions to remote Supabase database and local store} [Commented by: Sonic on 10/13/2026 03:19 AM]
     chats.forEach((c) => {
-      if (!c.pinned) deleteLocalEncryptedChat(c.id);
+      if (!c.pinned) removeEncryptedChatRecord(c.id);
     });
 
     try {
@@ -664,7 +661,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
   // Delete chat
   const handleDeleteChat = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    deleteLocalEncryptedChat(id);
+    removeEncryptedChatRecord(id);
     setChats((prev) => prev.filter((c) => c.id !== id));
     if (activeChatId === id) handleStartNewChat();
   };

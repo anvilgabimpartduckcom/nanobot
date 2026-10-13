@@ -276,7 +276,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* TAB 1: ACCOUNT */}
           {activeTab === 'account' && (
             <div className="space-y-5 max-w-xl">
-              <h2 className="text-xl font-bold font-serif mb-4">Account Settings</h2>
+              {/* {Added Supabase Cloud connectivity indicator in Account settings} [Commented by: Sonic on 10/13/2026 03:20 AM] */}
+              <div className="flex items-center justify-between pb-2 border-b border-neutral-800 mb-4">
+                <h2 className="text-xl font-bold font-serif">Account Settings</h2>
+                <span className={`text-[11px] font-mono px-2.5 py-0.5 rounded-full border ${
+                  isSupabaseConfigured
+                    ? 'bg-emerald-950/60 border-emerald-700 text-emerald-400'
+                    : 'bg-neutral-900 border-neutral-700 text-neutral-400'
+                }`}>
+                  {isSupabaseConfigured ? '● Supabase Cloud Connected' : '⚡ Netlify Integration Ready'}
+                </span>
+              </div>
 
               <div>
                 <label className="block text-xs uppercase tracking-wider text-neutral-400 mb-1">
