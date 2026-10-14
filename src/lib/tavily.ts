@@ -163,3 +163,61 @@ export async function runDeepResearch(
     throw new Error(`Tavily Deep Research Error: ${err.message || 'Failed to complete research task'}`);
   }
 }
+
+// {Created extractUrlsWithTavily to retrieve raw webpage markdown via Tavily Extract API} [Commented by: Sonic on 10/14/2026 10:35 AM]
+export interface ExtractedUrlResult {
+  url: string;
+  rawContent: string;
+  error?: string;
+}
+
+export async function extractUrlsWithTavily(
+  urls: string[],
+  apiKey: string,
+  signal?: AbortSignal
+): Promise<ExtractedUrlResult[]> {
+  if (!apiKey || urls.length === 0) return [];
+
+  try {
+    const res = await fetch('https://api.tavily.com/extract', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        api_key: apiKey,
+        urls: urls
+      }),
+      signal
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`Tavily Extract API error (${res.status}): ${errText}`);
+    }
+
+    const data = await res.json();
+    const successful: ExtractedUrlResult[] = (data.results || []).map((r: { url: string; raw_content?: string }) => ({
+      url: r.url,
+      rawContent: r.raw_content || 'No content extracted.'
+    }));
+
+    const failed: ExtractedUrlResult[] = (data.failed_results || []).map((f: { url: string; error?: string }) => ({
+      url: f.url,
+      rawContent: '',
+      error: f.error || 'Failed to extract content'
+    }));
+
+    return [...successful, ...failed];
+  } catch (err: unknown) {
+    const e = err as Error;
+    if (e.name === 'AbortError') throw e;
+    console.error('Tavily URL extract failure:', err);
+    return urls.map((u) => ({
+      url: u,
+      rawContent: '',
+      error: e.message || 'Extraction failed'
+    }));
+  }
+}
+

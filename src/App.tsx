@@ -3,14 +3,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AuthModal } from './components/AuthModal';
 import { SettingsModal } from './components/SettingsModal';
-// {Updated Supabase sync imports for remote and local encrypted chat operations} [Commented by: Sonic on 10/13/2026 03:21 AM]
+// {Imported R2 tiered archive storage and Tavily extract utility} [Commented by: Sonic on 10/14/2026 10:35 AM]
 import { UserProfile, isSupabaseConfigured, supabase, fetchUserEncryptedChats, persistEncryptedChatRecord, removeEncryptedChatRecord } from './lib/supabase';
 import { deriveKeyFromPassword, encryptData, decryptData } from './lib/crypto';
 import { analyzeFileWithScript, ProcessedFile } from './lib/fileReader';
-import { performDynamicSearch, runDeepResearch } from './lib/tavily';
+import { performDynamicSearch, runDeepResearch, extractUrlsWithTavily } from './lib/tavily';
+import { uploadArchiveToR2, fetchArchiveFromR2, deleteArchiveFromR2 } from './lib/r2';
 import { markdownToHtml, escapeHtml, safeUrl } from './lib/markdown';
 // {Imported MCP_PLUGINS to equip the AI model with real tools from connected servers} [Commented by: Sonic on 10/13/2026 10:53 AM]
 import { MCP_PLUGINS } from './lib/plugins';
+// {Imported Cloudflare Worker API client for authenticated chat persistence} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
+import { workerClient, WorkerMessage } from './lib/workerClient';
 
 interface ChatMessage {
   role: 'user' | 'ai';
@@ -37,6 +40,8 @@ export default function App() {
   const [passwordSecret, setPasswordSecret] = useState<string>('');
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null);
   const [authModalMode, setAuthModalMode] = useState<'signin' | 'signup' | null>(null);
+  const [authModalInitialStep, setAuthModalInitialStep] = useState<1 | 2>(1);
+  const [authModalInitialEmail, setAuthModalInitialEmail] = useState<string>('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isIncognito, setIsIncognito] = useState(false);
 
@@ -52,6 +57,9 @@ export default function App() {
   const [reasoningExpanded, setReasoningExpanded] = useState<false | boolean>(false);
   const [activeSources, setActiveSources] = useState<Array<{ title: string; url: string }>>([]);
   const [showSourcesPopup, setShowSourcesPopup] = useState<number | null>(null);
+  // {Added Cloudflare Worker history sync and non-intrusive status notice state} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
+  const [isHistorySyncing, setIsHistorySyncing] = useState<boolean>(false);
+  const [historyNotice, setHistoryNotice] = useState<string | null>(null);
 
   // Stream Smoothing Buffer
   const [streamDisplayContent, setStreamDisplayContent] = useState('');
@@ -98,8 +106,12 @@ export default function App() {
     return () => clearInterval(timer);
   }, [isGenerating]);
 
-  // Derive CryptoKey when user logs in with password
+  // Derive CryptoKey and load Cloudflare Worker history when user logs in with password
   useEffect(() => {
+    // {Fetch remote chat history from Cloudflare Worker D1 backend upon user login} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
+    if (currentUser) {
+      loadWorkerConversations();
+    }
     if (currentUser && passwordSecret) {
       deriveKeyFromPassword(passwordSecret, currentUser.salt || 'default_nanobot_salt')
         .then((key) => {
@@ -122,7 +134,115 @@ export default function App() {
     }
   }, [currentUser, passwordSecret]);
 
-  // {Integrated remote Supabase encrypted chat syncing with zero-knowledge AES-GCM} [Commented by: Sonic on 10/13/2026 03:18 AM]
+  // {Configured email verification redirect auto-detection on app mount to launch Step 2 registration} [Commented by: Sonic on 10/14/2026 10:35 AM]
+  useEffect(() => {
+    const sb = supabase;
+    if (!sb) return;
+
+    const checkRedirectSession = async () => {
+      const hash = window.location.hash;
+      const isConfirmation = hash.includes('access_token=') || hash.includes('type=signup') || hash.includes('type=magiclink');
+
+      const { data: { session } } = await sb.auth.getSession();
+      const verifiedEmail = session?.user?.email;
+
+      if ((isConfirmation || verifiedEmail) && !currentUser) {
+        if (verifiedEmail) {
+          setAuthModalInitialEmail(verifiedEmail);
+          setAuthModalInitialStep(2);
+          setAuthModalMode('signup');
+        }
+      }
+    };
+
+    checkRedirectSession();
+
+    const { data: authSub } = sb.auth.onAuthStateChange((event, session) => {
+      if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session?.user?.email && !currentUser) {
+        setAuthModalInitialEmail(session.user.email);
+        setAuthModalInitialStep(2);
+        setAuthModalMode('signup');
+      }
+    });
+
+    return () => {
+      authSub?.subscription?.unsubscribe();
+    };
+  }, [currentUser]);
+
+  // {Persist and synchronize conversation history with Cloudflare Worker D1 backend using Supabase Bearer token} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
+  const loadWorkerConversations = async () => {
+    if (!currentUser) return;
+    setIsHistorySyncing(true);
+    try {
+      const res = await workerClient.listConversations();
+      if (res.success && res.data?.conversations) {
+        const workerConvs = res.data.conversations;
+        if (workerConvs.length > 0) {
+          setChats((prev) => {
+            const map = new Map<string, ChatSession>();
+            prev.forEach((c) => map.set(c.id, c));
+            workerConvs.forEach((wc) => {
+              const existing = map.get(wc.id);
+              map.set(wc.id, {
+                id: wc.id,
+                title: wc.title,
+                pinned: Boolean(wc.pinned),
+                messages: existing?.messages || [],
+                updated: wc.updated_at ? new Date(wc.updated_at).getTime() : Date.now(),
+              });
+            });
+            return Array.from(map.values()).sort(
+              (a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.updated - a.updated
+            );
+          });
+        }
+        setHistoryNotice(null);
+      } else if (res.isNetworkError) {
+        console.warn('Cloudflare Worker history temporarily unavailable; falling back to local chat cache:', res.error);
+        setHistoryNotice('Cloud history worker syncing locally. Your chat is fully functional.');
+      } else if (res.isAuthError) {
+        console.warn('Cloudflare Worker auth notice:', res.error);
+      }
+    } catch (workerErr) {
+      console.warn('Worker conversations query notice:', workerErr);
+      setHistoryNotice('Cloud history worker syncing locally. Your chat is fully functional.');
+    } finally {
+      setIsHistorySyncing(false);
+    }
+  };
+
+  // {Load message history from Cloudflare Worker when selecting a conversation} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
+  const handleSelectChat = async (id: string) => {
+    setActiveChatId(id);
+    setSidebarOpen(false);
+
+    const targetChat = chats.find((c) => c.id === id);
+    if (currentUser && targetChat && targetChat.messages.length === 0) {
+      setIsHistorySyncing(true);
+      try {
+        const res = await workerClient.getMessages(id);
+        if (res.success && res.data?.messages) {
+          const loadedMessages: ChatMessage[] = res.data.messages.map((m) => ({
+            role: m.role,
+            content: m.content,
+            sources: m.sources,
+            reasoning: m.reasoning,
+            displayAttachments: m.displayAttachments,
+          }));
+          setChats((prev) =>
+            prev.map((c) => (c.id === id ? { ...c, messages: loadedMessages } : c))
+          );
+        }
+      } catch (err) {
+        console.warn('Worker getMessages notice:', err);
+      } finally {
+        setIsHistorySyncing(false);
+      }
+    }
+  };
+
+  // {Integrated remote Supabase encrypted chat syncing with Cloudflare R2 tiered archives} [Commented by: Sonic on 10/14/2026 10:35 AM]
   const loadEncryptedChats = async (userId: string, key: CryptoKey) => {
     try {
       const records = await fetchUserEncryptedChats(userId);
@@ -134,10 +254,26 @@ export default function App() {
           const decryptedPayload = await decryptData(rec.data_ciphertext, rec.iv, key);
           const parsed = JSON.parse(decryptedPayload);
 
+          let allMessages: ChatMessage[] = parsed.messages || [];
+
+          // Tiered check: Retrieve older archived messages from Cloudflare R2 if available
+          const r2Archive = await fetchArchiveFromR2(rec.id);
+          if (r2Archive) {
+            try {
+              const decryptedR2 = await decryptData(r2Archive, rec.iv, key);
+              const parsedR2 = JSON.parse(decryptedR2);
+              if (Array.isArray(parsedR2.messages) && parsedR2.messages.length > 0) {
+                allMessages = [...parsedR2.messages, ...allMessages];
+              }
+            } catch (r2Err) {
+              console.warn('R2 archive decrypt note:', r2Err);
+            }
+          }
+
           decryptedChats.push({
             id: rec.id,
             title: decryptedTitle,
-            messages: parsed.messages || [],
+            messages: allMessages,
             pinned: rec.pinned,
             updated: new Date(rec.updated_at).getTime()
           });
@@ -146,19 +282,96 @@ export default function App() {
         }
       }
 
-      setChats(decryptedChats);
+      setChats((prev) => {
+        const map = new Map<string, ChatSession>();
+        prev.forEach((c) => map.set(c.id, c));
+        decryptedChats.forEach((dc) => map.set(dc.id, dc));
+        return Array.from(map.values()).sort(
+          (a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.updated - a.updated
+        );
+      });
     } catch (e) {
       console.error('Error loading encrypted chats:', e);
     }
   };
 
-  // Save active chat (Encrypted to Supabase if signed in, skipped if Incognito)
+  // Save active chat (Encrypted to Supabase + R2 if signed in, skipped if Incognito)
+  // {Enforced file storage isolation: raw files/images stay local, cloud backups store code output only} [Commented by: Sonic on 10/14/2026 10:35 AM]
+  // {Persist chat session and messages to Cloudflare Worker D1 backend with Supabase token verification} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
   const persistChat = async (chat: ChatSession) => {
     if (isIncognito) return; // Do not save incognito chats
 
+    // Strip bulky raw image data URLs before cloud persistence; retain text and script analyzer code output
+    const cleanMessagesForCloud = chat.messages.map((m) => {
+      if (Array.isArray(m.content)) {
+        const textParts = m.content
+          .filter((c) => c.type === 'text')
+          .map((c) => c.text || '')
+          .join('\n');
+        return {
+          ...m,
+          content: textParts || '[Multimodal Message]'
+        };
+      }
+      return m;
+    });
+
+    if (currentUser) {
+      // 1. Sync conversation metadata to Cloudflare Worker D1 backend asynchronously
+      workerClient
+        .createOrUpdateConversation({
+          id: chat.id,
+          title: chat.title,
+          pinned: chat.pinned,
+          updated_at: new Date(chat.updated).toISOString(),
+        })
+        .then((res) => {
+          if (!res.success && res.error) {
+            console.warn('Worker sync notice (conversation):', res.error);
+            if (res.isNetworkError) {
+              setHistoryNotice('Cloud history worker syncing locally. Your chat is fully functional.');
+            }
+          } else {
+            setHistoryNotice(null);
+          }
+        })
+        .catch(() => {});
+
+      // 2. Batch save clean messages to Cloudflare Worker D1 backend asynchronously
+      const workerMessages: WorkerMessage[] = cleanMessagesForCloud.map((m) => ({
+        role: m.role,
+        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+        sources: m.sources,
+        reasoning: m.reasoning,
+        displayAttachments: m.displayAttachments,
+      }));
+
+      workerClient
+        .saveMessagesBatch(chat.id, workerMessages, chat.title)
+        .then((res) => {
+          if (!res.success && res.error) {
+            console.warn('Worker sync notice (messages):', res.error);
+          }
+        })
+        .catch(() => {});
+    }
+
     if (currentUser && cryptoKey) {
       try {
-        const payloadStr = JSON.stringify({ messages: chat.messages });
+        let recentMessages = cleanMessagesForCloud;
+        let olderMessages: ChatMessage[] = [];
+
+        // Tiered archiving: If more than 10 messages, archive older conversation to Cloudflare R2
+        if (cleanMessagesForCloud.length > 10) {
+          olderMessages = cleanMessagesForCloud.slice(0, cleanMessagesForCloud.length - 10);
+          recentMessages = cleanMessagesForCloud.slice(cleanMessagesForCloud.length - 10);
+
+          const olderPayload = JSON.stringify({ messages: olderMessages });
+          const encryptedOlder = await encryptData(olderPayload, cryptoKey, currentUser.salt || 'salt');
+          await uploadArchiveToR2(chat.id, encryptedOlder.ciphertext);
+        }
+
+        const payloadStr = JSON.stringify({ messages: recentMessages });
         const encrypted = await encryptData(payloadStr, cryptoKey, currentUser.salt || 'salt');
         const titleEncrypted = await encryptData(chat.title, cryptoKey, currentUser.salt || 'salt');
 
@@ -413,7 +626,7 @@ export default function App() {
       return;
     }
 
-    // {Configured system prompt with real MCP server tool definitions and persona rules} [Commented by: Sonic on 10/13/2026 10:54 AM]
+    // {Configured system prompt with real MCP server tool definitions, persona rules, and URL scraping capability} [Commented by: Sonic on 10/14/2026 10:35 AM]
     const customInstructions = currentUser?.ai_instructions || '';
     const connectedPlugins = currentUser?.plugins_connected || {};
     const activePlugins = MCP_PLUGINS.filter((p) => connectedPlugins[p.id as keyof typeof connectedPlugins]);
@@ -429,11 +642,12 @@ export default function App() {
 Follow these guidelines strictly:
 1. Always use emojis for visual cues to make the conversation engaging.
 2. If a user asks for up-to-date facts, news, or information you lack, you MUST search the web. To do this, output EXACTLY the tag <search>your search query</search>. You may output multiple tags for parallel searches.
-3. Keep search queries concise and optimized for a search engine.
-4. When you receive search results, analyze them carefully and provide a comprehensive final answer.
-5. Always cite your sources using inline citations in the format [1], [2], corresponding to the provided search results. Do not list the sources at the end of your response.
-6. If the user ever wants some help on personal stuff, you must reply as if you are an objective outsider on that matter.
-${toolsContext ? `7. Connected MCP Server Tools: You have direct access to the following connected server tools:\n${toolsContext}\nWhen the user explicitly asks you to use a plugin, execute the tool action and synthesize the results for them.` : ''}
+3. If you need to scrape or read the full content of one or more URLs, output the tags <Scrap1>URL1</Scrap1> <Scrap2>URL2</Scrap2> (you can scrape multiple URLs). You can do this on your first response or after receiving search results.
+4. Keep search queries concise and optimized for a search engine.
+5. When you receive search results or scraped webpage contents, analyze them carefully and provide a comprehensive final answer.
+6. Always cite your sources using inline citations in the format [1], [2], corresponding to the provided search results. Do not list the sources at the end of your response.
+7. If the user ever wants some help on personal stuff, you must reply as if you are an objective outsider on that matter.
+${toolsContext ? `8. Connected MCP Server Tools: You have direct access to the following connected server tools:\n${toolsContext}\nWhen the user explicitly asks you to use a plugin, execute the tool action and synthesize the results for them.` : ''}
 ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
 
     const apiMessages: Array<{ role: string; content: unknown }> = [
@@ -537,6 +751,36 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         }
       }
 
+      // {Added regex detector and handler for Tavily URL scraping tags <Scrap1>URL1</Scrap1>} [Commented by: Sonic on 10/14/2026 10:35 AM]
+      const scrapMatches = [...currentOutput.matchAll(/<Scrap\d*>(.*?)<\/Scrap\d*>/gi)]
+        .map((m) => m[1].trim())
+        .filter(Boolean);
+
+      if (scrapMatches.length > 0) {
+        setCurrentStatus('Scraping Web Pages...');
+        try {
+          const extracted = await extractUrlsWithTavily(scrapMatches, tvKey, signal);
+          const combinedScraps = extracted
+            .map((item, idx) => {
+              return `[Scraped Page ${idx + 1}] URL: ${item.url}\n${item.rawContent || item.error || 'Empty content'}`;
+            })
+            .join('\n\n---\n\n');
+
+          const nextMessages = [
+            ...messagesArr,
+            { role: 'assistant', content: currentOutput },
+            { role: 'user', content: `Scraped Web Pages Content:\n${combinedScraps}` }
+          ];
+
+          currentOutput = '';
+          targetContentRef.current = '';
+          await runGeneration(nextMessages, depth + 1);
+          return;
+        } catch (scrapErr) {
+          console.warn('Scraping execution error:', scrapErr);
+        }
+      }
+
       // Check for <search> queries
       const queries = [...currentOutput.matchAll(/<search>(.*?)<\/search>/g)]
         .map((m) => m[1].trim())
@@ -632,14 +876,22 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
   };
 
   // Clear chat history
+  // {Synchronized batch chat deletion with Cloudflare Worker D1 backend} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
   const handleClearChatHistory = () => {
     if (!window.confirm('Clear unpinned chats from history?')) return;
     const remaining = chats.filter((c) => c.pinned);
     setChats(remaining);
 
-    // {Synchronized chat deletions to remote Supabase database and local store} [Commented by: Sonic on 10/13/2026 03:19 AM]
+    // {Synchronized chat deletions to remote Supabase, Cloudflare R2, and local file storage} [Commented by: Sonic on 10/14/2026 10:35 AM]
     chats.forEach((c) => {
-      if (!c.pinned) removeEncryptedChatRecord(c.id);
+      if (!c.pinned) {
+        removeEncryptedChatRecord(c.id);
+        deleteArchiveFromR2(c.id);
+        localStorage.removeItem('nanobot_files_' + c.id);
+        if (currentUser) {
+          workerClient.deleteConversation(c.id).catch(() => {});
+        }
+      }
     });
 
     try {
@@ -650,6 +902,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
   };
 
   // Toggle chat pin
+  // {Synchronized conversation pin state with Cloudflare Worker D1 backend} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
   const handleTogglePin = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setChats((prev) =>
@@ -657,6 +910,9 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         if (c.id === id) {
           const next = { ...c, pinned: !c.pinned };
           persistChat(next);
+          if (currentUser) {
+            workerClient.updateConversation(id, { pinned: next.pinned }).catch(() => {});
+          }
           return next;
         }
         return c;
@@ -665,14 +921,21 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
   };
 
   // Delete chat
+  // {Synchronized conversation deletion with Cloudflare Worker D1 backend} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
   const handleDeleteChat = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     removeEncryptedChatRecord(id);
+    deleteArchiveFromR2(id);
+    localStorage.removeItem('nanobot_files_' + id);
+    if (currentUser) {
+      workerClient.deleteConversation(id).catch(() => {});
+    }
     setChats((prev) => prev.filter((c) => c.id !== id));
     if (activeChatId === id) handleStartNewChat();
   };
 
   // Rename chat
+  // {Synchronized conversation rename with Cloudflare Worker D1 backend} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
   const handleRenameChat = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const chat = chats.find((c) => c.id === id);
@@ -683,6 +946,9 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
           if (c.id === id) {
             const next = { ...c, title: nextTitle.slice(0, 50) };
             persistChat(next);
+            if (currentUser) {
+              workerClient.updateConversation(id, { title: next.title }).catch(() => {});
+            }
             return next;
           }
           return c;
@@ -701,10 +967,11 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
   return (
     <div className="flex h-screen w-screen relative bg-black text-white overflow-hidden">
       {/* SIDEBAR */}
+      {/* {Restored UI scale matching nanobot.html and Old UI specifications} [Commented by: Sonic on 10/14/2026 10:35 AM] */}
       <aside
         className={`${
           sidebarOpen ? 'flex' : 'hidden'
-        } w-[300px] h-full bg-[#0a0a0a] border-r border-[#262626] flex-col p-4 z-40 shrink-0`}
+        } w-[300px] h-full bg-[#0a0a0a] border-r border-[#262626] flex-col p-[15px] z-40 shrink-0`}
       >
         <div className="flex items-center justify-between pb-3 border-b border-[#262626] mb-3">
           <h3 className="font-semibold text-sm tracking-wide text-neutral-300">
@@ -712,11 +979,30 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
           </h3>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="text-neutral-400 hover:text-white p-1 text-sm"
+            className="text-neutral-400 hover:text-white p-1 text-sm cursor-pointer"
           >
             ✕
           </button>
         </div>
+
+        {/* {Cloudflare Worker history sync indicator and non-intrusive offline fallback status} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM] */}
+        {isHistorySyncing && (
+          <div className="text-[10px] text-neutral-400 mb-2 flex items-center gap-1.5 px-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>Syncing history...</span>
+          </div>
+        )}
+        {historyNotice && (
+          <div className="bg-[#1f1604] border border-[#a16207] text-[#fef08a] px-2 py-1.5 rounded text-[10px] mb-2 flex items-center justify-between">
+            <span className="leading-tight">{historyNotice}</span>
+            <button
+              onClick={() => setHistoryNotice(null)}
+              className="ml-1 text-neutral-400 hover:text-white cursor-pointer text-xs"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* History List */}
         <div className="flex-1 overflow-y-auto space-y-1">
@@ -726,10 +1012,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
             chats.map((c) => (
               <div
                 key={c.id}
-                onClick={() => {
-                  setActiveChatId(c.id);
-                  setSidebarOpen(false);
-                }}
+                onClick={() => handleSelectChat(c.id)}
                 className={`flex items-center justify-between p-2 rounded-lg cursor-pointer text-xs transition-colors ${
                   activeChatId === c.id ? 'bg-[#222] text-white' : 'text-neutral-400 hover:bg-[#151515] hover:text-white'
                 }`}
@@ -753,19 +1036,17 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
 
         {/* Sidebar Bottom Controls */}
         <div className="border-t border-[#262626] pt-4 mt-auto flex flex-col gap-2.5">
-          {/* Requirement 2: Clear Chat History moves slightly upwards */}
           <button
             onClick={handleClearChatHistory}
-            className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-3 rounded-lg text-xs transition-colors cursor-pointer"
+            className="w-full bg-[#dc2626] hover:bg-red-700 text-white font-bold py-[10px] px-3 rounded-[6px] text-xs transition-colors cursor-pointer"
           >
             Clear Chat History
           </button>
 
-          {/* Requirement 2: Black Settings button placed below Clear Chat History only after user has signed in */}
           {currentUser && (
             <button
               onClick={() => setIsSettingsOpen(true)}
-              className="w-full bg-black border border-[#333] hover:border-neutral-500 text-white font-medium py-2 px-3 rounded-lg text-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
+              className="w-full bg-black border border-[#333] hover:border-neutral-500 text-white font-bold py-[10px] px-3 rounded-[6px] text-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
             >
               <span>⚙️</span>
               <span>Settings</span>
@@ -780,42 +1061,41 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         <div className="absolute top-4 left-4 flex gap-2 z-30">
           <button
             onClick={() => setSidebarOpen((prev) => !prev)}
-            className="w-10 h-10 bg-transparent text-white border border-[#333] rounded-xl flex items-center justify-center text-lg hover:border-neutral-500 cursor-pointer"
+            className="w-10 h-10 bg-transparent text-white border border-[#333] rounded-[8px] flex items-center justify-center text-[20px] hover:border-neutral-500 cursor-pointer"
             title="Toggle History"
           >
             {sidebarOpen ? '✕' : '◴'}
           </button>
           <button
             onClick={handleStartNewChat}
-            className="w-10 h-10 bg-transparent text-white border border-[#333] rounded-xl flex items-center justify-center text-lg hover:border-neutral-500 cursor-pointer"
+            className="w-10 h-10 bg-transparent text-white border border-[#333] rounded-[8px] flex items-center justify-center text-[20px] hover:border-neutral-500 cursor-pointer"
             title="New Chat"
           >
             💬
           </button>
         </div>
 
-        {/* Top-Right Controls (Requirement 1 & 11) */}
+        {/* Top-Right Controls */}
         <div className="absolute top-4 right-4 flex items-center gap-2 z-30">
           {!currentUser ? (
             <>
               <button
                 onClick={() => setAuthModalMode('signin')}
-                className="bg-black border border-[#333] hover:border-neutral-500 text-white font-medium px-4 py-2 rounded-xl text-xs transition-colors cursor-pointer"
+                className="bg-black border border-[#333] hover:border-neutral-500 text-white font-semibold px-4 py-2 rounded-lg text-xs transition-colors cursor-pointer"
               >
                 Sign In
               </button>
               <button
                 onClick={() => setAuthModalMode('signup')}
-                className="bg-black border border-[#333] hover:border-neutral-500 text-white font-medium px-4 py-2 rounded-xl text-xs transition-colors cursor-pointer"
+                className="bg-black border border-[#333] hover:border-neutral-500 text-white font-semibold px-4 py-2 rounded-lg text-xs transition-colors cursor-pointer"
               >
                 Sign Up
               </button>
             </>
           ) : (
-            // Requirement 11: Sunglasses / Sun emoji for Incognito chat toggle
             <button
               onClick={() => setIsIncognito((prev) => !prev)}
-              className="w-10 h-10 bg-[#111] border border-[#333] hover:border-[#39ff14] rounded-xl flex items-center justify-center text-xl cursor-pointer transition-colors"
+              className="w-10 h-10 bg-[#111] border border-[#333] hover:border-[#39ff14] rounded-[8px] flex items-center justify-center text-[20px] cursor-pointer transition-colors"
               title={isIncognito ? 'Incognito Mode Active (Click to switch to Normal)' : 'Normal Chat (Click for Incognito Mode)'}
             >
               {isIncognito ? '☀️' : '🕶️'}
@@ -830,9 +1110,9 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
           </div>
         )}
 
-        {/* Main Heading (Visible in zero state) */}
+        {/* Main Heading (Visible in zero state matching 19vh and 3.5rem) */}
         {!activeChat && (
-          <h1 className="absolute top-[20vh] text-6xl font-bold font-serif text-white tracking-tight pointer-events-none select-none">
+          <h1 className="absolute top-[19vh] text-[3.5rem] font-bold font-serif text-white tracking-tight pointer-events-none select-none">
             nanobot
           </h1>
         )}
@@ -985,12 +1265,13 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         </div>
 
         {/* Composer Wrap */}
+        {/* {Restored UI scale: composer container 750px at top 30vh / bottom 45px, 20px radius, 15px padding, 36px send button} [Commented by: Sonic on 10/14/2026 10:35 AM] */}
         <div
           className={`absolute left-1/2 -translate-x-1/2 w-full max-w-[750px] px-4 transition-all duration-300 z-20 ${
-            activeChat ? 'bottom-8' : 'top-[34vh]'
+            activeChat ? 'bottom-[45px]' : 'top-[30vh]'
           }`}
         >
-          <div className="w-full bg-[#111] border border-[#2b2b2b] rounded-3xl p-4 flex flex-col gap-2.5 neon-glow">
+          <div className="w-full bg-[#111] border border-[#333] rounded-[20px] p-[15px] flex flex-col gap-2.5 neon-glow">
             {/* Attachments Preview */}
             {attachments.length > 0 && (
               <div className="flex gap-2 overflow-x-auto py-1">
@@ -1033,10 +1314,9 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                   handleSend();
                 }
               }}
-              /* {Updated composer input placeholder to clean 'Ask Anything...' label} [Commented by: Sonic on 10/13/2026 10:26 AM] */
               placeholder="Ask Anything..."
               rows={1}
-              className="w-full bg-transparent border-none text-white resize-none outline-none text-base leading-relaxed placeholder-neutral-500 min-h-[52px] max-h-[160px]"
+              className="w-full bg-transparent border-none text-white resize-none outline-none text-[16px] leading-[1.5] placeholder-neutral-500 min-h-[52px] max-h-[160px]"
             />
 
             {/* Bottom Controls */}
@@ -1045,7 +1325,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="text-neutral-400 hover:text-white p-1 text-lg cursor-pointer transition-colors"
+                  className="text-neutral-400 hover:text-white p-1 text-[1.2rem] cursor-pointer transition-colors"
                   title="Upload Image, PDF, Code, or any Data File"
                 >
                   ➕
@@ -1063,7 +1343,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                 <button
                   type="button"
                   onClick={handleSend}
-                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
+                  className={`w-[36px] h-[36px] rounded-full flex items-center justify-center font-bold text-[18px] transition-colors cursor-pointer ${
                     isGenerating
                       ? 'bg-red-600 hover:bg-red-700 text-white font-mono text-sm'
                       : 'bg-[#000080] hover:bg-[#000066] text-white'
@@ -1073,7 +1353,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                   {isGenerating ? (
                     <span>{STOP_FRAMES[stopFrameIndex]}</span>
                   ) : (
-                    <span className="font-bold text-sm">?</span>
+                    <span>?</span>
                   )}
                 </button>
               </div>
@@ -1087,7 +1367,12 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         <AuthModal
           mode={authModalMode}
           isOpen={true}
-          onClose={() => setAuthModalMode(null)}
+          initialStep={authModalInitialStep}
+          initialEmail={authModalInitialEmail}
+          onClose={() => {
+            setAuthModalMode(null);
+            setAuthModalInitialStep(1);
+          }}
           onSuccess={(user, secret) => {
             setCurrentUser(user);
             setPasswordSecret(secret);

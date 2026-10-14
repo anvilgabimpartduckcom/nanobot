@@ -9,13 +9,23 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (user: UserProfile, passwordSecret: string) => void;
+  initialStep?: 1 | 2;
+  initialEmail?: string;
 }
 
-export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onSuccess }) => {
+export const AuthModal: React.FC<AuthModalProps> = ({
+  mode,
+  isOpen,
+  onClose,
+  onSuccess,
+  initialStep = 1,
+  initialEmail = ''
+}) => {
   // Signup State
-  const [signupStep, setSignupStep] = useState<1 | 2>(1);
-  const [email, setEmail] = useState('');
+  const [signupStep, setSignupStep] = useState<1 | 2>(initialStep);
+  const [email, setEmail] = useState(initialEmail);
   const [emailSent, setEmailSent] = useState(false);
+  const [resendNotice, setResendNotice] = useState<string | null>(null);
 
   // Credentials State
   const [username, setUsername] = useState('');
@@ -56,9 +66,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
   if (!isOpen) return null;
 
   // Step 1: Send real email verification link via Supabase
-  const handleSendEmailConfirm = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // {Handled resend email verification link dispatch with user feedback notice} [Commented by: Sonic on 10/14/2026 10:35 AM]
+  const handleSendEmailConfirm = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setError(null);
+    setResendNotice(null);
     const trimmedEmail = email.trim().toLowerCase();
     if (!trimmedEmail || !trimmedEmail.includes('@')) {
       setError('Please enter a valid email address.');
@@ -87,6 +99,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
       }
 
       setEmailSent(true);
+      setResendNotice('Fresh verification email sent! Check your inbox.');
+      setTimeout(() => setResendNotice(null), 4000);
     } catch (err: unknown) {
       const e = err as Error;
       setError(e.message || 'Failed to dispatch verification email.');
@@ -305,22 +319,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
                       Please check your email inbox and click the verification link. When you click it, you will be redirected back here to finalize your username, password, and API keys.
                     </p>
 
+                    {resendNotice && (
+                      <p className="text-xs text-emerald-400 font-medium bg-emerald-950/40 border border-emerald-800 rounded-lg py-1.5 px-2">
+                        {resendNotice}
+                      </p>
+                    )}
+
+                    {/* {Restructured verification prompt to make Resend Confirmation Email the primary action} [Commented by: Sonic on 10/14/2026 10:35 AM] */}
                     <div className="pt-2 flex flex-col gap-2">
                       <button
-                        onClick={async () => {
-                          setLoading(true);
-                          if (supabase) {
-                            const { data: { session } } = await supabase.auth.getSession();
-                            if (session?.user?.email) {
-                              setEmail(session.user.email);
-                            }
-                          }
-                          setSignupStep(2);
-                          setLoading(false);
-                        }}
-                        className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 px-4 rounded-xl transition-colors cursor-pointer"
+                        type="button"
+                        onClick={() => handleSendEmailConfirm()}
+                        disabled={loading}
+                        className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 px-4 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
                       >
-                        I&#39;ve Confirmed in My Inbox →
+                        {loading ? 'Sending verification...' : 'Resend Confirmation Email'}
                       </button>
 
                       <button
@@ -328,10 +341,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
                         onClick={() => {
                           setEmailSent(false);
                           setError(null);
+                          setResendNotice(null);
                         }}
-                        className="text-xs text-neutral-400 hover:text-white"
+                        className="text-xs text-neutral-400 hover:text-white pt-1 cursor-pointer"
                       >
-                        ← Resend or change email
+                        ← Change email address
                       </button>
                     </div>
                   </div>
@@ -357,12 +371,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
                   />
                 </div>
 
+                {/* {Configured password and API keys as visible (type=text) during account creation} [Commented by: Sonic on 10/14/2026 10:35 AM] */}
                 <div>
                   <label className="block text-xs uppercase tracking-wider text-neutral-400 mb-1">
                     Password
                   </label>
                   <input
-                    type="password"
+                    type="text"
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -384,7 +399,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
                     </a>
                   </label>
                   <input
-                    type="password"
+                    type="text"
                     required
                     value={openrouterKey}
                     onChange={(e) => setOpenrouterKey(e.target.value)}
@@ -406,7 +421,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ mode, isOpen, onClose, onS
                     </a>
                   </label>
                   <input
-                    type="password"
+                    type="text"
                     required
                     value={tavilyKey}
                     onChange={(e) => setTavilyKey(e.target.value)}

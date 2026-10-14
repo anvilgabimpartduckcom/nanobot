@@ -19,17 +19,19 @@
 
 - **Bring-Your-Own-Key (BYOK) Model**: Users provide their own OpenRouter and Tavily API keys during registration or within Account settings. Keys are validated for global uniqueness, encrypted, and stored per account.
 - **Client-Side Zero-Knowledge Encryption**: Chat transcripts and titles are encrypted in the browser using **Web Crypto AES-GCM (256-bit)** with keys derived via PBKDF2 (100,000 iterations of SHA-256) from the user's password. Stored database records are ciphertext-only; neither the server nor database administrators can read user chats.
-- **Universal Code-Driven File Reader**: Non-image documents (PDF, CSV, JSON, TXT, PY, XLSX, etc.) trigger dynamic script analysis and extraction with an animated `"Reading Files"` indicator, while images stream directly to multimodal vision.
-- **Tavily Deep Research**:
+- **Tiered Cloud Architecture (Supabase + Cloudflare Worker D1 + Cloudflare R2)**: Active sessions and user authentication are managed via Supabase, chat conversations and message history are persisted via a dedicated Cloudflare Worker backend with Cloudflare D1 SQL database, and older conversation history is securely archived to Cloudflare R2 as encrypted JSON blobs.
+- **Universal Code-Driven File Reader**: Non-image documents (PDF, CSV, JSON, TXT, PY, XLSX, etc.) trigger dynamic script analysis and extraction with an animated `"Reading Files"` indicator. Raw images and binary files are isolated in local browser storage, while remote backups persist only the code output.
+- **Tavily Deep Research & URL Web Scraping**:
   - `# <query>`: Initiates fast Mini Deep Research with live source synthesis.
   - `## <query>`: Initiates comprehensive Pro Deep Research with multi-angle reporting.
+  - `<Scrap1>URL1</Scrap1> <Scrap2>URL2</Scrap2>`: The AI dynamically scrapes and extracts full webpage markdown directly using Tavily's Extract API.
 - **Fluid Token Streaming**: Utilizes a `requestAnimationFrame` token smoothing ticker buffer to deliver smooth reading streams without choppy network packet bursts.
 - **Mathematical Typesetting & Code Highlighting**: Full LaTeX math formula parsing (`\[...\]`, `$$...$$`, `\(...\)`, `$..$`) via KaTeX alongside syntax-highlighted code blocks via Highlight.js.
 - **Two-Column Settings Suite**:
   - **Account**: Update username, password, hyperlinked OpenRouter/Tavily keys, or delete account.
   - **AI Configuration**: Custom system instructions (Enter saves, Shift+Enter newline) and an "Enable Model Training" toggle (default ON; sends `data_collection: "deny"` when OFF).
   - **MCP Plugins Hub**: Integration hooks for Google Drive, Gmail, Google Docs, Notion, Firecrawl, and Tavily.
-  - **About nanobot**: Direct link to official Notion documentation.
+  - **About nanobot**: Privacy statement, developer contact (`molecule-sip-sauna@duck.com`), 30-day chat deletion policy, and direct link to official Notion documentation.
 - **Incognito Mode (`🕶️` / `☀️`)**: Signed-in users can toggle ephemeral incognito sessions that omit database persistence and automatically opt out of model training data collection.
 - **30-Day Auto Purge**: Inactive chats older than 30 days are automatically pruned via client filters and PostgreSQL routines.
 - **Crawler Indexing & SEO**: Crawlers are unblocked with rich OpenGraph, Twitter Cards, and Schema.org WebApplication structured data.
@@ -44,9 +46,10 @@
 | **Styling & Effects** | Tailwind CSS v4, Lucide React, Motion |
 | **Cryptography** | Web Crypto API (`window.crypto.subtle`, PBKDF2, AES-GCM 256-bit) |
 | **Typography & Parsers** | MarkdownIt, KaTeX, DOMPurify, Highlight.js |
-| **Backend & Persistence** | Supabase (PostgreSQL, Row Level Security, Auth OTP) |
+| **Authentication** | Supabase (PostgreSQL, Row Level Security, Auth OTP) |
+| **Backend & Persistence** | Cloudflare Workers, Cloudflare D1 SQL Database, Cloudflare R2 |
 | **AI Models & Search** | OpenRouter API (`nvidia/nemotron-3-nano-omni-30b-a3b-reasoning`), Tavily Search & Research API |
-| **Deployment** | Netlify (Single-Page Application build with SPA redirects) |
+| **Deployment** | Netlify (SPA build with redirects), Cloudflare Workers |
 
 ---
 
@@ -124,13 +127,54 @@ VITE_SUPABASE_ANON_KEY="eyJhbGciOi..."
    - `purge_inactive_chats()` automated 30-day cleanup function.
 3. *Free Plan Email Note:* On Supabase free tier plans, custom SMTP email templates are restricted. Supabase will send its default email verification confirmation link, allowing users to verify and complete their profile setup.
 
-### 2. Netlify Deployment
+<!-- {Added comprehensive Cloudflare Worker and D1 backend persistence setup guide} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM] -->
+### 2. Cloudflare Worker & D1 Database Setup
+The Nanobot backend leverages Cloudflare Workers and Cloudflare D1 for serverless, zero-trust chat transcript persistence:
+- **Base Endpoint:** `https://nanobot-api.mud-amiable-tweed.workers.dev/` (configurable via `VITE_CLOUDFLARE_WORKER_URL`)
+- **Zero-Trust Token Verification:** All `/api/*` endpoints require an `Authorization: Bearer <supabase_access_token>` header. The Cloudflare Worker directly verifies the token with Supabase Auth (`/auth/v1/user`) to securely extract the authenticated `user.id`. Client-supplied user IDs are never trusted.
+- **Parameterized D1 Queries:** All SQL statements use prepared statement bindings to prevent SQL injection.
+
+#### Deployment Steps:
+1. **Create the D1 Database:**
+   ```bash
+   cd worker
+   npx wrangler d1 create nanobot_db
+   ```
+   Copy the generated `database_id` into `worker/wrangler.toml`.
+
+2. **Execute the Database Schema:**
+   ```bash
+   npx wrangler d1 execute nanobot_db --file=./schema.sql
+   ```
+   This provisions the `conversations` and `messages` tables with indexing on `(user_id, updated_at)` and `(conversation_id, created_at)`.
+
+3. **Configure Worker Secrets:**
+   ```bash
+   npx wrangler secret put SUPABASE_URL
+   # Enter your Supabase Project URL (e.g., https://your-project.supabase.co)
+
+   npx wrangler secret put SUPABASE_ANON_KEY
+   # Enter your Supabase Anon/Public Key
+   ```
+
+4. **Deploy the Worker:**
+   ```bash
+   npx wrangler deploy
+   ```
+
+5. **Connect to Frontend:**
+   Add your worker URL to your frontend `.env`:
+   ```env
+   VITE_CLOUDFLARE_WORKER_URL="https://nanobot-api.mud-amiable-tweed.workers.dev"
+   ```
+
+### 3. Netlify Deployment
 1. Connect your repository to [Netlify](https://app.netlify.com).
 2. The provided `netlify.toml` automatically configures:
    - Build Command: `npm run build`
    - Publish Directory: `dist`
    - Single-Page Application (SPA) redirects (`/*` to `/index.html`)
-3. Under **Site Configuration -> Environment Variables**, add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (or connect using Netlify's official Supabase integration extension).
+3. Under **Site Configuration -> Environment Variables**, add `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_CLOUDFLARE_WORKER_URL` (or connect using Netlify's official Supabase integration extension).
 
 ---
 
@@ -146,6 +190,10 @@ nanobot/
 ├── vite.config.ts          # Vite build configuration with Tailwind CSS plugin
 ├── README.md               # Project documentation
 ├── LICENSE                 # Custom source-available license
+├── worker/                 # Cloudflare Worker backend
+│   ├── src/index.ts        # Worker REST API with Supabase token verification & D1 queries
+│   ├── schema.sql          # Cloudflare D1 tables (conversations, messages)
+│   └── wrangler.toml       # Cloudflare Wrangler configuration & D1 binding
 ├── supabase/
 │   └── schema.sql          # PostgreSQL tables, RLS policies, and purge functions
 └── src/
@@ -160,8 +208,9 @@ nanobot/
         ├── fileReader.ts   # Universal code-driven file analyzer for non-image files
         ├── markdown.ts     # Markdown, KaTeX math parsing, and Highlight.js styling
         ├── plugins.ts      # MCP plugins registry (Drive, Gmail, Docs, Notion, Firecrawl, Tavily)
+        ├── r2.ts           # Cloudflare R2 tiered encrypted conversation archiving
         ├── supabase.ts     # Supabase client with multi-prefix Netlify env var resolution
-        └── tavily.ts       # Tavily search and # / ## Deep Research runners
+        └── tavily.ts       # Tavily search, URL scraping, and # / ## Deep Research runners
 ```
 
 ---
@@ -195,9 +244,10 @@ This project is licensed under a **Custom Source-Available Limited Use License**
 
 ---
 
+<!-- {Updated Contact and documentation links in README.md} [Commented by: Google AI Studio on 10/14/2026 10:45 AM] -->
 ## 📬 Contact & Inquiries
 
-For questions, permissions, or license inquiries:
-- **Project Maintainer:** [Copyright Holder / Legal Name]
-- **Contact Email:** `privatedevelopersonic@gmail.com`
+For questions, permissions, developer support, or license inquiries:
+- **Developer Support:** `molecule-sip-sauna@duck.com`
+- **Documentation:** [nanobot Docs](https://tropical-chime-8c1.notion.site/nanobot-Docs-3f4b104092f3804792d0c68bca97e821)
 - **GitHub Repository:** [https://github.com/anvilgabimpartduckcom/nanobot](https://github.com/anvilgabimpartduckcom/nanobot)

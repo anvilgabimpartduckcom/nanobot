@@ -509,28 +509,44 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           )}
 
           {/* TAB 4: ABOUT NANOBOT */}
+          {/* {Updated About nanobot documentation with privacy statement, developer contact, hyperlinked docs, and 30-day chat deletion policy notes} [Commented by: Sonic on 10/14/2026 10:35 AM] */}
           {activeTab === 'about' && (
-            <div className="space-y-4 max-w-xl">
-              <h2 className="text-xl font-bold font-serif">About nanobot</h2>
-              <p className="text-sm text-neutral-300 leading-relaxed">
-                nanobot is an autonomous, privacy-first AI intelligence engine featuring mathematical precision, live web citations, deep multi-angle research, and zero-knowledge encrypted chat histories.
+            <div className="space-y-4 max-w-xl text-neutral-300">
+              <h2 className="text-xl font-bold font-serif text-white">About nanobot</h2>
+              <p className="text-sm leading-relaxed">
+                Everyone should get to use AI, and that too without giving away their data. So we created nanobot, an open source AI chatbot which respects your privacy, and is free to use. Users bring their own API keys, which helps in further keeping nanobot completely free to use.
               </p>
-
-              <div className="bg-[#141414] border border-[#333] rounded-xl p-5 space-y-3">
-                <div className="font-semibold text-sm text-white">
-                  Official Documentation & User Guide:
-                </div>
+              <p className="text-sm leading-relaxed">
+                For more information, or under any problems, please contact developer via email:{' '}
                 <a
-                  href="https://tropical-chime-8c1.notion.site/nanobot-Docs-3f4b104092f3804792d0c68bca97e821?pvs=74"
+                  href="mailto:molecule-sip-sauna@duck.com"
+                  className="text-emerald-400 hover:underline font-mono"
+                >
+                  molecule-sip-sauna@duck.com
+                </a>
+              </p>
+              <p className="text-sm leading-relaxed">
+                You can also get more info at the{' '}
+                <a
+                  href="https://tropical-chime-8c1.notion.site/nanobot-Docs-3f4b104092f3804792d0c68bca97e821"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 underline font-medium"
+                  className="text-emerald-400 hover:text-emerald-300 underline font-medium"
                 >
-                  <span>Open nanobot Docs on Notion ↗</span>
+                  nanobot Docs
                 </a>
-                <p className="text-xs text-neutral-500">
-                  Includes full guides on Bring-Your-Own-Key configuration, MCP server extensions, and command syntax.
-                </p>
+              </p>
+
+              <div className="bg-[#141414] border border-[#333] rounded-xl p-4 space-y-2 mt-4 text-xs text-neutral-300">
+                <div className="font-semibold text-white text-sm">Note:</div>
+                <ol className="list-decimal list-inside space-y-2 leading-relaxed">
+                  <li>
+                    nanobot has a 30-days chat deletion policy. Any chat inactive for 30 days will be automatically deleted. This is required for storage purposes. On top of that, we request you to delete any chat that you have no longer use for. Your deleting of one chat will help another user create a new chat.
+                  </li>
+                  <li>
+                    Though we&#39;ve given our best not to have any data loss, some of your data might get deleted. Though this&#39;ll be extremely rare, we recommend to keep a backup of any important chats or data. nanobot or its developer will not be responsible for any data loss.
+                  </li>
+                </ol>
               </div>
             </div>
           )}
