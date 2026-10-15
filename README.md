@@ -15,12 +15,17 @@
 
 ---
 
+<!-- {Updated README documentation with revised local-only IndexedDB file handling and Cloudflare D1 AI output persistence} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM] -->
 ## ✨ Features
 
 - **Bring-Your-Own-Key (BYOK) Model**: Users provide their own OpenRouter and Tavily API keys during registration or within Account settings. Keys are validated for global uniqueness, encrypted, and stored per account.
 - **Client-Side Zero-Knowledge Encryption**: Chat transcripts and titles are encrypted in the browser using **Web Crypto AES-GCM (256-bit)** with keys derived via PBKDF2 (100,000 iterations of SHA-256) from the user's password. Stored database records are ciphertext-only; neither the server nor database administrators can read user chats.
-- **Tiered Cloud Architecture (Supabase + Cloudflare Worker D1 + Cloudflare R2)**: Active sessions and user authentication are managed via Supabase, chat conversations and message history are persisted via a dedicated Cloudflare Worker backend with Cloudflare D1 SQL database, and older conversation history is securely archived to Cloudflare R2 as encrypted JSON blobs.
-- **Universal Code-Driven File Reader**: Non-image documents (PDF, CSV, JSON, TXT, PY, XLSX, etc.) trigger dynamic script analysis and extraction with an animated `"Reading Files"` indicator. Raw images and binary files are isolated in local browser storage, while remote backups persist only the code output.
+- **Tiered Cloud Architecture (Supabase + Cloudflare Worker D1)**: Active sessions and user authentication are managed via Supabase, while chat conversations, message histories, and AI-extracted file outputs are persisted in Cloudflare D1 via a secure Cloudflare Worker backend requiring validated Supabase Bearer tokens.
+- **Privacy-First File Handling (IndexedDB + D1 Outputs)**:
+  - **Local-Only Original Files**: Raw user files and images are stored exclusively in the user's browser using **IndexedDB**, never uploaded to any cloud storage or external server.
+  - **Cloud-Persisted AI Outputs**: Extracted text, structured data summaries, and dynamic Python inspection scripts are safely persisted in Cloudflare D1, making extracted knowledge accessible across devices without exposing original files.
+  - **Clear File Status UX**: Clearly distinguishes between locally present original files and cloud-preserved AI outputs when accessing conversations from multiple devices or following browser storage purges.
+  - **Cascading Cleanup**: Deleting chats cleans up local IndexedDB blobs and executes cascading deletion of all associated messages and AI outputs in D1 without orphaned records.
 - **Tavily Deep Research & URL Web Scraping**:
   - `# <query>`: Initiates fast Mini Deep Research with live source synthesis.
   - `## <query>`: Initiates comprehensive Pro Deep Research with multi-angle reporting.
@@ -191,8 +196,8 @@ nanobot/
 ├── README.md               # Project documentation
 ├── LICENSE                 # Custom source-available license
 ├── worker/                 # Cloudflare Worker backend
-│   ├── src/index.ts        # Worker REST API with Supabase token verification & D1 queries
-│   ├── schema.sql          # Cloudflare D1 tables (conversations, messages)
+│   ├── src/index.ts        # Worker REST API with Supabase token verification, D1 queries & file output endpoints
+│   ├── schema.sql          # Cloudflare D1 tables (conversations, messages, file_outputs)
 │   └── wrangler.toml       # Cloudflare Wrangler configuration & D1 binding
 ├── supabase/
 │   └── schema.sql          # PostgreSQL tables, RLS policies, and purge functions
@@ -205,12 +210,14 @@ nanobot/
     │   └── SettingsModal.tsx # Two-column settings: Account, AI Config, Plugins, About
     └── lib/
         ├── crypto.ts       # Web Crypto PBKDF2 key derivation and AES-GCM encryption
-        ├── fileReader.ts   # Universal code-driven file analyzer for non-image files
+        ├── fileReader.ts   # Universal code-driven file analyzer for non-image files with stable fileIds
+        ├── indexedDb.ts    # Browser IndexedDB local-only original user file storage & orphaned file cleanup
         ├── markdown.ts     # Markdown, KaTeX math parsing, and Highlight.js styling
         ├── plugins.ts      # MCP plugins registry (Drive, Gmail, Docs, Notion, Firecrawl, Tavily)
-        ├── r2.ts           # Cloudflare R2 tiered encrypted conversation archiving
+        ├── r2.ts           # Cloudflare R2 archive integration utilities
         ├── supabase.ts     # Supabase client with multi-prefix Netlify env var resolution
-        └── tavily.ts       # Tavily search, URL scraping, and # / ## Deep Research runners
+        ├── tavily.ts       # Tavily search, URL scraping, and # / ## Deep Research runners
+        └── workerClient.ts # Cloudflare Worker REST API client with Bearer token authentication
 ```
 
 ---

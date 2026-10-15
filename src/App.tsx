@@ -13,14 +13,23 @@ import { markdownToHtml, escapeHtml, safeUrl } from './lib/markdown';
 // {Imported MCP_PLUGINS to equip the AI model with real tools from connected servers} [Commented by: Sonic on 10/13/2026 10:53 AM]
 import { MCP_PLUGINS } from './lib/plugins';
 // {Imported Cloudflare Worker API client for authenticated chat persistence} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
-import { workerClient, WorkerMessage } from './lib/workerClient';
+import { workerClient, WorkerMessage, WorkerFileOutput } from './lib/workerClient';
+// {Imported IndexedDB storage manager for client-only original user files and orphaned cleanup} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+import {
+  saveOriginalFile,
+  getOriginalFile,
+  getOriginalFilesForChat,
+  deleteOriginalFilesForChat,
+  clearAllOriginalFiles,
+  cleanupOrphanedFiles
+} from './lib/indexedDb';
 
 interface ChatMessage {
   role: 'user' | 'ai';
   content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
   sources?: Array<{ title: string; url: string }>;
   reasoning?: string;
-  displayAttachments?: Array<{ type: string; name: string }>;
+  displayAttachments?: Array<{ type: string; name: string; fileId?: string; isLocalMissing?: boolean }>;
 }
 
 interface ChatSession {
@@ -60,6 +69,9 @@ export default function App() {
   // {Added Cloudflare Worker history sync and non-intrusive status notice state} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
   const [isHistorySyncing, setIsHistorySyncing] = useState<boolean>(false);
   const [historyNotice, setHistoryNotice] = useState<string | null>(null);
+  // {Added state for cloud-persisted AI file outputs and local storage quota warnings} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+  const [chatFileOutputs, setChatFileOutputs] = useState<Record<string, WorkerFileOutput[]>>({});
+  const [quotaErrorNotice, setQuotaErrorNotice] = useState<string | null>(null);
 
   // Stream Smoothing Buffer
   const [streamDisplayContent, setStreamDisplayContent] = useState('');
@@ -170,7 +182,7 @@ export default function App() {
     };
   }, [currentUser]);
 
-  // {Persist and synchronize conversation history with Cloudflare Worker D1 backend using Supabase Bearer token} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
+  // {Persist and synchronize conversation history with Cloudflare Worker D1 backend using Supabase Bearer token, with orphaned local file cleanup} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
   const loadWorkerConversations = async () => {
     if (!currentUser) return;
     setIsHistorySyncing(true);
@@ -192,9 +204,12 @@ export default function App() {
                 updated: wc.updated_at ? new Date(wc.updated_at).getTime() : Date.now(),
               });
             });
-            return Array.from(map.values()).sort(
+            const merged = Array.from(map.values()).sort(
               (a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.updated - a.updated
             );
+            // Clean up any local IndexedDB files for conversations deleted remotely
+            cleanupOrphanedFiles(merged.map((m) => m.id)).catch(() => {});
+            return merged;
           });
         }
         setHistoryNotice(null);
@@ -212,10 +227,26 @@ export default function App() {
     }
   };
 
-  // {Load message history from Cloudflare Worker when selecting a conversation} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
+  // {Load message history and AI file outputs from Cloudflare Worker, verifying local file presence in IndexedDB} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
   const handleSelectChat = async (id: string) => {
     setActiveChatId(id);
     setSidebarOpen(false);
+
+    // Check local file availability in IndexedDB for this conversation
+    const localFiles = await getOriginalFilesForChat(id);
+    const localFileIds = new Set(localFiles.map((f) => f.fileId));
+
+    if (currentUser) {
+      // Fetch persisted AI file outputs from Cloudflare D1
+      try {
+        const outRes = await workerClient.getFileOutputs(id);
+        if (outRes.success && outRes.data?.outputs) {
+          setChatFileOutputs((prev) => ({ ...prev, [id]: outRes.data!.outputs }));
+        }
+      } catch (err) {
+        console.warn('Worker getFileOutputs notice:', err);
+      }
+    }
 
     const targetChat = chats.find((c) => c.id === id);
     if (currentUser && targetChat && targetChat.messages.length === 0) {
@@ -228,7 +259,10 @@ export default function App() {
             content: m.content,
             sources: m.sources,
             reasoning: m.reasoning,
-            displayAttachments: m.displayAttachments,
+            displayAttachments: m.displayAttachments?.map((att) => ({
+              ...att,
+              isLocalMissing: att.fileId ? !localFileIds.has(att.fileId) : false,
+            })),
           }));
           setChats((prev) =>
             prev.map((c) => (c.id === id ? { ...c, messages: loadedMessages } : c))
@@ -239,6 +273,25 @@ export default function App() {
       } finally {
         setIsHistorySyncing(false);
       }
+    } else if (targetChat) {
+      // Update local presence flags for already loaded messages
+      setChats((prev) =>
+        prev.map((c) => {
+          if (c.id === id) {
+            return {
+              ...c,
+              messages: c.messages.map((m) => ({
+                ...m,
+                displayAttachments: m.displayAttachments?.map((att) => ({
+                  ...att,
+                  isLocalMissing: att.fileId ? !localFileIds.has(att.fileId) : false,
+                })),
+              })),
+            };
+          }
+          return c;
+        })
+      );
     }
   };
 
@@ -512,33 +565,21 @@ export default function App() {
 
     // Prepare User Message Content
     let userContent: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
-    const displayAttachments: Array<{ type: string; name: string }> = [];
+    const displayAttachments: Array<{ type: string; name: string; fileId?: string; isLocalMissing?: boolean }> = [];
 
     // Check if there are non-image files with extracted text
     let attachedFileContext = '';
     attachments.forEach((att) => {
-      displayAttachments.push({ type: att.isImage ? 'image' : 'file', name: att.name });
+      displayAttachments.push({
+        type: att.isImage ? 'image' : 'file',
+        name: att.name,
+        fileId: att.fileId,
+        isLocalMissing: false
+      });
       if (!att.isImage && att.contentSnippet) {
         attachedFileContext += `\n\n--- Uploaded File: ${att.name} ---\n${att.contentSnippet}\n`;
       }
     });
-
-    const fullTextPrompt = trimmedPrompt + attachedFileContext;
-
-    // {Typed userContent multimodal parts array explicitly for TypeScript safety} [Commented by: Sonic on 10/12/2026 11:00 AM]
-    const imageAttachments = attachments.filter((a) => a.isImage && a.dataUrl);
-    if (imageAttachments.length > 0) {
-      const parts: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
-      if (fullTextPrompt) {
-        parts.push({ type: 'text', text: fullTextPrompt });
-      }
-      imageAttachments.forEach((img) => {
-        parts.push({ type: 'image_url', image_url: { url: img.dataUrl! } });
-      });
-      userContent = parts;
-    } else {
-      userContent = fullTextPrompt;
-    }
 
     const promptSummary = trimmedPrompt || (attachments.length > 0 ? attachments[0].name : 'New Chat');
 
@@ -554,6 +595,68 @@ export default function App() {
       };
       setChats((prev) => [chat!, ...prev]);
       setActiveChatId(chat.id);
+    }
+
+    // {Save raw files strictly to browser IndexedDB and persist AI outputs to Cloudflare D1} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+    attachments.forEach((att) => {
+      if (att.originalFile) {
+        saveOriginalFile(chat!.id, att.fileId, att.originalFile, att.name, att.type, att.size)
+          .then((res) => {
+            if (!res.success && res.error) {
+              setQuotaErrorNotice(res.error);
+            }
+          })
+          .catch((err) => {
+            console.warn('IndexedDB saveOriginalFile error:', err);
+          });
+      }
+
+      if (currentUser) {
+        const outputPayload = att.contentSnippet + (att.generatedReaderCode ? `\n\n[Python Reader Script]:\n${att.generatedReaderCode}` : '');
+        workerClient.saveFileOutput(chat!.id, {
+          source_file_id: att.fileId,
+          file_name: att.name,
+          file_type: att.type,
+          output_type: att.outputType,
+          output_content: outputPayload,
+          metadata: { size: att.size, isImage: att.isImage }
+        }).then((res) => {
+          if (res.success && res.data?.output) {
+            setChatFileOutputs((prev) => ({
+              ...prev,
+              [chat!.id]: [...(prev[chat!.id] || []).filter((o) => o.source_file_id !== att.fileId), res.data!.output]
+            }));
+          }
+        }).catch((err) => {
+          console.warn('workerClient.saveFileOutput error:', err);
+        });
+      }
+    });
+
+    // {Inject preserved AI outputs when continuing conversation on a device where raw file is missing} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+    const existingCloudOutputs = chatFileOutputs[chat.id] || [];
+    let cloudOutputsContext = '';
+    if (attachments.length === 0 && existingCloudOutputs.length > 0) {
+      existingCloudOutputs.forEach((out) => {
+        cloudOutputsContext += `\n\n[Preserved AI Output for file: "${out.file_name}"]:\n(Note: Original file bytes reside locally in the original user browser and are unavailable on this device. The model is using the cloud-preserved extraction output.)\n${out.output_content}\n`;
+      });
+    }
+
+    const fullTextPrompt = trimmedPrompt + attachedFileContext + cloudOutputsContext;
+
+    // {Typed userContent multimodal parts array explicitly for TypeScript safety} [Commented by: Sonic on 10/12/2026 11:00 AM]
+    const imageAttachments = attachments.filter((a) => a.isImage && a.dataUrl);
+    if (imageAttachments.length > 0) {
+      const parts: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
+      if (fullTextPrompt) {
+        parts.push({ type: 'text', text: fullTextPrompt });
+      }
+      imageAttachments.forEach((img) => {
+        parts.push({ type: 'image_url', image_url: { url: img.dataUrl! } });
+      });
+      userContent = parts;
+    } else {
+      userContent = fullTextPrompt;
     }
 
     // Append user message
@@ -876,18 +979,19 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
   };
 
   // Clear chat history
-  // {Synchronized batch chat deletion with Cloudflare Worker D1 backend} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
+  // {Synchronized batch chat deletion with Cloudflare Worker D1 backend and local IndexedDB file cleanup} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
   const handleClearChatHistory = () => {
     if (!window.confirm('Clear unpinned chats from history?')) return;
     const remaining = chats.filter((c) => c.pinned);
     setChats(remaining);
 
-    // {Synchronized chat deletions to remote Supabase, Cloudflare R2, and local file storage} [Commented by: Sonic on 10/14/2026 10:35 AM]
+    // {Synchronized chat deletions to remote Supabase, Cloudflare Worker, and local IndexedDB file storage} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
     chats.forEach((c) => {
       if (!c.pinned) {
         removeEncryptedChatRecord(c.id);
         deleteArchiveFromR2(c.id);
         localStorage.removeItem('nanobot_files_' + c.id);
+        deleteOriginalFilesForChat(c.id).catch(() => {});
         if (currentUser) {
           workerClient.deleteConversation(c.id).catch(() => {});
         }
@@ -921,9 +1025,10 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
   };
 
   // Delete chat
-  // {Synchronized conversation deletion with Cloudflare Worker D1 backend} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
+  // {Synchronized conversation deletion with Cloudflare Worker D1 backend and local IndexedDB file cleanup} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
   const handleDeleteChat = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    deleteOriginalFilesForChat(id).catch(() => {});
     removeEncryptedChatRecord(id);
     deleteArchiveFromR2(id);
     localStorage.removeItem('nanobot_files_' + id);
@@ -997,6 +1102,18 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
             <span className="leading-tight">{historyNotice}</span>
             <button
               onClick={() => setHistoryNotice(null)}
+              className="ml-1 text-neutral-400 hover:text-white cursor-pointer text-xs"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+        {/* {Non-intrusive IndexedDB storage quota warning} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM] */}
+        {quotaErrorNotice && (
+          <div className="bg-[#2a0e0e] border border-[#dc2626] text-rose-200 px-2 py-1.5 rounded text-[10px] mb-2 flex items-center justify-between">
+            <span className="leading-tight">{quotaErrorNotice}</span>
+            <button
+              onClick={() => setQuotaErrorNotice(null)}
               className="ml-1 text-neutral-400 hover:text-white cursor-pointer text-xs"
             >
               ✕
@@ -1142,10 +1259,19 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                   <div className="bg-[#181818] border border-[#2a2a2a] px-4 py-3 rounded-2xl max-w-[85%] md:max-w-[75%] text-sm leading-relaxed break-words">
                     <div>{escapeHtml(textContent)}</div>
                     {m.displayAttachments && m.displayAttachments.length > 0 && (
-                      <div className="mt-2 text-xs text-neutral-400 space-y-0.5 border-t border-neutral-700 pt-1.5">
+                      <div className="mt-2 text-xs text-neutral-400 space-y-1.5 border-t border-neutral-700/60 pt-1.5">
                         {m.displayAttachments.map((att, aIdx) => (
-                          <div key={aIdx}>
-                            {att.type === 'image' ? '🖼️ Image' : `📄 ${att.name}`}
+                          <div key={aIdx} className="flex items-center gap-2 flex-wrap">
+                            <span>{att.type === 'image' ? '🖼️ Image' : `📄 ${att.name}`}</span>
+                            {/* {Clear UI distinction when raw file bytes reside only in original browser while preserved cloud output is loaded} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM] */}
+                            {att.isLocalMissing ? (
+                              <span
+                                className="text-[10px] text-amber-300 bg-amber-950/60 border border-amber-800/60 px-1.5 py-0.5 rounded font-mono"
+                                title="Original file bytes stored in local browser only. Preserved AI output loaded from cloud."
+                              >
+                                (Local file unavailable on this device • Cloud output active)
+                              </span>
+                            ) : null}
                           </div>
                         ))}
                       </div>

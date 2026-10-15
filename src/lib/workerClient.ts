@@ -16,7 +16,7 @@ export interface WorkerMessage {
   content: string;
   sources?: Array<{ title: string; url: string }>;
   reasoning?: string;
-  displayAttachments?: Array<{ type: string; name: string }>;
+  displayAttachments?: Array<{ type: string; name: string; fileId?: string; isLocalMissing?: boolean }>;
   created_at?: string;
 }
 
@@ -26,6 +26,20 @@ export interface WorkerApiResponse<T> {
   error?: string;
   isAuthError?: boolean;
   isNetworkError?: boolean;
+}
+
+// {Cloud-persisted AI-generated file outputs for cross-device chat context} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+export interface WorkerFileOutput {
+  id?: string;
+  conversation_id?: string;
+  source_file_id: string;
+  file_name: string;
+  file_type: string;
+  output_type: string; // 'text_extraction' | 'reader_script' | 'structured_summary'
+  output_content: string;
+  metadata?: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
 }
 
 // {Configured Cloudflare Worker base URL with fallback to production deployment} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
@@ -208,6 +222,41 @@ export const workerClient = {
           title: conversationTitle,
         }),
       }
+    );
+  },
+
+  // {Retrieve persisted AI-extracted outputs for a conversation} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+  async getFileOutputs(
+    conversationId: string
+  ): Promise<WorkerApiResponse<{ outputs: WorkerFileOutput[] }>> {
+    return workerFetch<{ outputs: WorkerFileOutput[] }>(
+      `/api/conversations/${encodeURIComponent(conversationId)}/outputs`,
+      { method: 'GET' }
+    );
+  },
+
+  // {Persist an AI-generated file extraction or reader script result to Cloudflare D1} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+  async saveFileOutput(
+    conversationId: string,
+    output: WorkerFileOutput
+  ): Promise<WorkerApiResponse<{ output: WorkerFileOutput }>> {
+    return workerFetch<{ output: WorkerFileOutput }>(
+      `/api/conversations/${encodeURIComponent(conversationId)}/outputs`,
+      {
+        method: 'POST',
+        body: JSON.stringify(output),
+      }
+    );
+  },
+
+  // {Delete a persisted AI output for a file from Cloudflare D1} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+  async deleteFileOutput(
+    conversationId: string,
+    fileId: string
+  ): Promise<WorkerApiResponse<{ message: string }>> {
+    return workerFetch<{ message: string }>(
+      `/api/conversations/${encodeURIComponent(conversationId)}/outputs/${encodeURIComponent(fileId)}`,
+      { method: 'DELETE' }
     );
   },
 };

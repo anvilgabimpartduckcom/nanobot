@@ -1,19 +1,30 @@
-// {Created universal code-driven file analyzer supporting arbitrary non-image file formats} [Commented by: Sonic on 10/12/2026 10:50 AM]
+// {Created universal code-driven file analyzer with stable file identifiers and structured AI output preservation} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
 
 export interface ProcessedFile {
   id: number;
+  fileId: string; // Stable UUID for local IndexedDB and cloud output linkage
   name: string;
   type: string;
   size: number;
   isImage: boolean;
   contentSnippet: string;
+  outputType: 'text_extraction' | 'reader_script' | 'image_metadata';
   generatedReaderCode?: string;
   dataUrl?: string;
+  originalFile?: File;
 }
 
 // Check if a file is an image
 export function isImageFile(file: File): boolean {
   return file.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(file.name);
+}
+
+// Generate stable unique file ID
+export function generateStableFileId(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return `file_${crypto.randomUUID()}`;
+  }
+  return `file_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 }
 
 // Synthesize python-style file inspection script for any arbitrary file format
@@ -69,6 +80,7 @@ except UnicodeDecodeError:
 // Universal extractor executing client-side extraction simulating the dynamic script reader
 export async function analyzeFileWithScript(file: File): Promise<ProcessedFile> {
   const id = Date.now() + Math.random();
+  const fileId = generateStableFileId();
   const isImage = isImageFile(file);
 
   if (isImage) {
@@ -77,12 +89,15 @@ export async function analyzeFileWithScript(file: File): Promise<ProcessedFile> 
       reader.onload = (e) => {
         resolve({
           id,
+          fileId,
           name: file.name,
           type: file.type || 'image/jpeg',
           size: file.size,
           isImage: true,
-          contentSnippet: `[Image File: ${file.name}]`,
-          dataUrl: e.target?.result as string
+          contentSnippet: `[Image File: ${file.name} (${file.size} bytes)]`,
+          outputType: 'image_metadata',
+          dataUrl: e.target?.result as string,
+          originalFile: file
         });
       };
       reader.onerror = reject;
@@ -114,11 +129,14 @@ export async function analyzeFileWithScript(file: File): Promise<ProcessedFile> 
 
   return {
     id,
+    fileId,
     name: file.name,
     type: file.type || 'application/octet-stream',
     size: file.size,
     isImage: false,
     contentSnippet: extractedContent,
-    generatedReaderCode: pythonScript
+    outputType: pythonScript ? 'reader_script' : 'text_extraction',
+    generatedReaderCode: pythonScript,
+    originalFile: file
   };
 }

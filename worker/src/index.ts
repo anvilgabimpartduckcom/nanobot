@@ -1,6 +1,6 @@
-// {Cloudflare Worker backend persisting user chat history with Supabase Bearer token verification and D1 parameterized queries} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
+// {Cloudflare Worker backend persisting user chat history and AI-extracted file outputs with Supabase Bearer token verification and D1 parameterized queries} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
 
-// {Self-contained Cloudflare D1 database interface definitions for zero-dependency portability} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
+// {Self-contained Cloudflare D1 database interface definitions for zero-dependency portability} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
 export interface D1Result<T = unknown> {
   results?: T[];
   success?: boolean;
@@ -123,7 +123,7 @@ export default {
         {
           status: 'ok',
           service: 'nanobot-cloudflare-worker-backend',
-          version: '1.0.0',
+          version: '1.1.0',
           endpoints: [
             'GET /api/conversations',
             'POST /api/conversations',
@@ -132,6 +132,9 @@ export default {
             'DELETE /api/conversations/:id',
             'GET /api/conversations/:id/messages',
             'POST /api/conversations/:id/messages',
+            'GET /api/conversations/:id/outputs',
+            'POST /api/conversations/:id/outputs',
+            'DELETE /api/conversations/:id/outputs/:fileId',
             'DELETE /api/conversations',
           ],
         },
@@ -207,11 +210,133 @@ export default {
           );
         }
 
-        // 3. DELETE /api/conversations -> Delete all conversations and messages for the authenticated user
+        // 3. DELETE /api/conversations -> Delete all conversations, messages, and file outputs for the authenticated user
+        // {Explicit transactional cleanup deleting file outputs, messages, and conversations} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
         if (pathname === '/api/conversations' && request.method === 'DELETE') {
+          await env.DB.prepare(`DELETE FROM file_outputs WHERE user_id = ?`).bind(verifiedUserId).run();
           await env.DB.prepare(`DELETE FROM messages WHERE user_id = ?`).bind(verifiedUserId).run();
           await env.DB.prepare(`DELETE FROM conversations WHERE user_id = ?`).bind(verifiedUserId).run();
-          return jsonResponse({ success: true, message: 'All conversations successfully cleared' }, 200, origin);
+          return jsonResponse({ success: true, message: 'All conversations and associated outputs successfully cleared' }, 200, origin);
+        }
+
+        // Match conversation routes:
+        // /api/conversations/:id
+        // /api/conversations/:id/messages
+        // /api/conversations/:id/outputs
+        // /api/conversations/:id/outputs/:fileId
+        const outputMatch = pathname.match(/^\/api\/conversations\/([^/]+)\/outputs(?:\/([^/]+))?$/);
+        if (outputMatch) {
+          const conversationId = decodeURIComponent(outputMatch[1]);
+          const targetFileId = outputMatch[2] ? decodeURIComponent(outputMatch[2]) : null;
+
+          // Ensure user owns this conversation
+          const conv = await env.DB.prepare(
+            `SELECT id FROM conversations WHERE id = ? AND user_id = ?`
+          )
+            .bind(conversationId, verifiedUserId)
+            .first();
+
+          if (!conv) {
+            return errorResponse('Conversation not found or access denied', 404, origin);
+          }
+
+          // GET /api/conversations/:id/outputs -> List all saved AI file outputs for this conversation
+          if (request.method === 'GET') {
+            const { results } = await env.DB.prepare(
+              `SELECT id, conversation_id, source_file_id, file_name, file_type, output_type, output_content, metadata_json, created_at, updated_at
+               FROM file_outputs
+               WHERE conversation_id = ? AND user_id = ?
+               ORDER BY created_at ASC`
+            )
+              .bind(conversationId, verifiedUserId)
+              .all();
+
+            const formatted = (results || []).map((row: any) => ({
+              id: row.id,
+              conversation_id: row.conversation_id,
+              source_file_id: row.source_file_id,
+              file_name: row.file_name,
+              file_type: row.file_type,
+              output_type: row.output_type,
+              output_content: row.output_content,
+              metadata: row.metadata_json ? JSON.parse(row.metadata_json) : undefined,
+              created_at: row.created_at,
+              updated_at: row.updated_at,
+            }));
+
+            return jsonResponse({ success: true, outputs: formatted }, 200, origin);
+          }
+
+          // POST /api/conversations/:id/outputs -> Save or update an AI-generated output (e.g. extracted text or script results)
+          // {Enforced payload size safety checks and parameterized storage of AI output only} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+          if (request.method === 'POST') {
+            const body: any = await request.json().catch(() => null);
+            if (!body || typeof body !== 'object') {
+              return errorResponse('Invalid output payload', 400, origin);
+            }
+
+            const sourceFileId = typeof body.source_file_id === 'string' && body.source_file_id.trim()
+              ? body.source_file_id.trim()
+              : `file_${crypto.randomUUID()}`;
+            const fileName = typeof body.file_name === 'string' && body.file_name.trim()
+              ? body.file_name.trim()
+              : 'Uploaded File';
+            const fileType = typeof body.file_type === 'string' ? body.file_type : 'application/octet-stream';
+            const outputType = typeof body.output_type === 'string' ? body.output_type : 'text_extraction';
+            const outputContent = typeof body.output_content === 'string' ? body.output_content : '';
+
+            // Guard against excessive output payload sizes (max 512KB for extracted output)
+            if (outputContent.length > 512 * 1024) {
+              return errorResponse('Output payload exceeds safe maximum limit of 512KB', 413, origin);
+            }
+
+            const id = typeof body.id === 'string' && body.id.trim() ? body.id.trim() : `${conversationId}_${sourceFileId}`;
+            const metadataJson = body.metadata ? JSON.stringify(body.metadata) : null;
+            const nowIso = new Date().toISOString();
+
+            await env.DB.prepare(
+              `INSERT INTO file_outputs (id, conversation_id, user_id, source_file_id, file_name, file_type, output_type, output_content, metadata_json, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET
+                 output_content = excluded.output_content,
+                 metadata_json = excluded.metadata_json,
+                 updated_at = excluded.updated_at
+               WHERE file_outputs.user_id = excluded.user_id`
+            )
+              .bind(id, conversationId, verifiedUserId, sourceFileId, fileName, fileType, outputType, outputContent, metadataJson, nowIso, nowIso)
+              .run();
+
+            return jsonResponse(
+              {
+                success: true,
+                output: {
+                  id,
+                  conversation_id: conversationId,
+                  source_file_id: sourceFileId,
+                  file_name: fileName,
+                  file_type: fileType,
+                  output_type: outputType,
+                  output_content: outputContent,
+                  metadata: body.metadata,
+                  created_at: nowIso,
+                  updated_at: nowIso,
+                },
+              },
+              201,
+              origin
+            );
+          }
+
+          // DELETE /api/conversations/:id/outputs/:fileId -> Delete saved output for a file
+          if (request.method === 'DELETE' && targetFileId) {
+            await env.DB.prepare(
+              `DELETE FROM file_outputs WHERE conversation_id = ? AND user_id = ? AND source_file_id = ?`
+            )
+              .bind(conversationId, verifiedUserId, targetFileId)
+              .run();
+
+            return jsonResponse({ success: true, message: 'File output successfully removed' }, 200, origin);
+          }
         }
 
         // Match conversation routes: /api/conversations/:id and /api/conversations/:id/messages
@@ -391,7 +516,12 @@ export default {
             return jsonResponse({ success: true, updated_at: nowIso }, 200, origin);
           }
 
+          // {Explicit cascade deletion: remove file_outputs, messages, and conversation without leaving orphans} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
           if (request.method === 'DELETE') {
+            await env.DB.prepare(`DELETE FROM file_outputs WHERE conversation_id = ? AND user_id = ?`)
+              .bind(conversationId, verifiedUserId)
+              .run();
+
             await env.DB.prepare(`DELETE FROM messages WHERE conversation_id = ? AND user_id = ?`)
               .bind(conversationId, verifiedUserId)
               .run();
@@ -400,7 +530,7 @@ export default {
               .bind(conversationId, verifiedUserId)
               .run();
 
-            return jsonResponse({ success: true, message: 'Conversation deleted successfully' }, 200, origin);
+            return jsonResponse({ success: true, message: 'Conversation, messages, and saved outputs deleted successfully' }, 200, origin);
           }
         }
 

@@ -1,4 +1,4 @@
--- {Cloudflare D1 SQL schema for Nanobot conversations and message persistence} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
+-- {Cloudflare D1 SQL schema for Nanobot conversations, messages, and AI-generated file outputs} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
 
 -- 1. Conversations Table
 CREATE TABLE IF NOT EXISTS conversations (
@@ -34,3 +34,30 @@ CREATE INDEX IF NOT EXISTS idx_messages_conversation_created
 
 CREATE INDEX IF NOT EXISTS idx_messages_user 
   ON messages (user_id);
+
+-- 3. AI-Generated File Outputs Table (Persisting extracted text, reader scripts, and structured data summaries, NEVER original raw file bytes)
+-- {Added file_outputs table for cross-device AI output persistence with foreign-key cascading deletion} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+CREATE TABLE IF NOT EXISTS file_outputs (
+  id TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  source_file_id TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  file_type TEXT NOT NULL,
+  output_type TEXT NOT NULL, -- 'text_extraction' | 'reader_script' | 'structured_summary'
+  output_content TEXT NOT NULL,
+  metadata_json TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+);
+
+-- Indexes for fast lookup of conversation file outputs
+CREATE INDEX IF NOT EXISTS idx_file_outputs_conversation 
+  ON file_outputs (conversation_id, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_file_outputs_user 
+  ON file_outputs (user_id);
+
+CREATE INDEX IF NOT EXISTS idx_file_outputs_source_file 
+  ON file_outputs (source_file_id);
