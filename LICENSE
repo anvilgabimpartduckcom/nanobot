@@ -1,7 +1,9 @@
-NANOBOT SOURCE-AVAILABLE LIMITED USE LICENSE
-Version 1.0 — October 2026
+{Updated license with new contact email anvil-gab-impart@duck.com and mandatory explicit email permission requirement for sharing any part of the code} [Commented by: Google AI Studio on October 15, 2026 at 10:01 AM]
 
-Copyright (c) 2026 [Copyright Holder / Legal Name] <privatedevelopersonic@gmail.com>
+NANOBOT SOURCE-AVAILABLE LIMITED USE LICENSE
+Version 1.1 — October 2026
+
+Copyright (c) 2026 [Copyright Holder / Legal Name] <anvil-gab-impart@duck.com>
 All Rights Reserved.
 
 Repository: https://github.com/anvilgabimpartduckcom/nanobot
@@ -31,10 +33,12 @@ non-transferable, revocable license to:
 Except as expressly permitted in Section 1, all other rights are reserved by the
 Copyright Holder. Without limiting the generality of the foregoing, You SHALL NOT:
 
-  a) No Redistribution: Distribute, publish, republish, broadcast, syndicate,
-     mirror, transmit, transfer, or otherwise make available the original source
-     code, modified source code, or any compiled binaries to any third party,
-     public repository, website, forum, or network.
+  a) No Sharing or Redistribution of Any Part: Distribute, publish, republish,
+     broadcast, syndicate, mirror, transmit, transfer, share, post snippets of,
+     or otherwise make available the source code, any part or portion of the code,
+     modified source code, or any compiled binaries to any third party, public
+     repository, website, forum, messaging service, social network, or public
+     medium without prior explicit written permission obtained via email.
   b) No Public Forks: Host, maintain, or publish any public fork, mirror, or
      repository containing this software or derivative works on GitHub, GitLab,
      or any other hosting platform without explicit written authorization.
@@ -46,19 +50,24 @@ Copyright Holder. Without limiting the generality of the foregoing, You SHALL NO
      code or documentation.
 
 --------------------------------------------------------------------------------
-3. REQUESTING PERMISSION
+3. MANDATORY EMAIL PERMISSION FOR SHARING ANY PART OF THE CODE
 --------------------------------------------------------------------------------
-If You wish to redistribute, publicly publish, fork, commercially use, or license
-any portion of this software beyond the scope expressly authorized herein, You
-must obtain prior written authorization from the Copyright Holder.
+If ever anyone needs or wishes to share any part, snippet, file, module, routine,
+or portion of this code, or to redistribute, publicly publish, fork, embed, or
+commercially use any portion of this software beyond the private personal study
+expressly authorized in Section 1, You MUST request and obtain explicit written
+permission directly from the Copyright Holder via email prior to sharing.
 
-To request permission, please contact:
-  Name:  [Copyright Holder / Legal Name]
-  Email: privatedevelopersonic@gmail.com
-  Subject: nanobot License Permission Request
+Sharing, posting, or communicating any part or excerpt of this codebase without
+prior explicit authorization received via email is strictly prohibited.
 
-Any permission granted must be delivered in an explicit written document signed or
-transmitted directly by the Copyright Holder.
+To request explicit permission to share any part of the code:
+  Contact Email: anvil-gab-impart@duck.com
+  Subject Line:  nanobot Code Sharing & License Permission Request
+
+Any authorization or permission granted is valid ONLY if delivered in an explicit
+written communication sent directly by the Copyright Holder from the email address
+anvil-gab-impart@duck.com.
 
 --------------------------------------------------------------------------------
 4. DISCLAIMER OF WARRANTY

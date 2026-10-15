@@ -249,8 +249,8 @@ nanobot/
 
 This repository is **source-available for private inspection and study**:
 - You are welcome to view, study, evaluate, and privately modify the code for personal, private, or internal use.
-- **Prohibited:** Publicly redistributing the original or modified source code, publishing public forks on GitHub or other platforms, and selling or sublicensing copies without prior explicit written permission.
-- If you would like to suggest changes or request permission for public distribution, please reach out via the contact information below.
+- **Prohibited:** Publicly redistributing the original or modified source code, sharing any part or snippet of the code, publishing public forks on GitHub or other platforms, and selling or sublicensing copies without prior explicit written permission obtained via email.
+- **Sharing Code:** If ever anyone needs or wishes to share any part or snippet of this code, they must take explicit permission via email from `anvil-gab-impart@duck.com`.
 
 ---
 
@@ -261,15 +261,17 @@ This project is licensed under a **Custom Source-Available Limited Use License**
 - It is **NOT** licensed under MIT, Apache 2.0, GPL, or another permissive open-source license.
 - It does **NOT** constitute open-source software under the Open Source Definition.
 - Review the complete terms in the [LICENSE](./LICENSE) file.
+- **Sharing Requirement:** Sharing any portion of the source code requires prior explicit permission granted via email by the author.
 
 > **Legal Notice:** This custom restrictive license is provided for source-available proprietary protection. Users and project maintainers are advised that custom licenses should be reviewed by a qualified legal professional before commercial publication.
 
 ---
 
-<!-- {Updated Contact and documentation links in README.md} [Commented by: Google AI Studio on 10/14/2026 10:45 AM] -->
+<!-- {Updated contact email to anvil-gab-impart@duck.com and code-sharing permission protocol} [Commented by: Google AI Studio on October 15, 2026 at 10:01 AM] -->
 ## 📬 Contact & Inquiries
 
-For questions, permissions, developer support, or license inquiries:
-- **Developer Support:** `molecule-sip-sauna@duck.com`
+For questions, permissions, code-sharing authorizations, developer support, or license inquiries:
+- **Permission & License Requests:** `anvil-gab-impart@duck.com`
+- **Developer Support:** `molecule-sip-sauna@duck.com` / `anvil-gab-impart@duck.com`
 - **Documentation:** [nanobot Docs](https://tropical-chime-8c1.notion.site/nanobot-Docs-3f4b104092f3804792d0c68bca97e821)
 - **GitHub Repository:** [https://github.com/anvilgabimpartduckcom/nanobot](https://github.com/anvilgabimpartduckcom/nanobot)
