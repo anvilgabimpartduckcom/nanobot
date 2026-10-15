@@ -1,6 +1,6 @@
-// {Cloudflare Worker backend persisting user chat history and AI-extracted file outputs with Supabase Bearer token verification and D1 parameterized queries} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+// {Cloudflare Worker backend persisting user chat history and AI-extracted file outputs with Supabase Bearer token verification and D1 parameterized queries} [Commented by: Google AI Studio on October 15, 2026 at 09:57 AM]
 
-// {Self-contained Cloudflare D1 database interface definitions for zero-dependency portability} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+// {Self-contained Cloudflare D1 database interface definitions for zero-dependency portability} [Commented by: Google AI Studio on October 15, 2026 at 09:57 AM]
 export interface D1Result<T = unknown> {
   results?: T[];
   success?: boolean;
@@ -34,29 +34,53 @@ interface SupabaseUser {
   role?: string;
 }
 
-// CORS headers helper
+// {CORS headers helper supporting wildcard or configured origins from runtime environment} [Commented by: Google AI Studio on October 15, 2026 at 09:57 AM]
 function getCorsHeaders(origin: string | null, allowedOrigin: string = '*'): Headers {
   const headers = new Headers();
-  headers.set('Access-Control-Allow-Origin', allowedOrigin === '*' ? '*' : origin || allowedOrigin);
+  let permitOrigin = '*';
+  if (allowedOrigin === '*') {
+    permitOrigin = '*';
+  } else if (allowedOrigin.includes(',')) {
+    const list = allowedOrigin.split(',').map((o) => o.trim());
+    if (origin && list.includes(origin)) {
+      permitOrigin = origin;
+    } else {
+      permitOrigin = list[0];
+    }
+  } else {
+    permitOrigin = allowedOrigin;
+  }
+
+  headers.set('Access-Control-Allow-Origin', permitOrigin);
   headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   headers.set('Access-Control-Max-Age', '86400');
   return headers;
 }
 
-// JSON response helper with CORS
-function jsonResponse(data: unknown, status = 200, origin: string | null = null): Response {
-  const headers = getCorsHeaders(origin);
+// JSON response helper with CORS configured from environment
+function jsonResponse(
+  data: unknown,
+  status = 200,
+  origin: string | null = null,
+  allowedOrigin: string = '*'
+): Response {
+  const headers = getCorsHeaders(origin, allowedOrigin);
   headers.set('Content-Type', 'application/json');
   return new Response(JSON.stringify(data), { status, headers });
 }
 
-// Error response helper
-function errorResponse(message: string, status = 400, origin: string | null = null): Response {
-  return jsonResponse({ success: false, error: message }, status, origin);
+// Error response helper with CORS configured from environment
+function errorResponse(
+  message: string,
+  status = 400,
+  origin: string | null = null,
+  allowedOrigin: string = '*'
+): Response {
+  return jsonResponse({ success: false, error: message }, status, origin, allowedOrigin);
 }
 
-// Securely verify Supabase Bearer token against Supabase Auth API
+// {Securely verify Supabase Bearer token against Supabase Auth API using environment secrets} [Commented by: Google AI Studio on October 15, 2026 at 09:57 AM]
 // Derives user ID strictly from the verified cryptographic session; never trusts client-supplied user ID
 async function authenticateRequest(
   request: Request,
@@ -72,8 +96,16 @@ async function authenticateRequest(
     return { user: null, error: 'Empty Bearer token' };
   }
 
-  const supabaseUrl = env.SUPABASE_URL || 'https://xyzcompany.supabase.co';
-  const supabaseAnonKey = env.SUPABASE_ANON_KEY || '';
+  const supabaseUrl = env.SUPABASE_URL;
+  const supabaseAnonKey = env.SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return {
+      user: null,
+      error:
+        'Worker runtime configuration missing: SUPABASE_URL and SUPABASE_ANON_KEY secrets must be configured in Cloudflare (wrangler secret put SUPABASE_URL / SUPABASE_ANON_KEY or Cloudflare dashboard).',
+    };
+  }
 
   try {
     const authEndpoint = `${supabaseUrl.replace(/\/$/, '')}/auth/v1/user`;
@@ -105,25 +137,38 @@ async function authenticateRequest(
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const origin = request.headers.get('Origin');
+    const allowedOrigin = env.CORS_ORIGIN || '*';
+
+    // Helper functions capturing current origin and CORS configuration
+    const sendJson = (data: unknown, status = 200) =>
+      jsonResponse(data, status, origin, allowedOrigin);
+    const sendError = (msg: string, status = 400) =>
+      errorResponse(msg, status, origin, allowedOrigin);
 
     // Handle CORS preflight
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         status: 204,
-        headers: getCorsHeaders(origin, env.CORS_ORIGIN || '*'),
+        headers: getCorsHeaders(origin, allowedOrigin),
       });
     }
 
     const url = new URL(request.url);
     const pathname = url.pathname;
 
-    // Public health check and info
+    // {Public health check and diagnostic endpoint verifying environment variables and D1 binding} [Commented by: Google AI Studio on October 15, 2026 at 09:57 AM]
     if (pathname === '/' || pathname === '/health' || pathname === '/api/health') {
-      return jsonResponse(
+      return sendJson(
         {
           status: 'ok',
           service: 'nanobot-cloudflare-worker-backend',
-          version: '1.1.0',
+          version: '1.2.0',
+          environment: {
+            d1_database_bound: Boolean(env.DB && typeof env.DB.prepare === 'function'),
+            supabase_url_configured: Boolean(env.SUPABASE_URL),
+            supabase_anon_key_configured: Boolean(env.SUPABASE_ANON_KEY),
+            cors_origin: allowedOrigin,
+          },
           endpoints: [
             'GET /api/conversations',
             'POST /api/conversations',
@@ -138,16 +183,19 @@ export default {
             'DELETE /api/conversations',
           ],
         },
-        200,
-        origin
+        200
       );
     }
 
     // All endpoints under /api/* (except health) require authenticated Supabase Bearer token
     if (pathname.startsWith('/api/')) {
+      if (!env.DB || typeof env.DB.prepare !== 'function') {
+        return sendError('D1 database binding "DB" is not available on Cloudflare Worker', 500);
+      }
+
       const { user, error: authError } = await authenticateRequest(request, env);
       if (!user) {
-        return errorResponse(authError || 'Unauthorized', 401, origin);
+        return sendError(authError || 'Unauthorized', 401);
       }
 
       const verifiedUserId = user.id;
@@ -164,14 +212,14 @@ export default {
             .bind(verifiedUserId)
             .all();
 
-          return jsonResponse({ success: true, conversations: results || [] }, 200, origin);
+          return sendJson({ success: true, conversations: results || [] }, 200);
         }
 
         // 2. POST /api/conversations -> Create or upsert a conversation record
         if (pathname === '/api/conversations' && request.method === 'POST') {
           const body: any = await request.json().catch(() => null);
           if (!body || typeof body !== 'object') {
-            return errorResponse('Invalid JSON payload', 400, origin);
+            return sendError('Invalid JSON payload', 400);
           }
 
           const id = typeof body.id === 'string' && body.id.trim() ? body.id.trim() : crypto.randomUUID();
@@ -194,7 +242,7 @@ export default {
             .bind(id, verifiedUserId, title, pinned, createdAt, updatedAt)
             .run();
 
-          return jsonResponse(
+          return sendJson(
             {
               success: true,
               conversation: {
@@ -205,23 +253,20 @@ export default {
                 updated_at: updatedAt,
               },
             },
-            201,
-            origin
+            201
           );
         }
 
         // 3. DELETE /api/conversations -> Delete all conversations, messages, and file outputs for the authenticated user
-        // {Explicit transactional cleanup deleting file outputs, messages, and conversations} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+        // {Explicit transactional cleanup deleting file outputs, messages, and conversations} [Commented by: Google AI Studio on October 15, 2026 at 09:57 AM]
         if (pathname === '/api/conversations' && request.method === 'DELETE') {
           await env.DB.prepare(`DELETE FROM file_outputs WHERE user_id = ?`).bind(verifiedUserId).run();
           await env.DB.prepare(`DELETE FROM messages WHERE user_id = ?`).bind(verifiedUserId).run();
           await env.DB.prepare(`DELETE FROM conversations WHERE user_id = ?`).bind(verifiedUserId).run();
-          return jsonResponse({ success: true, message: 'All conversations and associated outputs successfully cleared' }, 200, origin);
+          return sendJson({ success: true, message: 'All conversations and associated outputs successfully cleared' }, 200);
         }
 
-        // Match conversation routes:
-        // /api/conversations/:id
-        // /api/conversations/:id/messages
+        // Match conversation file output routes:
         // /api/conversations/:id/outputs
         // /api/conversations/:id/outputs/:fileId
         const outputMatch = pathname.match(/^\/api\/conversations\/([^/]+)\/outputs(?:\/([^/]+))?$/);
@@ -237,7 +282,7 @@ export default {
             .first();
 
           if (!conv) {
-            return errorResponse('Conversation not found or access denied', 404, origin);
+            return sendError('Conversation not found or access denied', 404);
           }
 
           // GET /api/conversations/:id/outputs -> List all saved AI file outputs for this conversation
@@ -264,15 +309,15 @@ export default {
               updated_at: row.updated_at,
             }));
 
-            return jsonResponse({ success: true, outputs: formatted }, 200, origin);
+            return sendJson({ success: true, outputs: formatted }, 200);
           }
 
           // POST /api/conversations/:id/outputs -> Save or update an AI-generated output (e.g. extracted text or script results)
-          // {Enforced payload size safety checks and parameterized storage of AI output only} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+          // {Enforced payload size safety checks and parameterized storage of AI output only} [Commented by: Google AI Studio on October 15, 2026 at 09:57 AM]
           if (request.method === 'POST') {
             const body: any = await request.json().catch(() => null);
             if (!body || typeof body !== 'object') {
-              return errorResponse('Invalid output payload', 400, origin);
+              return sendError('Invalid output payload', 400);
             }
 
             const sourceFileId = typeof body.source_file_id === 'string' && body.source_file_id.trim()
@@ -287,7 +332,7 @@ export default {
 
             // Guard against excessive output payload sizes (max 512KB for extracted output)
             if (outputContent.length > 512 * 1024) {
-              return errorResponse('Output payload exceeds safe maximum limit of 512KB', 413, origin);
+              return sendError('Output payload exceeds safe maximum limit of 512KB', 413);
             }
 
             const id = typeof body.id === 'string' && body.id.trim() ? body.id.trim() : `${conversationId}_${sourceFileId}`;
@@ -306,7 +351,7 @@ export default {
               .bind(id, conversationId, verifiedUserId, sourceFileId, fileName, fileType, outputType, outputContent, metadataJson, nowIso, nowIso)
               .run();
 
-            return jsonResponse(
+            return sendJson(
               {
                 success: true,
                 output: {
@@ -322,8 +367,7 @@ export default {
                   updated_at: nowIso,
                 },
               },
-              201,
-              origin
+              201
             );
           }
 
@@ -335,7 +379,7 @@ export default {
               .bind(conversationId, verifiedUserId, targetFileId)
               .run();
 
-            return jsonResponse({ success: true, message: 'File output successfully removed' }, 200, origin);
+            return sendJson({ success: true, message: 'File output successfully removed' }, 200);
           }
         }
 
@@ -356,7 +400,7 @@ export default {
                 .first();
 
               if (!conv) {
-                return errorResponse('Conversation not found or access denied', 404, origin);
+                return sendError('Conversation not found or access denied', 404);
               }
 
               const { results } = await env.DB.prepare(
@@ -378,14 +422,14 @@ export default {
                 created_at: m.created_at,
               }));
 
-              return jsonResponse({ success: true, messages: formattedMessages }, 200, origin);
+              return sendJson({ success: true, messages: formattedMessages }, 200);
             }
 
             // 5. POST /api/conversations/:id/messages -> Append a single message or batch save messages
             if (request.method === 'POST') {
               const body: any = await request.json().catch(() => null);
               if (!body || typeof body !== 'object') {
-                return errorResponse('Invalid message payload', 400, origin);
+                return sendError('Invalid message payload', 400);
               }
 
               // Auto-ensure conversation exists for this user
@@ -437,7 +481,7 @@ export default {
                   await env.DB.batch(statements);
                 }
 
-                return jsonResponse({ success: true, count: statements.length }, 201, origin);
+                return sendJson({ success: true, count: statements.length }, 201);
               }
 
               // Handle single message payload
@@ -456,7 +500,7 @@ export default {
                 .bind(msgId, conversationId, verifiedUserId, role, content, sourcesJson, reasoning, attachmentsJson, createdAt)
                 .run();
 
-              return jsonResponse(
+              return sendJson(
                 {
                   success: true,
                   message: {
@@ -470,8 +514,7 @@ export default {
                     created_at: createdAt,
                   },
                 },
-                201,
-                origin
+                201
               );
             }
           }
@@ -487,16 +530,16 @@ export default {
               .first();
 
             if (!conv) {
-              return errorResponse('Conversation not found or access denied', 404, origin);
+              return sendError('Conversation not found or access denied', 404);
             }
 
-            return jsonResponse({ success: true, conversation: conv }, 200, origin);
+            return sendJson({ success: true, conversation: conv }, 200);
           }
 
           if (request.method === 'PUT') {
             const body: any = await request.json().catch(() => null);
             if (!body || typeof body !== 'object') {
-              return errorResponse('Invalid update payload', 400, origin);
+              return sendError('Invalid update payload', 400);
             }
 
             const nowIso = new Date().toISOString();
@@ -513,10 +556,10 @@ export default {
               .bind(title, pinned, nowIso, conversationId, verifiedUserId)
               .run();
 
-            return jsonResponse({ success: true, updated_at: nowIso }, 200, origin);
+            return sendJson({ success: true, updated_at: nowIso }, 200);
           }
 
-          // {Explicit cascade deletion: remove file_outputs, messages, and conversation without leaving orphans} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+          // {Explicit cascade deletion: remove file_outputs, messages, and conversation without leaving orphans} [Commented by: Google AI Studio on October 15, 2026 at 09:57 AM]
           if (request.method === 'DELETE') {
             await env.DB.prepare(`DELETE FROM file_outputs WHERE conversation_id = ? AND user_id = ?`)
               .bind(conversationId, verifiedUserId)
@@ -530,18 +573,18 @@ export default {
               .bind(conversationId, verifiedUserId)
               .run();
 
-            return jsonResponse({ success: true, message: 'Conversation, messages, and saved outputs deleted successfully' }, 200, origin);
+            return sendJson({ success: true, message: 'Conversation, messages, and saved outputs deleted successfully' }, 200);
           }
         }
 
-        return errorResponse('Endpoint not found', 404, origin);
+        return sendError('Endpoint not found', 404);
       } catch (dbErr: unknown) {
         const error = dbErr as Error;
         console.error('D1 Database Query Error:', error);
-        return errorResponse(`Database error: ${error.message}`, 500, origin);
+        return sendError(`Database error: ${error.message}`, 500);
       }
     }
 
-    return errorResponse('Not found', 404, origin);
+    return sendError('Not found', 404);
   },
 };

@@ -147,19 +147,23 @@ The Nanobot backend leverages Cloudflare Workers and Cloudflare D1 for serverles
    ```
    Copy the generated `database_id` into `worker/wrangler.toml`.
 
+<!-- {Updated Cloudflare Worker D1 schema command with nanobot-chat-history and diagnostic testing steps} [Commented by: Google AI Studio on October 15, 2026 at 09:57 AM] -->
 2. **Execute the Database Schema:**
+   Apply the schema to your existing Cloudflare D1 database:
    ```bash
-   npx wrangler d1 execute nanobot_db --file=./schema.sql
+   cd worker
+   npx wrangler d1 execute nanobot-chat-history --remote --file=./schema.sql
    ```
-   This provisions the `conversations` and `messages` tables with indexing on `(user_id, updated_at)` and `(conversation_id, created_at)`.
+   This creates the `conversations`, `messages`, and `file_outputs` tables with cascading foreign keys (`ON DELETE CASCADE`) and composite indexes.
 
 3. **Configure Worker Secrets:**
+   Configure your Supabase credentials securely as encrypted Cloudflare secrets (never commit these to Git or wrangler.toml):
    ```bash
    npx wrangler secret put SUPABASE_URL
    # Enter your Supabase Project URL (e.g., https://your-project.supabase.co)
 
    npx wrangler secret put SUPABASE_ANON_KEY
-   # Enter your Supabase Anon/Public Key
+   # Enter your Supabase Anon/Public Key (eyJhbGciOi...)
    ```
 
 4. **Deploy the Worker:**
@@ -167,8 +171,19 @@ The Nanobot backend leverages Cloudflare Workers and Cloudflare D1 for serverles
    npx wrangler deploy
    ```
 
-5. **Connect to Frontend:**
-   Add your worker URL to your frontend `.env`:
+5. **Verify the Deployment & Diagnostics:**
+   Visit `https://nanobot-api.mud-amiable-tweed.workers.dev/api/health` in your browser or with curl:
+   ```bash
+   curl https://nanobot-api.mud-amiable-tweed.workers.dev/api/health
+   ```
+   You should receive a `200 OK` response confirming:
+   - `d1_database_bound: true`
+   - `supabase_url_configured: true`
+   - `supabase_anon_key_configured: true`
+   - `cors_origin: "*"`
+
+6. **Connect to Frontend:**
+   Configure your frontend environment variable in `.env` (or Netlify dashboard):
    ```env
    VITE_CLOUDFLARE_WORKER_URL="https://nanobot-api.mud-amiable-tweed.workers.dev"
    ```

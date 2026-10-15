@@ -1,4 +1,4 @@
-# {Wrangler configuration for Nanobot Cloudflare Worker with D1 database binding} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
+# {Wrangler configuration for Nanobot Cloudflare Worker binding DB to nanobot-chat-history D1 database} [Commented by: Google AI Studio on October 15, 2026 at 09:57 AM]
 
 name = "nanobot-api"
 main = "src/index.ts"
@@ -7,12 +7,12 @@ compatibility_flags = ["nodejs_compat"]
 
 [[d1_databases]]
 binding = "DB"
-database_name = "nanobot_db"
+database_name = "nanobot-chat-history"
 database_id = "nanobot-d1-production"
 
 [vars]
 CORS_ORIGIN = "*"
 
-# In production, securely configure secrets with:
+# In Cloudflare Worker, configure secrets securely via dashboard or CLI:
 # npx wrangler secret put SUPABASE_URL
 # npx wrangler secret put SUPABASE_ANON_KEY

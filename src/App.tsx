@@ -1397,6 +1397,31 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
             activeChat ? 'bottom-[45px]' : 'top-[30vh]'
           }`}
         >
+          {/* {Storage quota and sync status notices} [Commented by: Google AI Studio on October 15, 2026 at 09:57 AM] */}
+          {quotaErrorNotice && (
+            <div className="mb-2 px-3 py-1.5 rounded-lg bg-amber-950/80 border border-amber-600/60 text-amber-200 text-xs flex items-center justify-between shadow-lg">
+              <span>⚠️ {quotaErrorNotice}</span>
+              <button
+                type="button"
+                onClick={() => setQuotaErrorNotice(null)}
+                className="text-amber-400 hover:text-white ml-2 cursor-pointer font-bold"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+          {historyNotice && (
+            <div className="mb-2 px-3 py-1.5 rounded-lg bg-blue-950/70 border border-blue-700/60 text-blue-200 text-xs flex items-center justify-between shadow-lg">
+              <span>ℹ️ {historyNotice}</span>
+              <button
+                type="button"
+                onClick={() => setHistoryNotice(null)}
+                className="text-blue-400 hover:text-white ml-2 cursor-pointer font-bold"
+              >
+                ✕
+              </button>
+            </div>
+          )}
           <div className="w-full bg-[#111] border border-[#333] rounded-[20px] p-[15px] flex flex-col gap-2.5 neon-glow">
             {/* Attachments Preview */}
             {attachments.length > 0 && (
