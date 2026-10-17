@@ -1,4 +1,4 @@
-# {Wrangler configuration for Nanobot Cloudflare Worker binding DB to nanobot-chat-history D1 database} [Commented by: Google AI Studio on October 15, 2026 at 09:57 AM]
+# {Restricted CORS_ORIGIN to Netlify production URL and configured D1 binding for nanobot-chat-history} [Commented by: Google AI Studio on October 17, 2026 at 02:29 AM]
 
 name = "nanobot-api"
 main = "src/index.ts"
@@ -8,10 +8,13 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "nanobot-chat-history"
-database_id = "nanobot-d1-production"
+# In Cloudflare, database_id must be the exact UUID of the D1 database (e.g. xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).
+# The GitHub Actions deploy workflow auto-discovers this UUID from Cloudflare API, or you can paste your UUID below:
+database_id = "nanobot-chat-history-uuid"
 
 [vars]
-CORS_ORIGIN = "*"
+# Restricted to the official production frontend on Netlify for security
+CORS_ORIGIN = "https://nanobot-chatbot.netlify.app"
 
 # In Cloudflare Worker, configure secrets securely via dashboard or CLI:
 # npx wrangler secret put SUPABASE_URL
