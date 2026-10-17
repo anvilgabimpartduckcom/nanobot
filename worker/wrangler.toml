@@ -1,4 +1,4 @@
-# {Configured Cloudflare Worker binding DB to nanobot-chat-history with verified database UUID and Netlify CORS} [Commented by: Google AI Studio on October 17, 2026 at 02:43 AM]
+# {Configured Cloudflare Worker binding DB, Netlify CORS, and non-secret Supabase project URL variable} [Commented by: Google AI Studio on 17/10/2026 03:22 AM]
 
 name = "nanobot-api"
 main = "src/index.ts"
@@ -13,7 +13,8 @@ database_id = "48cb0c33-cc0d-4dae-918b-8bb36e9fcb44"
 [vars]
 # Restricted to the official production frontend on Netlify for security
 CORS_ORIGIN = "https://nanobot-chatbot.netlify.app"
+# Non-secret Supabase project endpoint URL for token verification
+SUPABASE_URL = "https://kyluvwlbdtovuwpmakep.supabase.co"
 
 # In Cloudflare Worker, configure secrets securely via dashboard or CLI:
-# npx wrangler secret put SUPABASE_URL
 # npx wrangler secret put SUPABASE_ANON_KEY
