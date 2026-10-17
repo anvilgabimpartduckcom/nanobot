@@ -47,5 +47,3 @@ nanobot/
         ├── tavily.ts           # Tavily search, URL scraping, and # / ## Deep Research runners
         └── workerClient.ts     # Cloudflare Worker REST API client with Bearer token authentication
 ```
-
-New to nanobot? Visit here [https://nanobot-chatbot.netlify.app](https://nanobot-chatbot.netlify.app)
