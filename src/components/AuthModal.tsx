@@ -1,31 +1,25 @@
-// {Removed Google OAuth completely to enforce strict email verification link flow} [Commented by: Sonic on 10/13/2026 10:52 AM]
+// {Removed email id login concept completely for direct username, password, and API keys entry on Sign Up, and implemented zero-knowledge client-side encryption for credentials saved to Supabase} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM]
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { supabase, isSupabaseConfigured, getLocalProfiles, saveLocalProfiles, UserProfile } from '../lib/supabase';
-import { generateSalt } from '../lib/crypto';
+import { generateSalt, deriveKeyFromPassword, encryptText, decryptText } from '../lib/crypto';
 
 interface AuthModalProps {
   mode: 'signin' | 'signup';
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (user: UserProfile, passwordSecret: string) => void;
-  initialStep?: 1 | 2;
-  initialEmail?: string;
+  onSwitchMode?: (mode: 'signin' | 'signup') => void;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
-  mode,
+  mode: initialMode,
   isOpen,
   onClose,
   onSuccess,
-  initialStep = 1,
-  initialEmail = ''
+  onSwitchMode
 }) => {
-  // Signup State
-  const [signupStep, setSignupStep] = useState<1 | 2>(initialStep);
-  const [email, setEmail] = useState(initialEmail);
-  const [emailSent, setEmailSent] = useState(false);
-  const [resendNotice, setResendNotice] = useState<string | null>(null);
+  const [currentMode, setCurrentMode] = useState<'signin' | 'signup'>(initialMode);
 
   // Credentials State
   const [username, setUsername] = useState('');
@@ -37,79 +31,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Auto-detect when the user clicks the confirmation link in their inbox and returns to nanobot
-  useEffect(() => {
-    if (!supabase) return;
-
-    // Check if returning with active session from email verification link
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user?.email) {
-        setEmail(session.user.email);
-        setSignupStep(2);
-      }
-    });
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
-        if (session?.user?.email) {
-          setEmail(session.user.email);
-          setSignupStep(2);
-        }
-      }
-    });
-
-    return () => {
-      authListener?.subscription?.unsubscribe();
-    };
-  }, []);
-
   if (!isOpen) return null;
 
-  // Step 1: Send real email verification link via Supabase
-  // {Handled resend email verification link dispatch with user feedback notice} [Commented by: Sonic on 10/14/2026 10:35 AM]
-  const handleSendEmailConfirm = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  const handleSwitchMode = (targetMode: 'signin' | 'signup') => {
     setError(null);
-    setResendNotice(null);
-    const trimmedEmail = email.trim().toLowerCase();
-    if (!trimmedEmail || !trimmedEmail.includes('@')) {
-      setError('Please enter a valid email address.');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      // Check if email already exists locally or remotely
-      const existing = getLocalProfiles();
-      if (existing.some((u) => u.email.toLowerCase() === trimmedEmail)) {
-        throw new Error('This email address is already registered. Please sign in instead.');
-      }
-
-      // Send real email verification link to user's inbox
-      if (isSupabaseConfigured && supabase) {
-        const { error: signUpErr } = await supabase.auth.signInWithOtp({
-          email: trimmedEmail,
-          options: {
-            emailRedirectTo: window.location.origin
-          }
-        });
-        if (signUpErr) {
-          throw new Error(`Supabase Auth: ${signUpErr.message}`);
-        }
-      }
-
-      setEmailSent(true);
-      setResendNotice('Fresh verification email sent! Check your inbox.');
-      setTimeout(() => setResendNotice(null), 4000);
-    } catch (err: unknown) {
-      const e = err as Error;
-      setError(e.message || 'Failed to dispatch verification email.');
-    } finally {
-      setLoading(false);
-    }
+    setCurrentMode(targetMode);
+    if (onSwitchMode) onSwitchMode(targetMode);
   };
 
-  // Step 2: Create Account with global uniqueness verification across all 4 parameters
+  // Direct Account Creation: Username, Password, OpenRouter Key, Tavily Key
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -124,44 +54,50 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
+    if (pwd.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+
     setLoading(true);
     try {
       const existingUsers = getLocalProfiles();
 
-      // Check global uniqueness for all 4 parameters
-      const emailTaken = existingUsers.some((u) => u.email.toLowerCase() === email.trim().toLowerCase());
-      const usernameTaken = existingUsers.some((u) => u.username.toLowerCase() === uName.toLowerCase());
-      const orTaken = existingUsers.some((u) => u.openrouter_key === orKey);
-      const tvTaken = existingUsers.some((u) => u.tavily_key === tvKey);
+      // Check global username uniqueness locally
+      const usernameTaken = existingUsers.some(
+        (u) => u.username.toLowerCase() === uName.toLowerCase()
+      );
+      if (usernameTaken) {
+        throw new Error('Username is already taken. Please choose another username.');
+      }
 
-      if (emailTaken) throw new Error('Email is already registered.');
-      if (usernameTaken) throw new Error('Username is already taken globally. Please choose another username.');
-      if (orTaken) throw new Error('This OpenRouter API Key is already registered to another account.');
-      if (tvTaken) throw new Error('This Tavily API Key is already registered to another account.');
-
-      // Check remote Supabase table uniqueness
+      // Check remote Supabase table uniqueness if connected
       if (isSupabaseConfigured && supabase) {
-        const { data: remoteUsers } = await supabase
+        const { data: remoteUsers, error: sbCheckErr } = await supabase
           .from('user_profiles')
-          .select('username, openrouter_key, tavily_key');
+          .select('username')
+          .ilike('username', uName);
 
-        if (remoteUsers) {
-          if (remoteUsers.some((u) => u.username.toLowerCase() === uName.toLowerCase())) {
-            throw new Error('Username is already registered globally.');
-          }
-          if (remoteUsers.some((u) => u.openrouter_key === orKey)) {
-            throw new Error('This OpenRouter API Key is already in use.');
-          }
-          if (remoteUsers.some((u) => u.tavily_key === tvKey)) {
-            throw new Error('This Tavily API Key is already in use.');
-          }
+        if (!sbCheckErr && remoteUsers && remoteUsers.length > 0) {
+          throw new Error('Username is already registered globally. Please choose another.');
         }
       }
 
       const salt = generateSalt();
+      // Derive client-side zero-knowledge key from password and salt
+      const cryptoKey = await deriveKeyFromPassword(pwd, salt);
+
+      // {Zero-Knowledge credential encryption: encrypt API keys before storing in Supabase so developer cannot read them} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM]
+      const encryptedOpenRouterKey = await encryptText(orKey, cryptoKey, salt);
+      const encryptedTavilyKey = await encryptText(tvKey, cryptoKey, salt);
+
+      const generatedUserId = 'usr_' + Date.now();
+      const internalEmail = `${uName.toLowerCase().replace(/[^a-z0-9_-]/g, '')}@nanobot.internal`;
+
+      // Memory/local profile keeps decrypted keys for client-side chat execution
       const newUser: UserProfile = {
-        id: 'usr_' + Date.now(),
-        email: email.trim().toLowerCase(),
+        id: generatedUserId,
+        email: internalEmail,
         username: uName,
         openrouter_key: orKey,
         tavily_key: tvKey,
@@ -181,20 +117,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       existingUsers.push(newUser);
       saveLocalProfiles(existingUsers);
 
-      // Save to remote Supabase user_profiles
+      // Save encrypted profile to remote Supabase user_profiles (stored as ciphertexts, unreadable by admin)
       if (isSupabaseConfigured && supabase) {
-        await supabase.from('user_profiles').insert([
+        const { error: insertErr } = await supabase.from('user_profiles').insert([
           {
-            email: newUser.email,
-            username: newUser.username,
-            openrouter_key: newUser.openrouter_key,
-            tavily_key: newUser.tavily_key,
+            email: internalEmail,
+            username: uName,
+            openrouter_key: encryptedOpenRouterKey,
+            tavily_key: encryptedTavilyKey,
             ai_instructions: '',
             model_training: true,
             plugins_connected: newUser.plugins_connected,
             salt: newUser.salt
           }
         ]);
+
+        if (insertErr) {
+          console.warn('Supabase remote profile notice:', insertErr.message);
+        }
       }
 
       onSuccess(newUser, pwd);
@@ -229,8 +169,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         const { data, error: sbErr } = await supabase
           .from('user_profiles')
           .select('*')
-          .eq('username', uName)
-          .single();
+          .ilike('username', uName)
+          .maybeSingle();
 
         if (data && !sbErr) {
           matched = data as UserProfile;
@@ -247,11 +187,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         throw new Error('No account found with this username. Please check your credentials or Sign Up.');
       }
 
+      // {Zero-Knowledge credential decryption: decrypt encrypted API keys locally in the browser} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM]
+      const derivedKey = await deriveKeyFromPassword(pwd, matched.salt || 'default_nanobot_salt');
+      const decryptedOr = await decryptText(matched.openrouter_key, derivedKey);
+      const decryptedTv = await decryptText(matched.tavily_key, derivedKey);
+      const decryptedInstructions = await decryptText(matched.ai_instructions || '', derivedKey);
+
+      matched.openrouter_key = decryptedOr;
+      matched.tavily_key = decryptedTv;
+      matched.ai_instructions = decryptedInstructions;
+
       onSuccess(matched, pwd);
       onClose();
     } catch (err: unknown) {
       const e = err as Error;
-      setError(e.message || 'Sign in failed.');
+      setError(e.message || 'Sign in failed. Please verify your credentials.');
     } finally {
       setLoading(false);
     }
@@ -268,185 +218,117 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           ✕
         </button>
 
-        {mode === 'signup' ? (
+        {currentMode === 'signup' ? (
           <div>
-            <h2 className="text-2xl font-bold font-serif mb-6 text-center text-white">
+            <h2 className="text-2xl font-bold font-serif mb-2 text-center text-white">
               Register to nanobot
             </h2>
+            <p className="text-xs text-neutral-400 text-center mb-6">
+              Enter your username, password, and personal API keys. No email required.
+            </p>
 
-            {signupStep === 1 ? (
+            <form onSubmit={handleCreateAccount} className="space-y-4">
               <div>
-                {!emailSent ? (
-                  <form onSubmit={handleSendEmailConfirm} className="space-y-4">
-                    <div>
-                      <label className="block text-sm text-neutral-300 mb-2 font-medium">
-                        Enter Email Id
-                      </label>
-                      <input
-                        type="email"
-                        required
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="you@example.com"
-                        className="w-full bg-[#141414] border border-[#333] rounded-xl px-4 py-3 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] transition-colors"
-                      />
-                    </div>
-
-                    {error && <p className="text-sm text-red-500">{error}</p>}
-
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 px-4 rounded-xl transition-colors cursor-pointer"
-                    >
-                      {loading ? 'Sending verification link...' : 'Confirm'}
-                    </button>
-                  </form>
-                ) : (
-                  <div className="space-y-4 text-center">
-                    <div className="w-16 h-16 bg-[#141414] border border-[#333] rounded-2xl flex items-center justify-center mx-auto text-3xl">
-                      ✉️
-                    </div>
-
-                    <h3 className="text-lg font-semibold text-white">Verification Link Sent!</h3>
-
-                    <p className="text-sm text-neutral-300 leading-relaxed">
-                      Supabase has sent a verification link to{' '}
-                      <span className="text-emerald-400 font-semibold">{email}</span>.
-                    </p>
-
-                    <p className="text-xs text-neutral-400 leading-relaxed">
-                      Please check your email inbox and click the verification link. When you click it, you will be redirected back here to finalize your username, password, and API keys.
-                    </p>
-
-                    {resendNotice && (
-                      <p className="text-xs text-emerald-400 font-medium bg-emerald-950/40 border border-emerald-800 rounded-lg py-1.5 px-2">
-                        {resendNotice}
-                      </p>
-                    )}
-
-                    {/* {Restructured verification prompt to make Resend Confirmation Email the primary action} [Commented by: Sonic on 10/14/2026 10:35 AM] */}
-                    <div className="pt-2 flex flex-col gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleSendEmailConfirm()}
-                        disabled={loading}
-                        className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 px-4 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
-                      >
-                        {loading ? 'Sending verification...' : 'Resend Confirmation Email'}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEmailSent(false);
-                          setError(null);
-                          setResendNotice(null);
-                        }}
-                        className="text-xs text-neutral-400 hover:text-white pt-1 cursor-pointer"
-                      >
-                        ← Change email address
-                      </button>
-                    </div>
-                  </div>
-                )}
+                <label className="block text-xs uppercase tracking-wider text-neutral-400 mb-1">
+                  Username
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Enter unique username"
+                  className="w-full bg-[#141414] border border-[#333] rounded-xl px-4 py-2.5 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] transition-colors"
+                />
               </div>
-            ) : (
-              <form onSubmit={handleCreateAccount} className="space-y-4">
-                <div className="p-2.5 bg-emerald-950/40 border border-emerald-800 rounded-xl text-xs text-emerald-400 text-center font-medium">
-                  ✓ Email verified ({email}). Complete your account details:
-                </div>
 
-                <div>
-                  <label className="block text-xs uppercase tracking-wider text-neutral-400 mb-1">
-                    Username
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder="Enter unique username"
-                    className="w-full bg-[#141414] border border-[#333] rounded-xl px-4 py-2.5 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14]"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-neutral-400 mb-1">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter secure password (min 6 chars)"
+                  className="w-full bg-[#141414] border border-[#333] rounded-xl px-4 py-2.5 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] transition-colors"
+                />
+              </div>
 
-                {/* {Configured password and API keys as visible (type=text) during account creation} [Commented by: Sonic on 10/14/2026 10:35 AM] */}
-                <div>
-                  <label className="block text-xs uppercase tracking-wider text-neutral-400 mb-1">
-                    Password
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter secure password"
-                    className="w-full bg-[#141414] border border-[#333] rounded-xl px-4 py-2.5 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14]"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-neutral-400 mb-1">
+                  Enter{' '}
+                  <a
+                    href="https://openrouter.ai/workspaces"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:underline"
+                  >
+                    Openrouter API Key
+                  </a>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={openrouterKey}
+                  onChange={(e) => setOpenrouterKey(e.target.value)}
+                  placeholder="sk-or-v1-..."
+                  className="w-full bg-[#141414] border border-[#333] rounded-xl px-4 py-2.5 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] transition-colors"
+                />
+              </div>
 
-                <div>
-                  <label className="block text-xs uppercase tracking-wider text-neutral-400 mb-1">
-                    Enter{' '}
-                    <a
-                      href="https://openrouter.ai/workspaces"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-400 hover:underline"
-                    >
-                      Openrouter API Key
-                    </a>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={openrouterKey}
-                    onChange={(e) => setOpenrouterKey(e.target.value)}
-                    placeholder="sk-or-v1-..."
-                    className="w-full bg-[#141414] border border-[#333] rounded-xl px-4 py-2.5 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14]"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-neutral-400 mb-1">
+                  Enter{' '}
+                  <a
+                    href="https://app.tavily.com/home"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:underline"
+                  >
+                    Tavily API Key
+                  </a>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={tavilyKey}
+                  onChange={(e) => setTavilyKey(e.target.value)}
+                  placeholder="tvly-..."
+                  className="w-full bg-[#141414] border border-[#333] rounded-xl px-4 py-2.5 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] transition-colors"
+                />
+              </div>
 
-                <div>
-                  <label className="block text-xs uppercase tracking-wider text-neutral-400 mb-1">
-                    Enter{' '}
-                    <a
-                      href="https://app.tavily.com/home"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-400 hover:underline"
-                    >
-                      Tavily API Key
-                    </a>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={tavilyKey}
-                    onChange={(e) => setTavilyKey(e.target.value)}
-                    placeholder="tvly-..."
-                    className="w-full bg-[#141414] border border-[#333] rounded-xl px-4 py-2.5 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14]"
-                  />
-                </div>
+              {error && <p className="text-sm text-red-500">{error}</p>}
 
-                {error && <p className="text-sm text-red-500">{error}</p>}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 px-4 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {loading ? 'Creating Account...' : 'Create Account'}
+              </button>
 
+              <div className="text-center pt-2">
                 <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-emerald-800 hover:bg-emerald-700 text-white font-semibold py-3 px-4 rounded-xl transition-colors cursor-pointer"
+                  type="button"
+                  onClick={() => handleSwitchMode('signin')}
+                  className="text-xs text-neutral-400 hover:text-emerald-400 transition-colors cursor-pointer"
                 >
-                  {loading ? 'Validating Uniqueness...' : 'Create Account'}
+                  Already have an account? <span className="underline font-medium">Sign In</span>
                 </button>
-              </form>
-            )}
+              </div>
+            </form>
           </div>
         ) : (
           <div>
-            <h2 className="text-2xl font-bold font-serif mb-6 text-center text-white">
+            <h2 className="text-2xl font-bold font-serif mb-2 text-center text-white">
               Sign In to nanobot
             </h2>
+            <p className="text-xs text-neutral-400 text-center mb-6">
+              Enter your username and password to load your zero-knowledge encrypted chats.
+            </p>
 
             <form onSubmit={handleSignIn} className="space-y-4">
               <div>
@@ -459,7 +341,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="Enter username"
-                  className="w-full bg-[#141414] border border-[#333] rounded-xl px-4 py-3 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14]"
+                  className="w-full bg-[#141414] border border-[#333] rounded-xl px-4 py-3 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] transition-colors"
                 />
               </div>
 
@@ -473,7 +355,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter password"
-                  className="w-full bg-[#141414] border border-[#333] rounded-xl px-4 py-3 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14]"
+                  className="w-full bg-[#141414] border border-[#333] rounded-xl px-4 py-3 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] transition-colors"
                 />
               </div>
 
@@ -482,10 +364,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 px-4 rounded-xl transition-colors cursor-pointer"
+                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 px-4 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
               >
-                {loading ? 'Checking...' : 'Confirm'}
+                {loading ? 'Signing in...' : 'Sign In'}
               </button>
+
+              <div className="text-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => handleSwitchMode('signup')}
+                  className="text-xs text-neutral-400 hover:text-emerald-400 transition-colors cursor-pointer"
+                >
+                  Don't have an account? <span className="underline font-medium">Sign Up</span>
+                </button>
+              </div>
             </form>
           </div>
         )}

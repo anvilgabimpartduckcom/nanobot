@@ -5,7 +5,7 @@ import { AuthModal } from './components/AuthModal';
 import { SettingsModal } from './components/SettingsModal';
 // {Imported R2 tiered archive storage and Tavily extract utility} [Commented by: Sonic on 10/14/2026 10:35 AM]
 import { UserProfile, isSupabaseConfigured, supabase, fetchUserEncryptedChats, persistEncryptedChatRecord, removeEncryptedChatRecord } from './lib/supabase';
-import { deriveKeyFromPassword, encryptData, decryptData } from './lib/crypto';
+import { deriveKeyFromPassword, encryptData, decryptData, encryptText, decryptText } from './lib/crypto';
 import { analyzeFileWithScript, ProcessedFile } from './lib/fileReader';
 import { performDynamicSearch, runDeepResearch, extractUrlsWithTavily } from './lib/tavily';
 import { uploadArchiveToR2, fetchArchiveFromR2, deleteArchiveFromR2 } from './lib/r2';
@@ -45,12 +45,12 @@ const INPUT_MIN_HEIGHT = 52;
 
 export default function App() {
   // Session & Auth State
+  // {Removed email login state and added toast notification state for plain-text chat export} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM]
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [passwordSecret, setPasswordSecret] = useState<string>('');
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null);
   const [authModalMode, setAuthModalMode] = useState<'signin' | 'signup' | null>(null);
-  const [authModalInitialStep, setAuthModalInitialStep] = useState<1 | 2>(1);
-  const [authModalInitialEmail, setAuthModalInitialEmail] = useState<string>('');
+  const [toastNotice, setToastNotice] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isIncognito, setIsIncognito] = useState(false);
 
@@ -121,16 +121,19 @@ export default function App() {
   // Derive CryptoKey and load Cloudflare Worker history when user logs in with password
   useEffect(() => {
     // {Fetch remote chat history from Cloudflare Worker D1 backend upon user login} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
-    if (currentUser) {
-      loadWorkerConversations();
-    }
     if (currentUser && passwordSecret) {
       deriveKeyFromPassword(passwordSecret, currentUser.salt || 'default_nanobot_salt')
         .then((key) => {
           setCryptoKey(key);
           loadEncryptedChats(currentUser.id, key);
+          loadWorkerConversations(key);
         })
-        .catch((err) => console.error('Error deriving encryption key:', err));
+        .catch((err) => {
+          console.error('Error deriving encryption key:', err);
+          loadWorkerConversations();
+        });
+    } else if (currentUser) {
+      loadWorkerConversations();
     } else {
       setCryptoKey(null);
       // Load unencrypted fallback chats if guest
@@ -146,55 +149,117 @@ export default function App() {
     }
   }, [currentUser, passwordSecret]);
 
-  // {Configured email verification redirect auto-detection on app mount to launch Step 2 registration} [Commented by: Sonic on 10/14/2026 10:35 AM]
-  useEffect(() => {
-    const sb = supabase;
-    if (!sb) return;
+  // {Export currently active chat history as a clean plain text file for local backup and sharing} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM]
+  const handleExportActiveChat = () => {
+    const targetChat = chats.find((c) => c.id === activeChatId) || (activeChatId ? null : chats[0]);
+    if (!targetChat || targetChat.messages.length === 0) {
+      setToastNotice('No active chat messages to export.');
+      setTimeout(() => setToastNotice(null), 3000);
+      return;
+    }
 
-    const checkRedirectSession = async () => {
-      const hash = window.location.hash;
-      const isConfirmation = hash.includes('access_token=') || hash.includes('type=signup') || hash.includes('type=magiclink');
+    const divider = '='.repeat(80);
+    const subDivider = '-'.repeat(80);
+    const dateStr = new Date(targetChat.updated || Date.now()).toLocaleString();
+    const exportTime = new Date().toLocaleString();
 
-      const { data: { session } } = await sb.auth.getSession();
-      const verifiedEmail = session?.user?.email;
+    let output = `${divider}\n`;
+    output += `NANOBOT CHAT BACKUP\n`;
+    output += `Title: ${targetChat.title}\n`;
+    output += `Updated: ${dateStr}\n`;
+    output += `Exported: ${exportTime}\n`;
+    output += `Total Messages: ${targetChat.messages.length}\n`;
+    output += `${divider}\n\n`;
 
-      if ((isConfirmation || verifiedEmail) && !currentUser) {
-        if (verifiedEmail) {
-          setAuthModalInitialEmail(verifiedEmail);
-          setAuthModalInitialStep(2);
-          setAuthModalMode('signup');
-        }
+    targetChat.messages.forEach((msg) => {
+      const isUser = msg.role === 'user';
+      const sender = isUser ? '[USER]' : '[NANOBOT AI]';
+      const textContent =
+        typeof msg.content === 'string'
+          ? msg.content
+          : Array.isArray(msg.content)
+          ? msg.content.map((c) => (c.type === 'text' ? c.text : '')).filter(Boolean).join('\n')
+          : String(msg.content || '');
+
+      output += `${sender}:\n${textContent}\n`;
+
+      if (msg.displayAttachments && msg.displayAttachments.length > 0) {
+        output += `\n[Attachments]: ${msg.displayAttachments.map((a) => a.name).join(', ')}\n`;
       }
-    };
 
-    checkRedirectSession();
-
-    const { data: authSub } = sb.auth.onAuthStateChange((event, session) => {
-      if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session?.user?.email && !currentUser) {
-        setAuthModalInitialEmail(session.user.email);
-        setAuthModalInitialStep(2);
-        setAuthModalMode('signup');
+      if (msg.reasoning) {
+        output += `\n[Reasoning / Thinking]:\n${msg.reasoning}\n`;
       }
+
+      if (msg.sources && msg.sources.length > 0) {
+        output += `\n[Sources / Citations]:\n`;
+        msg.sources.forEach((s) => {
+          output += `- ${s.title}: ${s.url}\n`;
+        });
+      }
+
+      output += `\n${subDivider}\n\n`;
     });
 
-    return () => {
-      authSub?.subscription?.unsubscribe();
-    };
-  }, [currentUser]);
+    output += `${divider}\n`;
+    output += `End of chat history. Exported from nanobot (https://nanobot-chatbot.netlify.app)\n`;
+    output += `${divider}\n`;
 
-  // {Persist and synchronize conversation history with Cloudflare Worker D1 backend using Supabase Bearer token, with orphaned local file cleanup} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
-  const loadWorkerConversations = async () => {
+    const blob = new Blob([output], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const safeTitle = (targetChat.title || 'chat')
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, '_')
+      .slice(0, 40);
+    const fileDate = new Date().toISOString().split('T')[0];
+    a.href = url;
+    a.download = `nanobot-${safeTitle}-${fileDate}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    setToastNotice('Chat history exported as plain text file!');
+    setTimeout(() => setToastNotice(null), 3000);
+  };
+
+  // {Global keyboard listener for Ctrl+S or Cmd+S to export active chat history} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM]
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        handleExportActiveChat();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [chats, activeChatId]);
+
+  // {Persist and synchronize conversation history with Cloudflare Worker D1 backend using Supabase Bearer token, with zero-knowledge title decryption} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM]
+  const loadWorkerConversations = async (providedKey?: CryptoKey | null) => {
     if (!currentUser) return;
     setIsHistorySyncing(true);
+    const activeKey = providedKey !== undefined ? providedKey : cryptoKey;
     try {
       const res = await workerClient.listConversations();
       if (res.success && res.data?.conversations) {
         const workerConvs = res.data.conversations;
         if (workerConvs.length > 0) {
+          const decryptedConvs = await Promise.all(
+            workerConvs.map(async (wc) => {
+              let displayTitle = wc.title;
+              if (activeKey && displayTitle && displayTitle.startsWith('enc:')) {
+                displayTitle = await decryptText(displayTitle, activeKey);
+              }
+              return { ...wc, title: displayTitle };
+            })
+          );
+
           setChats((prev) => {
             const map = new Map<string, ChatSession>();
             prev.forEach((c) => map.set(c.id, c));
-            workerConvs.forEach((wc) => {
+            decryptedConvs.forEach((wc) => {
               const existing = map.get(wc.id);
               map.set(wc.id, {
                 id: wc.id,
@@ -227,7 +292,7 @@ export default function App() {
     }
   };
 
-  // {Load message history and AI file outputs from Cloudflare Worker, verifying local file presence in IndexedDB} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+  // {Load message history and AI file outputs from Cloudflare Worker with zero-knowledge decryption, verifying local file presence in IndexedDB} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM]
   const handleSelectChat = async (id: string) => {
     setActiveChatId(id);
     setSidebarOpen(false);
@@ -241,7 +306,16 @@ export default function App() {
       try {
         const outRes = await workerClient.getFileOutputs(id);
         if (outRes.success && outRes.data?.outputs) {
-          setChatFileOutputs((prev) => ({ ...prev, [id]: outRes.data!.outputs }));
+          const decryptedOutputs = await Promise.all(
+            outRes.data.outputs.map(async (o) => {
+              let content = o.output_content;
+              if (cryptoKey && content && content.startsWith('enc:')) {
+                content = await decryptText(content, cryptoKey);
+              }
+              return { ...o, output_content: content };
+            })
+          );
+          setChatFileOutputs((prev) => ({ ...prev, [id]: decryptedOutputs }));
         }
       } catch (err) {
         console.warn('Worker getFileOutputs notice:', err);
@@ -254,16 +328,30 @@ export default function App() {
       try {
         const res = await workerClient.getMessages(id);
         if (res.success && res.data?.messages) {
-          const loadedMessages: ChatMessage[] = res.data.messages.map((m) => ({
-            role: m.role,
-            content: m.content,
-            sources: m.sources,
-            reasoning: m.reasoning,
-            displayAttachments: m.displayAttachments?.map((att) => ({
-              ...att,
-              isLocalMissing: att.fileId ? !localFileIds.has(att.fileId) : false,
-            })),
-          }));
+          const loadedMessages: ChatMessage[] = await Promise.all(
+            res.data.messages.map(async (m) => {
+              let plainContent = m.content;
+              let plainReasoning = m.reasoning;
+              if (cryptoKey) {
+                if (plainContent && plainContent.startsWith('enc:')) {
+                  plainContent = await decryptText(plainContent, cryptoKey);
+                }
+                if (plainReasoning && plainReasoning.startsWith('enc:')) {
+                  plainReasoning = await decryptText(plainReasoning, cryptoKey);
+                }
+              }
+              return {
+                role: m.role,
+                content: plainContent,
+                sources: m.sources,
+                reasoning: plainReasoning,
+                displayAttachments: m.displayAttachments?.map((att) => ({
+                  ...att,
+                  isLocalMissing: att.fileId ? !localFileIds.has(att.fileId) : false,
+                })),
+              };
+            })
+          );
           setChats((prev) =>
             prev.map((c) => (c.id === id ? { ...c, messages: loadedMessages } : c))
           );
@@ -369,44 +457,72 @@ export default function App() {
       return m;
     });
 
+    // {Zero-knowledge client-side encryption: encrypt title and message contents before sending to Cloudflare Worker D1 so developer cannot read them} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM]
     if (currentUser) {
-      // 1. Sync conversation metadata to Cloudflare Worker D1 backend asynchronously
-      workerClient
-        .createOrUpdateConversation({
-          id: chat.id,
-          title: chat.title,
-          pinned: chat.pinned,
-          updated_at: new Date(chat.updated).toISOString(),
-        })
-        .then((res) => {
-          if (!res.success && res.error) {
-            console.warn('Worker sync notice (conversation):', res.error);
-            if (res.isNetworkError) {
-              setHistoryNotice('Cloud history worker syncing locally. Your chat is fully functional.');
+      (async () => {
+        let titleToSync = chat.title;
+        let workerMessagesToSync: WorkerMessage[] = cleanMessagesForCloud.map((m) => ({
+          role: m.role,
+          content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+          sources: m.sources,
+          reasoning: m.reasoning,
+          displayAttachments: m.displayAttachments,
+        }));
+
+        if (cryptoKey) {
+          try {
+            titleToSync = await encryptText(chat.title, cryptoKey, currentUser.salt || 'salt');
+            workerMessagesToSync = await Promise.all(
+              cleanMessagesForCloud.map(async (m) => {
+                const rawContent = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+                const encContent = await encryptText(rawContent, cryptoKey, currentUser.salt || 'salt');
+                const encReasoning = m.reasoning
+                  ? await encryptText(m.reasoning, cryptoKey, currentUser.salt || 'salt')
+                  : undefined;
+                return {
+                  role: m.role,
+                  content: encContent,
+                  sources: m.sources,
+                  reasoning: encReasoning,
+                  displayAttachments: m.displayAttachments,
+                };
+              })
+            );
+          } catch (encErr) {
+            console.warn('Worker encryption notice:', encErr);
+          }
+        }
+
+        // 1. Sync conversation metadata to Cloudflare Worker D1 backend asynchronously
+        workerClient
+          .createOrUpdateConversation({
+            id: chat.id,
+            title: titleToSync,
+            pinned: chat.pinned,
+            updated_at: new Date(chat.updated).toISOString(),
+          })
+          .then((res) => {
+            if (!res.success && res.error) {
+              console.warn('Worker sync notice (conversation):', res.error);
+              if (res.isNetworkError) {
+                setHistoryNotice('Cloud history worker syncing locally. Your chat is fully functional.');
+              }
+            } else {
+              setHistoryNotice(null);
             }
-          } else {
-            setHistoryNotice(null);
-          }
-        })
-        .catch(() => {});
+          })
+          .catch(() => {});
 
-      // 2. Batch save clean messages to Cloudflare Worker D1 backend asynchronously
-      const workerMessages: WorkerMessage[] = cleanMessagesForCloud.map((m) => ({
-        role: m.role,
-        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
-        sources: m.sources,
-        reasoning: m.reasoning,
-        displayAttachments: m.displayAttachments,
-      }));
-
-      workerClient
-        .saveMessagesBatch(chat.id, workerMessages, chat.title)
-        .then((res) => {
-          if (!res.success && res.error) {
-            console.warn('Worker sync notice (messages):', res.error);
-          }
-        })
-        .catch(() => {});
+        // 2. Batch save clean messages to Cloudflare Worker D1 backend asynchronously
+        workerClient
+          .saveMessagesBatch(chat.id, workerMessagesToSync, titleToSync)
+          .then((res) => {
+            if (!res.success && res.error) {
+              console.warn('Worker sync notice (messages):', res.error);
+            }
+          })
+          .catch(() => {});
+      })();
     }
 
     if (currentUser && cryptoKey) {
@@ -611,25 +727,36 @@ export default function App() {
           });
       }
 
+      // {Zero-knowledge client-side encryption for AI file outputs sent to Cloudflare Worker D1} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM]
       if (currentUser) {
         const outputPayload = att.contentSnippet + (att.generatedReaderCode ? `\n\n[Python Reader Script]:\n${att.generatedReaderCode}` : '');
-        workerClient.saveFileOutput(chat!.id, {
-          source_file_id: att.fileId,
-          file_name: att.name,
-          file_type: att.type,
-          output_type: att.outputType,
-          output_content: outputPayload,
-          metadata: { size: att.size, isImage: att.isImage }
-        }).then((res) => {
-          if (res.success && res.data?.output) {
-            setChatFileOutputs((prev) => ({
-              ...prev,
-              [chat!.id]: [...(prev[chat!.id] || []).filter((o) => o.source_file_id !== att.fileId), res.data!.output]
-            }));
+        (async () => {
+          let payloadToSave = outputPayload;
+          if (cryptoKey) {
+            try {
+              payloadToSave = await encryptText(outputPayload, cryptoKey, currentUser.salt || 'salt');
+            } catch (encErr) {
+              console.warn('File output encryption notice:', encErr);
+            }
           }
-        }).catch((err) => {
-          console.warn('workerClient.saveFileOutput error:', err);
-        });
+          workerClient.saveFileOutput(chat!.id, {
+            source_file_id: att.fileId,
+            file_name: att.name,
+            file_type: att.type,
+            output_type: att.outputType,
+            output_content: payloadToSave,
+            metadata: { size: att.size, isImage: att.isImage }
+          }).then((res) => {
+            if (res.success && res.data?.output) {
+              setChatFileOutputs((prev) => ({
+                ...prev,
+                [chat!.id]: [...(prev[chat!.id] || []).filter((o) => o.source_file_id !== att.fileId), { ...res.data!.output, output_content: outputPayload }]
+              }));
+            }
+          }).catch((err) => {
+            console.warn('workerClient.saveFileOutput error:', err);
+          });
+        })();
       }
     });
 
@@ -1192,8 +1319,28 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
           </button>
         </div>
 
+        {/* Toast Notification */}
+        {toastNotice && (
+          <div className="absolute top-5 left-1/2 -translate-x-1/2 z-40 bg-[#161616] border border-emerald-500/80 text-emerald-400 px-4 py-2 rounded-xl text-xs font-mono shadow-2xl flex items-center gap-2">
+            <span>✓</span> {toastNotice}
+          </div>
+        )}
+
         {/* Top-Right Controls */}
+        {/* {Added Export active chat history button triggering plain text backup} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM] */}
         <div className="absolute top-4 right-4 flex items-center gap-2 z-30">
+          {activeChat && (
+            <button
+              onClick={handleExportActiveChat}
+              className="h-10 px-3 bg-[#111] border border-[#333] hover:border-[#39ff14] text-neutral-300 hover:text-white rounded-[8px] flex items-center gap-1.5 text-xs font-mono cursor-pointer transition-colors"
+              title="Export active chat history as plain text (Ctrl+S)"
+              aria-label="Export active chat history as plain text"
+            >
+              <span className="text-emerald-400 font-bold">↓</span>
+              <span className="hidden sm:inline">Export (Ctrl+S)</span>
+            </button>
+          )}
+
           {!currentUser ? (
             <>
               <button
@@ -1514,16 +1661,13 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
       </main>
 
       {/* AUTH MODAL */}
+      {/* {Removed email login concept completely: Sign Up directly opens for username, password, and API keys} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM] */}
       {authModalMode && (
         <AuthModal
           mode={authModalMode}
           isOpen={true}
-          initialStep={authModalInitialStep}
-          initialEmail={authModalInitialEmail}
-          onClose={() => {
-            setAuthModalMode(null);
-            setAuthModalInitialStep(1);
-          }}
+          onClose={() => setAuthModalMode(null)}
+          onSwitchMode={(mode) => setAuthModalMode(mode)}
           onSuccess={(user, secret) => {
             setCurrentUser(user);
             setPasswordSecret(secret);

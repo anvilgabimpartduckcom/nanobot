@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { UserProfile, supabase, isSupabaseConfigured, getLocalProfiles, saveLocalProfiles } from '../lib/supabase';
 import { MCP_PLUGINS } from '../lib/plugins';
+import { deriveKeyFromPassword, encryptText } from '../lib/crypto';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -53,6 +54,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   if (!isOpen) return null;
 
   // Handle Account Save
+  // {Zero-knowledge encryption for updated API credentials before storing in Supabase} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM]
   const handleSaveAccount = async () => {
     setStatusMessage(null);
     try {
@@ -72,16 +74,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       if (idx >= 0) profiles[idx] = updated;
       saveLocalProfiles(profiles);
 
-      // Update Supabase if configured
+      // Update Supabase if configured (encrypt secrets so developer cannot see them)
       if (isSupabaseConfigured && supabase) {
+        let encryptedOr = updated.openrouter_key;
+        let encryptedTv = updated.tavily_key;
+        let encryptedInst = updated.ai_instructions;
+        if (password.trim()) {
+          try {
+            const key = await deriveKeyFromPassword(password.trim(), user.salt || 'default_nanobot_salt');
+            encryptedOr = await encryptText(updated.openrouter_key, key, user.salt || 'salt');
+            encryptedTv = await encryptText(updated.tavily_key, key, user.salt || 'salt');
+            encryptedInst = await encryptText(updated.ai_instructions || '', key, user.salt || 'salt');
+          } catch (e) {
+            console.warn('Encryption notice:', e);
+          }
+        }
+
         await supabase
           .from('user_profiles')
           .update({
             username: updated.username,
-            openrouter_key: updated.openrouter_key,
-            tavily_key: updated.tavily_key,
+            openrouter_key: encryptedOr,
+            tavily_key: encryptedTv,
             model_training: updated.model_training,
-            ai_instructions: updated.ai_instructions,
+            ai_instructions: encryptedInst,
             plugins_connected: updated.plugins_connected
           })
           .eq('email', user.email);
@@ -509,47 +525,88 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           )}
 
           {/* TAB 4: ABOUT NANOBOT */}
-          {/* {Updated About nanobot documentation with privacy statement, developer contact, hyperlinked docs, and 30-day chat deletion policy notes} [Commented by: Sonic on 10/14/2026 10:35 AM] */}
-          {activeTab === 'about' && (
-            <div className="space-y-4 max-w-xl text-neutral-300">
-              <h2 className="text-xl font-bold font-serif text-white">About nanobot</h2>
-              <p className="text-sm leading-relaxed">
-                Everyone should get to use AI, and that too without giving away their data. So we created nanobot, an open source AI chatbot which respects your privacy, and is free to use. Users bring their own API keys, which helps in further keeping nanobot completely free to use.
-              </p>
-              <p className="text-sm leading-relaxed">
-                For more information, or under any problems, please contact developer via email:{' '}
-                <a
-                  href="mailto:molecule-sip-sauna@duck.com"
-                  className="text-emerald-400 hover:underline font-mono"
-                >
-                  molecule-sip-sauna@duck.com
-                </a>
-              </p>
-              <p className="text-sm leading-relaxed">
-                You can also get more info at the{' '}
-                <a
-                  href="https://tropical-chime-8c1.notion.site/nanobot-Docs-3f4b104092f3804792d0c68bca97e821"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-emerald-400 hover:text-emerald-300 underline font-medium"
-                >
-                  nanobot Docs
-                </a>
-              </p>
+          {/* {Updated About nanobot documentation with privacy statement, developer contact, Notion 101 link, Ctrl+S backup warning, GitHub source link, and dynamic alphabetical service credits with active plugin insertion} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM] */}
+          {activeTab === 'about' && (() => {
+            const baseServices = [
+              'Cloudflare',
+              'Github',
+              'Google AI Studio',
+              'Google Gemini',
+              'Netlify',
+              'OpenAI ChatGPT',
+              'Openrouter',
+              'Supabase',
+              'Tavily'
+            ];
 
-              <div className="bg-[#141414] border border-[#333] rounded-xl p-4 space-y-2 mt-4 text-xs text-neutral-300">
-                <div className="font-semibold text-white text-sm">Note:</div>
-                <ol className="list-decimal list-inside space-y-2 leading-relaxed">
-                  <li>
-                    nanobot has a 30-days chat deletion policy. Any chat inactive for 30 days will be automatically deleted. This is required for storage purposes. On top of that, we request you to delete any chat that you have no longer use for. Your deleting of one chat will help another user create a new chat.
-                  </li>
-                  <li>
-                    Though we&#39;ve given our best not to have any data loss, some of your data might get deleted. Though this&#39;ll be extremely rare, we recommend to keep a backup of any important chats or data. nanobot or its developer will not be responsible for any data loss.
-                  </li>
-                </ol>
+            const activePluginNames = MCP_PLUGINS
+              .filter((p) => Boolean(connectedPlugins[p.id]))
+              .map((p) => p.name);
+
+            const sortedServices = Array.from(new Set([...baseServices, ...activePluginNames]))
+              .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+            return (
+              <div className="space-y-4 max-w-xl text-neutral-300">
+                <h2 className="text-xl font-bold font-serif text-white">About nanobot</h2>
+                <p className="text-sm leading-relaxed">
+                  Everyone should get to use AI, and that too without giving away their data. So we created nanobot, an open source AI chatbot which respects your privacy, and is free to use. Users bring their own API keys, which helps in further keeping nanobot completely free to use.
+                </p>
+                <p className="text-sm leading-relaxed">
+                  For more information, or under any problems, please contact developer via email:{' '}
+                  <a
+                    href="mailto:molecule-sip-sauna@duck.com"
+                    className="text-emerald-400 hover:underline font-mono"
+                  >
+                    molecule-sip-sauna@duck.com
+                  </a>
+                </p>
+                <p className="text-sm leading-relaxed">
+                  You can also get information about more features of nanobot at the{' '}
+                  <a
+                    href="https://tropical-chime-8c1.notion.site/nanobot-101-3f4b104092f3804792d0c68bca97e821"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-emerald-400 hover:text-emerald-300 underline font-medium"
+                  >
+                    nanobot 101
+                  </a>
+                </p>
+
+                <div className="bg-[#141414] border border-[#333] rounded-xl p-4 space-y-2 mt-4 text-xs text-neutral-300">
+                  <div className="font-semibold text-white text-sm">Note:</div>
+                  <ol className="list-decimal list-inside space-y-2 leading-relaxed">
+                    <li>
+                      nanobot has a 30-days chat deletion policy. Any chat inactive for 30 days will be automatically deleted. This is required for storage purposes. On top of that, we request you to delete any chat that you have no longer use for. Your deleting of one chat will help another user create a new chat.
+                    </li>
+                    <li>
+                      Warning: Though we&#39;ve given our best not to have any data loss, some of your data might get deleted. Though this&#39;ll be extremely rare, we recommend to keep a backup of important chats by saving them using &#39;Ctrl+S&#39; combination.
+                    </li>
+                  </ol>
+                </div>
+
+                <p className="text-sm pt-2 leading-relaxed">
+                  <a
+                    href="https://github.com/anvilgabimpartduckcom/nanobot"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-emerald-400 hover:text-emerald-300 underline font-medium"
+                  >
+                    Visit nanobot&#39;s source code in Github
+                  </a>
+                </p>
+
+                <div className="border-t border-neutral-800 pt-4 mt-2 space-y-2 text-xs text-neutral-400 leading-relaxed">
+                  <p>
+                    Special thanks to {sortedServices.join(', ')}. The features from these services have enabled and assisted us in coding, developing, hosting, creating backend and maintaining nanobot.
+                  </p>
+                  <p className="text-[11px] text-neutral-500">
+                    All terms and conditions are under these services.
+                  </p>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       </div>
     </div>

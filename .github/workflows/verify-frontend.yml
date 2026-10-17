@@ -1,0 +1,42 @@
+# {GitHub Actions workflow verifying frontend build and TypeScript checks} [Commented by: Google AI Studio on October 15, 2026 at 10:16 AM]
+
+name: Verify Frontend Build
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'package.json'
+      - 'vite.config.ts'
+      - 'tsconfig.json'
+      - 'index.html'
+      - '.github/workflows/verify-frontend.yml'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  verify:
+    name: Typecheck & Build Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci || npm install
+
+      - name: Type Check (Lint)
+        run: npm run lint
+
+      - name: Build Production Bundle
+        run: npm run build
