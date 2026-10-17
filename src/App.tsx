@@ -1,20 +1,20 @@
-// {Created unified nanobot App with Supabase auth, settings, incognito mode, deep research, and smooth streaming} [Commented by: Google AI Studio on 10/12/2026 10:58 AM]
+// {Created unified nanobot App with Supabase auth, settings, incognito mode, deep research, and smooth streaming} [Commented by: Google AI Studio on 12/10/2026 10:58 AM]
 
 import React, { useState, useEffect, useRef } from 'react';
 import { AuthModal } from './components/AuthModal';
 import { SettingsModal } from './components/SettingsModal';
-// {Imported R2 tiered archive storage and Tavily extract utility} [Commented by: Google AI Studio on 10/14/2026 10:35 AM]
+// {Imported R2 tiered archive storage and Tavily extract utility} [Commented by: Google AI Studio on 14/10/2026 10:35 AM]
 import { UserProfile, isSupabaseConfigured, supabase, fetchUserEncryptedChats, persistEncryptedChatRecord, removeEncryptedChatRecord } from './lib/supabase';
 import { deriveKeyFromPassword, encryptData, decryptData, encryptText, decryptText } from './lib/crypto';
 import { analyzeFileWithScript, ProcessedFile } from './lib/fileReader';
 import { performDynamicSearch, runDeepResearch, extractUrlsWithTavily } from './lib/tavily';
 import { uploadArchiveToR2, fetchArchiveFromR2, deleteArchiveFromR2 } from './lib/r2';
 import { markdownToHtml, escapeHtml, safeUrl } from './lib/markdown';
-// {Imported MCP_PLUGINS to equip the AI model with real tools from connected servers} [Commented by: Google AI Studio on 10/13/2026 10:53 AM]
+// {Imported MCP_PLUGINS to equip the AI model with real tools from connected servers} [Commented by: Google AI Studio on 13/10/2026 10:53 AM]
 import { MCP_PLUGINS } from './lib/plugins';
-// {Imported Cloudflare Worker API client for authenticated chat persistence} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
+// {Imported Cloudflare Worker API client for authenticated chat persistence} [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
 import { workerClient, WorkerMessage, WorkerFileOutput } from './lib/workerClient';
-// {Imported IndexedDB storage manager for client-only original user files and orphaned cleanup} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+// {Imported IndexedDB storage manager for client-only original user files and orphaned cleanup} [Commented by: Google AI Studio on 15/10/2026 9:22 AM]
 import {
   saveOriginalFile,
   getOriginalFile,
@@ -45,7 +45,7 @@ const INPUT_MIN_HEIGHT = 52;
 
 export default function App() {
   // Session & Auth State
-  // {Removed email login state and added toast notification state for plain-text chat export} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM]
+  // {Removed email login state and added toast notification state for plain-text chat export} [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [passwordSecret, setPasswordSecret] = useState<string>('');
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null);
@@ -58,6 +58,8 @@ export default function App() {
   const [chats, setChats] = useState<ChatSession[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // {Added history search query state for filtering chat sessions by title} [Commented by: Google AI Studio on 17/10/2026 02:45 AM]
+  const [historySearchQuery, setHistorySearchQuery] = useState<string>('');
   const [inputText, setInputText] = useState('');
   const [attachments, setAttachments] = useState<ProcessedFile[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -66,10 +68,10 @@ export default function App() {
   const [reasoningExpanded, setReasoningExpanded] = useState<false | boolean>(false);
   const [activeSources, setActiveSources] = useState<Array<{ title: string; url: string }>>([]);
   const [showSourcesPopup, setShowSourcesPopup] = useState<number | null>(null);
-  // {Added Cloudflare Worker history sync and non-intrusive status notice state} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
+  // {Added Cloudflare Worker history sync and non-intrusive status notice state} [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
   const [isHistorySyncing, setIsHistorySyncing] = useState<boolean>(false);
   const [historyNotice, setHistoryNotice] = useState<string | null>(null);
-  // {Added state for cloud-persisted AI file outputs and local storage quota warnings} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+  // {Added state for cloud-persisted AI file outputs and local storage quota warnings} [Commented by: Google AI Studio on 15/10/2026 9:22 AM]
   const [chatFileOutputs, setChatFileOutputs] = useState<Record<string, WorkerFileOutput[]>>({});
   const [quotaErrorNotice, setQuotaErrorNotice] = useState<string | null>(null);
 
@@ -120,7 +122,7 @@ export default function App() {
 
   // Derive CryptoKey and load Cloudflare Worker history when user logs in with password
   useEffect(() => {
-    // {Fetch remote chat history from Cloudflare Worker D1 backend upon user login} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
+    // {Fetch remote chat history from Cloudflare Worker D1 backend upon user login} [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
     if (currentUser && passwordSecret) {
       deriveKeyFromPassword(passwordSecret, currentUser.salt || 'default_nanobot_salt')
         .then((key) => {
@@ -149,7 +151,7 @@ export default function App() {
     }
   }, [currentUser, passwordSecret]);
 
-  // {Export currently active chat history as a clean plain text file for local backup and sharing} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM]
+  // {Export currently active chat history as a clean plain text file for local backup and sharing} [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
   const handleExportActiveChat = () => {
     const targetChat = chats.find((c) => c.id === activeChatId) || (activeChatId ? null : chats[0]);
     if (!targetChat || targetChat.messages.length === 0) {
@@ -224,7 +226,7 @@ export default function App() {
     setTimeout(() => setToastNotice(null), 3000);
   };
 
-  // {Global keyboard listener for Ctrl+S or Cmd+S to export active chat history} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM]
+  // {Global keyboard listener for Ctrl+S or Cmd+S to export active chat history} [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
@@ -236,7 +238,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [chats, activeChatId]);
 
-  // {Persist and synchronize conversation history with Cloudflare Worker D1 backend using Supabase Bearer token, with zero-knowledge title decryption} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM]
+  // {Persist and synchronize conversation history with Cloudflare Worker D1 backend using Supabase Bearer token, with zero-knowledge title decryption} [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
   const loadWorkerConversations = async (providedKey?: CryptoKey | null) => {
     if (!currentUser) return;
     setIsHistorySyncing(true);
@@ -292,7 +294,7 @@ export default function App() {
     }
   };
 
-  // {Load message history and AI file outputs from Cloudflare Worker with zero-knowledge decryption, verifying local file presence in IndexedDB} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM]
+  // {Load message history and AI file outputs from Cloudflare Worker with zero-knowledge decryption, verifying local file presence in IndexedDB} [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
   const handleSelectChat = async (id: string) => {
     setActiveChatId(id);
     setSidebarOpen(false);
@@ -383,7 +385,7 @@ export default function App() {
     }
   };
 
-  // {Integrated remote Supabase encrypted chat syncing with Cloudflare R2 tiered archives} [Commented by: Google AI Studio on 10/14/2026 10:35 AM]
+  // {Integrated remote Supabase encrypted chat syncing with Cloudflare R2 tiered archives} [Commented by: Google AI Studio on 14/10/2026 10:35 AM]
   const loadEncryptedChats = async (userId: string, key: CryptoKey) => {
     try {
       const records = await fetchUserEncryptedChats(userId);
@@ -437,8 +439,8 @@ export default function App() {
   };
 
   // Save active chat (Encrypted to Supabase + R2 if signed in, skipped if Incognito)
-  // {Enforced file storage isolation: raw files/images stay local, cloud backups store code output only} [Commented by: Google AI Studio on 10/14/2026 10:35 AM]
-  // {Persist chat session and messages to Cloudflare Worker D1 backend with Supabase token verification} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
+  // {Enforced file storage isolation: raw files/images stay local, cloud backups store code output only} [Commented by: Google AI Studio on 14/10/2026 10:35 AM]
+  // {Persist chat session and messages to Cloudflare Worker D1 backend with Supabase token verification} [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
   const persistChat = async (chat: ChatSession) => {
     if (isIncognito) return; // Do not save incognito chats
 
@@ -457,7 +459,7 @@ export default function App() {
       return m;
     });
 
-    // {Zero-knowledge client-side encryption: encrypt title and message contents before sending to Cloudflare Worker D1 so developer cannot read them} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM]
+    // {Zero-knowledge client-side encryption: encrypt title and message contents before sending to Cloudflare Worker D1 so developer cannot read them} [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
     if (currentUser) {
       (async () => {
         let titleToSync = chat.title;
@@ -713,7 +715,7 @@ export default function App() {
       setActiveChatId(chat.id);
     }
 
-    // {Save raw files strictly to browser IndexedDB and persist AI outputs to Cloudflare D1} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+    // {Save raw files strictly to browser IndexedDB and persist AI outputs to Cloudflare D1} [Commented by: Google AI Studio on 15/10/2026 9:22 AM]
     attachments.forEach((att) => {
       if (att.originalFile) {
         saveOriginalFile(chat!.id, att.fileId, att.originalFile, att.name, att.type, att.size)
@@ -727,7 +729,7 @@ export default function App() {
           });
       }
 
-      // {Zero-knowledge client-side encryption for AI file outputs sent to Cloudflare Worker D1} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM]
+      // {Zero-knowledge client-side encryption for AI file outputs sent to Cloudflare Worker D1} [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
       if (currentUser) {
         const outputPayload = att.contentSnippet + (att.generatedReaderCode ? `\n\n[Python Reader Script]:\n${att.generatedReaderCode}` : '');
         (async () => {
@@ -760,7 +762,7 @@ export default function App() {
       }
     });
 
-    // {Inject preserved AI outputs when continuing conversation on a device where raw file is missing} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+    // {Inject preserved AI outputs when continuing conversation on a device where raw file is missing} [Commented by: Google AI Studio on 15/10/2026 9:22 AM]
     const existingCloudOutputs = chatFileOutputs[chat.id] || [];
     let cloudOutputsContext = '';
     if (attachments.length === 0 && existingCloudOutputs.length > 0) {
@@ -771,7 +773,7 @@ export default function App() {
 
     const fullTextPrompt = trimmedPrompt + attachedFileContext + cloudOutputsContext;
 
-    // {Typed userContent multimodal parts array explicitly for TypeScript safety} [Commented by: Google AI Studio on 10/12/2026 11:00 AM]
+    // {Typed userContent multimodal parts array explicitly for TypeScript safety} [Commented by: Google AI Studio on 12/10/2026 11:00 AM]
     const imageAttachments = attachments.filter((a) => a.isImage && a.dataUrl);
     if (imageAttachments.length > 0) {
       const parts: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
@@ -856,7 +858,7 @@ export default function App() {
       return;
     }
 
-    // {Configured system prompt with real MCP server tool definitions, persona rules, and URL scraping capability} [Commented by: Google AI Studio on 10/14/2026 10:35 AM]
+    // {Configured system prompt with real MCP server tool definitions, persona rules, and URL scraping capability} [Commented by: Google AI Studio on 14/10/2026 10:35 AM]
     const customInstructions = currentUser?.ai_instructions || '';
     const connectedPlugins = currentUser?.plugins_connected || {};
     const activePlugins = MCP_PLUGINS.filter((p) => connectedPlugins[p.id as keyof typeof connectedPlugins]);
@@ -981,7 +983,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         }
       }
 
-      // {Added regex detector and handler for Tavily URL scraping tags <Scrap1>URL1</Scrap1>} [Commented by: Google AI Studio on 10/14/2026 10:35 AM]
+      // {Added regex detector and handler for Tavily URL scraping tags <Scrap1>URL1</Scrap1>} [Commented by: Google AI Studio on 14/10/2026 10:35 AM]
       const scrapMatches = [...currentOutput.matchAll(/<Scrap\d*>(.*?)<\/Scrap\d*>/gi)]
         .map((m) => m[1].trim())
         .filter(Boolean);
@@ -1106,13 +1108,13 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
   };
 
   // Clear chat history
-  // {Synchronized batch chat deletion with Cloudflare Worker D1 backend and local IndexedDB file cleanup} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+  // {Synchronized batch chat deletion with Cloudflare Worker D1 backend and local IndexedDB file cleanup} [Commented by: Google AI Studio on 15/10/2026 9:22 AM]
   const handleClearChatHistory = () => {
     if (!window.confirm('Clear unpinned chats from history?')) return;
     const remaining = chats.filter((c) => c.pinned);
     setChats(remaining);
 
-    // {Synchronized chat deletions to remote Supabase, Cloudflare Worker, and local IndexedDB file storage} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+    // {Synchronized chat deletions to remote Supabase, Cloudflare Worker, and local IndexedDB file storage} [Commented by: Google AI Studio on 15/10/2026 9:22 AM]
     chats.forEach((c) => {
       if (!c.pinned) {
         removeEncryptedChatRecord(c.id);
@@ -1133,7 +1135,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
   };
 
   // Toggle chat pin
-  // {Synchronized conversation pin state with Cloudflare Worker D1 backend} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
+  // {Synchronized conversation pin state with Cloudflare Worker D1 backend} [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
   const handleTogglePin = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setChats((prev) =>
@@ -1152,7 +1154,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
   };
 
   // Delete chat
-  // {Synchronized conversation deletion with Cloudflare Worker D1 backend and local IndexedDB file cleanup} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+  // {Synchronized conversation deletion with Cloudflare Worker D1 backend and local IndexedDB file cleanup} [Commented by: Google AI Studio on 15/10/2026 9:22 AM]
   const handleDeleteChat = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     deleteOriginalFilesForChat(id).catch(() => {});
@@ -1167,7 +1169,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
   };
 
   // Rename chat
-  // {Synchronized conversation rename with Cloudflare Worker D1 backend} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
+  // {Synchronized conversation rename with Cloudflare Worker D1 backend} [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
   const handleRenameChat = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const chat = chats.find((c) => c.id === id);
@@ -1196,10 +1198,19 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
     e.target.style.height = `${Math.max(e.target.scrollHeight, INPUT_MIN_HEIGHT)}px`;
   };
 
+  // {Filter chat history sessions by title match exclusively for signed-in users} [Commented by: Google AI Studio on 17/10/2026 02:47 AM]
+  const filteredChats = currentUser && historySearchQuery.trim()
+    ? chats.filter((c) => {
+        const query = historySearchQuery.trim().toLowerCase();
+        const title = (c.title || 'Untitled Chat').toLowerCase();
+        return title.includes(query);
+      })
+    : chats;
+
   return (
     <div className="flex h-screen w-screen relative bg-black text-white overflow-hidden">
       {/* SIDEBAR */}
-      {/* {Restored UI scale matching nanobot.html and Old UI specifications} [Commented by: Google AI Studio on 10/14/2026 10:35 AM] */}
+      {/* {Restored UI scale matching nanobot.html and Old UI specifications} [Commented by: Google AI Studio on 14/10/2026 10:35 AM] */}
       <aside
         className={`${
           sidebarOpen ? 'flex' : 'hidden'
@@ -1217,7 +1228,35 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
           </button>
         </div>
 
-        {/* {Cloudflare Worker history sync indicator and non-intrusive offline fallback status} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM] */}
+        {/* Chat History Search Bar (Available exclusively to signed-in users) */}
+        {/* {Restricted chat history search bar visibility and title filtering exclusively to signed-in users} [Commented by: Google AI Studio on 17/10/2026 02:47 AM] */}
+        {currentUser && (
+          <div className="relative mb-3">
+            <input
+              type="text"
+              value={historySearchQuery}
+              onChange={(e) => setHistorySearchQuery(e.target.value)}
+              placeholder="Search chats by title..."
+              className="w-full bg-[#141414] border border-[#262626] rounded-lg pl-8 pr-7 py-1.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] transition-colors"
+              aria-label="Search chats by title"
+            />
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-500 text-xs pointer-events-none">
+              🔍
+            </span>
+            {historySearchQuery && (
+              <button
+                onClick={() => setHistorySearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white text-xs p-0.5 cursor-pointer"
+                title="Clear search"
+                aria-label="Clear search"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* {Cloudflare Worker history sync indicator and non-intrusive offline fallback status} [Commented by: Google AI Studio on 14/10/2026 10:55 AM] */}
         {isHistorySyncing && (
           <div className="text-[10px] text-neutral-400 mb-2 flex items-center gap-1.5 px-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -1235,7 +1274,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
             </button>
           </div>
         )}
-        {/* {Non-intrusive IndexedDB storage quota warning} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM] */}
+        {/* {Non-intrusive IndexedDB storage quota warning} [Commented by: Google AI Studio on 15/10/2026 9:22 AM] */}
         {quotaErrorNotice && (
           <div className="bg-[#2a0e0e] border border-[#dc2626] text-rose-200 px-2 py-1.5 rounded text-[10px] mb-2 flex items-center justify-between">
             <span className="leading-tight">{quotaErrorNotice}</span>
@@ -1252,8 +1291,18 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         <div className="flex-1 overflow-y-auto space-y-1">
           {chats.length === 0 ? (
             <div className="text-xs text-neutral-600 p-2 italic">No chat history yet</div>
+          ) : filteredChats.length === 0 ? (
+            <div className="text-xs text-neutral-500 p-2 italic text-center space-y-1.5">
+              <div>No chats matching &quot;{historySearchQuery}&quot;</div>
+              <button
+                onClick={() => setHistorySearchQuery('')}
+                className="text-[11px] text-emerald-400 hover:underline cursor-pointer"
+              >
+                Clear search
+              </button>
+            </div>
           ) : (
-            chats.map((c) => (
+            filteredChats.map((c) => (
               <div
                 key={c.id}
                 onClick={() => handleSelectChat(c.id)}
@@ -1327,7 +1376,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         )}
 
         {/* Top-Right Controls */}
-        {/* {Added Export active chat history button triggering plain text backup} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM] */}
+        {/* {Added Export active chat history button triggering plain text backup} [Commented by: Google AI Studio on 16/10/2026 10:55 PM] */}
         <div className="absolute top-4 right-4 flex items-center gap-2 z-30">
           {activeChat && (
             <button
@@ -1410,7 +1459,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                         {m.displayAttachments.map((att, aIdx) => (
                           <div key={aIdx} className="flex items-center gap-2 flex-wrap">
                             <span>{att.type === 'image' ? '🖼️ Image' : `📄 ${att.name}`}</span>
-                            {/* {Clear UI distinction when raw file bytes reside only in original browser while preserved cloud output is loaded} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM] */}
+                            {/* {Clear UI distinction when raw file bytes reside only in original browser while preserved cloud output is loaded} [Commented by: Google AI Studio on 15/10/2026 9:22 AM] */}
                             {att.isLocalMissing ? (
                               <span
                                 className="text-[10px] text-amber-300 bg-amber-950/60 border border-amber-800/60 px-1.5 py-0.5 rounded font-mono"
@@ -1538,13 +1587,13 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         </div>
 
         {/* Composer Wrap */}
-        {/* {Restored UI scale: composer container 750px at top 30vh / bottom 45px, 20px radius, 15px padding, 36px send button} [Commented by: Google AI Studio on 10/14/2026 10:35 AM] */}
+        {/* {Restored UI scale: composer container 750px at top 30vh / bottom 45px, 20px radius, 15px padding, 36px send button} [Commented by: Google AI Studio on 14/10/2026 10:35 AM] */}
         <div
           className={`absolute left-1/2 -translate-x-1/2 w-full max-w-[750px] px-4 transition-all duration-300 z-20 ${
             activeChat ? 'bottom-[45px]' : 'top-[30vh]'
           }`}
         >
-          {/* {Storage quota and sync status notices} [Commented by: Google AI Studio on October 15, 2026 at 09:57 AM] */}
+          {/* {Storage quota and sync status notices} [Commented by: Google AI Studio on 15/10/2026 09:57 AM] */}
           {quotaErrorNotice && (
             <div className="mb-2 px-3 py-1.5 rounded-lg bg-amber-950/80 border border-amber-600/60 text-amber-200 text-xs flex items-center justify-between shadow-lg">
               <span>⚠️ {quotaErrorNotice}</span>
@@ -1661,7 +1710,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
       </main>
 
       {/* AUTH MODAL */}
-      {/* {Removed email login concept completely: Sign Up directly opens for username, password, and API keys} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM] */}
+      {/* {Removed email login concept completely: Sign Up directly opens for username, password, and API keys} [Commented by: Google AI Studio on 16/10/2026 10:55 PM] */}
       {authModalMode && (
         <AuthModal
           mode={authModalMode}

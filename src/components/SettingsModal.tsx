@@ -1,4 +1,4 @@
-// {Created two-column SettingsModal with Account, AI Configuration, MCP Plugins, and Notion Docs} [Commented by: Google AI Studio on 10/12/2026 10:56 AM]
+// {Created two-column SettingsModal with Account, AI Configuration, MCP Plugins, and Notion Docs} [Commented by: Google AI Studio on 12/10/2026 10:56 AM]
 
 import React, { useState } from 'react';
 import { UserProfile, supabase, isSupabaseConfigured, getLocalProfiles, saveLocalProfiles } from '../lib/supabase';
@@ -54,7 +54,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   if (!isOpen) return null;
 
   // Handle Account Save
-  // {Zero-knowledge encryption for updated API credentials before storing in Supabase} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM]
+  // {Zero-knowledge encryption for updated API credentials before storing in Supabase} [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
   const handleSaveAccount = async () => {
     setStatusMessage(null);
     try {
@@ -292,7 +292,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* TAB 1: ACCOUNT */}
           {activeTab === 'account' && (
             <div className="space-y-5 max-w-xl">
-              {/* {Added Supabase Cloud connectivity indicator in Account settings} [Commented by: Google AI Studio on 10/13/2026 03:20 AM] */}
+              {/* {Added Supabase Cloud connectivity indicator in Account settings} [Commented by: Google AI Studio on 13/10/2026 03:20 AM] */}
               <div className="flex items-center justify-between pb-2 border-b border-neutral-800 mb-4">
                 <h2 className="text-xl font-bold font-serif">Account Settings</h2>
                 <span className={`text-[11px] font-mono px-2.5 py-0.5 rounded-full border ${
@@ -525,7 +525,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           )}
 
           {/* TAB 4: ABOUT NANOBOT */}
-          {/* {Updated About nanobot documentation with privacy statement, developer contact, Notion 101 link, Ctrl+S backup warning, GitHub source link, and dynamic alphabetical service credits with active plugin insertion} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM] */}
+          {/* {Updated About nanobot documentation with privacy statement, developer contact, Notion 101 link, Ctrl+S backup warning, GitHub source link, and dynamic alphabetical service credits with active plugin insertion} [Commented by: Google AI Studio on 16/10/2026 10:55 PM] */}
           {activeTab === 'about' && (() => {
             const baseServices = [
               'Cloudflare',

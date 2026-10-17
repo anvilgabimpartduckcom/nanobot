@@ -1,4 +1,4 @@
-// {Removed email id login concept completely for direct username, password, and API keys entry on Sign Up, and implemented zero-knowledge client-side encryption for credentials saved to Supabase} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM]
+// {Removed email id login concept completely for direct username, password, and API keys entry on Sign Up, and implemented zero-knowledge client-side encryption for credentials saved to Supabase} [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
 
 import React, { useState } from 'react';
 import { supabase, isSupabaseConfigured, getLocalProfiles, saveLocalProfiles, UserProfile } from '../lib/supabase';
@@ -87,7 +87,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       // Derive client-side zero-knowledge key from password and salt
       const cryptoKey = await deriveKeyFromPassword(pwd, salt);
 
-      // {Zero-Knowledge credential encryption: encrypt API keys before storing in Supabase so developer cannot read them} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM]
+      // {Zero-Knowledge credential encryption: encrypt API keys before storing in Supabase so developer cannot read them} [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
       const encryptedOpenRouterKey = await encryptText(orKey, cryptoKey, salt);
       const encryptedTavilyKey = await encryptText(tvKey, cryptoKey, salt);
 
@@ -187,7 +187,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         throw new Error('No account found with this username. Please check your credentials or Sign Up.');
       }
 
-      // {Zero-Knowledge credential decryption: decrypt encrypted API keys locally in the browser} [Commented by: Google AI Studio on October 16, 2026 at 10:55 PM]
+      // {Zero-Knowledge credential decryption: decrypt encrypted API keys locally in the browser} [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
       const derivedKey = await deriveKeyFromPassword(pwd, matched.salt || 'default_nanobot_salt');
       const decryptedOr = await decryptText(matched.openrouter_key, derivedKey);
       const decryptedTv = await decryptText(matched.tavily_key, derivedKey);

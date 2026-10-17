@@ -1,4 +1,4 @@
-# {GitHub Actions workflow deploying nanobot-api Cloudflare Worker using Wrangler with secure credentials} [Commented by: Google AI Studio on October 15, 2026 at 10:16 AM]
+# {GitHub Actions workflow deploying nanobot-api Cloudflare Worker using Wrangler with secure credentials} [Commented by: Google AI Studio on 15/10/2026 10:16 AM]
 
 name: Deploy Cloudflare Worker Backend
 
@@ -37,7 +37,7 @@ jobs:
             npm ci || npm install
           fi
 
-      # {Direct Cloudflare Worker deployment with verified D1 database_id from wrangler.toml} [Commented by: Google AI Studio on October 17, 2026 at 02:43 AM]
+      # {Direct Cloudflare Worker deployment with verified D1 database_id from wrangler.toml} [Commented by: Google AI Studio on 17/10/2026 02:43 AM]
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
         with:
