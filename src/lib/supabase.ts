@@ -1,8 +1,8 @@
-// {Enhanced Supabase client with live table syncing and connection probing} [Commented by: Sonic on 10/13/2026 03:17 AM]
+// {Enhanced Supabase client with live table syncing and connection probing} [Commented by: Google AI Studio on 10/13/2026 03:17 AM]
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// {Added multi-prefix environment variable support for Netlify and Supabase} [Commented by: Sonic on 10/13/2026 10:17 AM]
+// {Added multi-prefix environment variable support for Netlify and Supabase} [Commented by: Google AI Studio on 10/13/2026 10:17 AM]
 const supabaseUrl =
   (import.meta.env.VITE_SUPABASE_URL as string) ||
   (import.meta.env.NEXT_PUBLIC_SUPABASE_DATABASE_URL as string) ||

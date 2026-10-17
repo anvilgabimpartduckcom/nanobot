@@ -1,4 +1,4 @@
-// {Created MCP plugins registry for Google Drive, Gmail, Docs, Notion, Firecrawl, and Tavily} [Commented by: Sonic on 10/12/2026 10:53 AM]
+// {Created MCP plugins registry for Google Drive, Gmail, Docs, Notion, Firecrawl, and Tavily} [Commented by: Google AI Studio on 10/12/2026 10:53 AM]
 
 export interface PluginDefinition {
   id: string;

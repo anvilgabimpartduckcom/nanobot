@@ -1,4 +1,4 @@
-// {Created robust Markdown, KaTeX math typesetting, and highlight.js code parsing engine} [Commented by: Sonic on 10/12/2026 10:52 AM]
+// {Created robust Markdown, KaTeX math typesetting, and highlight.js code parsing engine} [Commented by: Google AI Studio on 10/12/2026 10:52 AM]
 
 import MarkdownIt from 'markdown-it';
 import DOMPurify from 'dompurify';

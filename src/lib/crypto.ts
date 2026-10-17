@@ -1,4 +1,4 @@
-// {Implemented client-side Web Crypto AES-GCM-256 zero-knowledge encryption} [Commented by: Sonic on 10/12/2026 10:48 AM]
+// {Implemented client-side Web Crypto AES-GCM-256 zero-knowledge encryption} [Commented by: Google AI Studio on 10/12/2026 10:48 AM]
 
 export interface EncryptedPayload {
   ciphertext: string;

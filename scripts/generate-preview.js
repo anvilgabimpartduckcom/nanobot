@@ -1,4 +1,4 @@
-// {Created preview generator converting exact nanobot UI SVG into public/preview.png} [Commented by: Sonic on 10/13/2026 10:41 AM]
+// {Created preview generator converting exact nanobot UI SVG into public/preview.png} [Commented by: Google AI Studio on 10/13/2026 10:41 AM]
 
 import sharp from 'sharp';
 import fs from 'fs';

@@ -1,4 +1,4 @@
-// {Created Cloudflare R2 integration module for tiered archiving of older encrypted conversations} [Commented by: Sonic on 10/14/2026 10:35 AM]
+// {Created Cloudflare R2 integration module for tiered archiving of older encrypted conversations} [Commented by: Google AI Studio on 10/14/2026 10:35 AM]
 
 export interface R2Config {
   accountId: string;

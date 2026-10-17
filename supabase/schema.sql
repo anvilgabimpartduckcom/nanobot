@@ -1,4 +1,4 @@
--- {Updated Supabase schema with salt column for multi-device zero-knowledge decryption} [Commented by: Sonic on 10/13/2026 10:51 AM]
+-- {Updated Supabase schema with salt column for multi-device zero-knowledge decryption} [Commented by: Google AI Studio on 10/13/2026 10:51 AM]
 
 -- 1. Enable UUID Extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";

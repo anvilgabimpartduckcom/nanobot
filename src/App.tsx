@@ -1,16 +1,16 @@
-// {Created unified nanobot App with Supabase auth, settings, incognito mode, deep research, and smooth streaming} [Commented by: Sonic on 10/12/2026 10:58 AM]
+// {Created unified nanobot App with Supabase auth, settings, incognito mode, deep research, and smooth streaming} [Commented by: Google AI Studio on 10/12/2026 10:58 AM]
 
 import React, { useState, useEffect, useRef } from 'react';
 import { AuthModal } from './components/AuthModal';
 import { SettingsModal } from './components/SettingsModal';
-// {Imported R2 tiered archive storage and Tavily extract utility} [Commented by: Sonic on 10/14/2026 10:35 AM]
+// {Imported R2 tiered archive storage and Tavily extract utility} [Commented by: Google AI Studio on 10/14/2026 10:35 AM]
 import { UserProfile, isSupabaseConfigured, supabase, fetchUserEncryptedChats, persistEncryptedChatRecord, removeEncryptedChatRecord } from './lib/supabase';
 import { deriveKeyFromPassword, encryptData, decryptData, encryptText, decryptText } from './lib/crypto';
 import { analyzeFileWithScript, ProcessedFile } from './lib/fileReader';
 import { performDynamicSearch, runDeepResearch, extractUrlsWithTavily } from './lib/tavily';
 import { uploadArchiveToR2, fetchArchiveFromR2, deleteArchiveFromR2 } from './lib/r2';
 import { markdownToHtml, escapeHtml, safeUrl } from './lib/markdown';
-// {Imported MCP_PLUGINS to equip the AI model with real tools from connected servers} [Commented by: Sonic on 10/13/2026 10:53 AM]
+// {Imported MCP_PLUGINS to equip the AI model with real tools from connected servers} [Commented by: Google AI Studio on 10/13/2026 10:53 AM]
 import { MCP_PLUGINS } from './lib/plugins';
 // {Imported Cloudflare Worker API client for authenticated chat persistence} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
 import { workerClient, WorkerMessage, WorkerFileOutput } from './lib/workerClient';
@@ -383,7 +383,7 @@ export default function App() {
     }
   };
 
-  // {Integrated remote Supabase encrypted chat syncing with Cloudflare R2 tiered archives} [Commented by: Sonic on 10/14/2026 10:35 AM]
+  // {Integrated remote Supabase encrypted chat syncing with Cloudflare R2 tiered archives} [Commented by: Google AI Studio on 10/14/2026 10:35 AM]
   const loadEncryptedChats = async (userId: string, key: CryptoKey) => {
     try {
       const records = await fetchUserEncryptedChats(userId);
@@ -437,7 +437,7 @@ export default function App() {
   };
 
   // Save active chat (Encrypted to Supabase + R2 if signed in, skipped if Incognito)
-  // {Enforced file storage isolation: raw files/images stay local, cloud backups store code output only} [Commented by: Sonic on 10/14/2026 10:35 AM]
+  // {Enforced file storage isolation: raw files/images stay local, cloud backups store code output only} [Commented by: Google AI Studio on 10/14/2026 10:35 AM]
   // {Persist chat session and messages to Cloudflare Worker D1 backend with Supabase token verification} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
   const persistChat = async (chat: ChatSession) => {
     if (isIncognito) return; // Do not save incognito chats
@@ -771,7 +771,7 @@ export default function App() {
 
     const fullTextPrompt = trimmedPrompt + attachedFileContext + cloudOutputsContext;
 
-    // {Typed userContent multimodal parts array explicitly for TypeScript safety} [Commented by: Sonic on 10/12/2026 11:00 AM]
+    // {Typed userContent multimodal parts array explicitly for TypeScript safety} [Commented by: Google AI Studio on 10/12/2026 11:00 AM]
     const imageAttachments = attachments.filter((a) => a.isImage && a.dataUrl);
     if (imageAttachments.length > 0) {
       const parts: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
@@ -856,7 +856,7 @@ export default function App() {
       return;
     }
 
-    // {Configured system prompt with real MCP server tool definitions, persona rules, and URL scraping capability} [Commented by: Sonic on 10/14/2026 10:35 AM]
+    // {Configured system prompt with real MCP server tool definitions, persona rules, and URL scraping capability} [Commented by: Google AI Studio on 10/14/2026 10:35 AM]
     const customInstructions = currentUser?.ai_instructions || '';
     const connectedPlugins = currentUser?.plugins_connected || {};
     const activePlugins = MCP_PLUGINS.filter((p) => connectedPlugins[p.id as keyof typeof connectedPlugins]);
@@ -981,7 +981,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         }
       }
 
-      // {Added regex detector and handler for Tavily URL scraping tags <Scrap1>URL1</Scrap1>} [Commented by: Sonic on 10/14/2026 10:35 AM]
+      // {Added regex detector and handler for Tavily URL scraping tags <Scrap1>URL1</Scrap1>} [Commented by: Google AI Studio on 10/14/2026 10:35 AM]
       const scrapMatches = [...currentOutput.matchAll(/<Scrap\d*>(.*?)<\/Scrap\d*>/gi)]
         .map((m) => m[1].trim())
         .filter(Boolean);
@@ -1199,7 +1199,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
   return (
     <div className="flex h-screen w-screen relative bg-black text-white overflow-hidden">
       {/* SIDEBAR */}
-      {/* {Restored UI scale matching nanobot.html and Old UI specifications} [Commented by: Sonic on 10/14/2026 10:35 AM] */}
+      {/* {Restored UI scale matching nanobot.html and Old UI specifications} [Commented by: Google AI Studio on 10/14/2026 10:35 AM] */}
       <aside
         className={`${
           sidebarOpen ? 'flex' : 'hidden'
@@ -1538,7 +1538,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         </div>
 
         {/* Composer Wrap */}
-        {/* {Restored UI scale: composer container 750px at top 30vh / bottom 45px, 20px radius, 15px padding, 36px send button} [Commented by: Sonic on 10/14/2026 10:35 AM] */}
+        {/* {Restored UI scale: composer container 750px at top 30vh / bottom 45px, 20px radius, 15px padding, 36px send button} [Commented by: Google AI Studio on 10/14/2026 10:35 AM] */}
         <div
           className={`absolute left-1/2 -translate-x-1/2 w-full max-w-[750px] px-4 transition-all duration-300 z-20 ${
             activeChat ? 'bottom-[45px]' : 'top-[30vh]'
