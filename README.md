@@ -12,6 +12,7 @@ nanobot/
 ├── metadata.json               # Application identity metadata
 ├── netlify.toml                # Netlify SPA build and redirect rules
 ├── package.json                # Frontend Node.js dependencies and scripts
+├── package-lock.json           # Exact resolved dependency tree for reproducible CI builds
 ├── tsconfig.json               # TypeScript configuration
 ├── vite.config.ts              # Vite build configuration with Tailwind CSS plugin
 ├── README.md                   # Project documentation
