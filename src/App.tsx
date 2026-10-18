@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AuthModal } from './components/AuthModal';
 import { SettingsModal } from './components/SettingsModal';
+import { AboutModal } from './components/AboutModal';
 // {Imported R2 tiered archive storage and Tavily extract utility} [Commented by: Google AI Studio on 14/10/2026 10:35 AM]
 import { UserProfile, isSupabaseConfigured, supabase, fetchUserEncryptedChats, persistEncryptedChatRecord, removeEncryptedChatRecord } from './lib/supabase';
 import { deriveKeyFromPassword, encryptData, decryptData, encryptText, decryptText } from './lib/crypto';
@@ -52,6 +53,7 @@ export default function App() {
   const [authModalMode, setAuthModalMode] = useState<'signin' | 'signup' | null>(null);
   const [toastNotice, setToastNotice] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [isIncognito, setIsIncognito] = useState(false);
 
   // Chat State
@@ -1336,13 +1338,21 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
             Clear Chat History
           </button>
 
-          {currentUser && (
+          {/* {Render Settings button for signed-in users or black 'About nanobot' button in exact same position for non-signed-in users} [Commented by: Google AI Studio on 18/10/2026 12:58 AM] */}
+          {currentUser ? (
             <button
               onClick={() => setIsSettingsOpen(true)}
               className="w-full bg-black border border-[#333] hover:border-neutral-500 text-white font-bold py-[10px] px-3 rounded-[6px] text-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
             >
               <span>⚙️</span>
               <span>Settings</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => setIsAboutModalOpen(true)}
+              className="w-full bg-black border border-[#333] hover:border-neutral-500 text-white font-bold py-[10px] px-3 rounded-[6px] text-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
+            >
+              <span>About nanobot</span>
             </button>
           )}
         </div>
@@ -1742,6 +1752,13 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
           }}
         />
       )}
+
+      {/* {Standalone About modal for non-signed-in users} [Commented by: Google AI Studio on 18/10/2026 12:58 AM] */}
+      <AboutModal
+        isOpen={isAboutModalOpen}
+        onClose={() => setIsAboutModalOpen(false)}
+        connectedPlugins={currentUser?.plugins_connected}
+      />
     </div>
   );
 }

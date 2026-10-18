@@ -1,4 +1,4 @@
--- {Cloudflare D1 SQL schema for Nanobot conversations, messages, and AI-generated file outputs} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+-- {Cloudflare D1 SQL schema for Nanobot conversations, messages, and AI-generated file outputs} [Commented by: Google AI Studio on 15/10/2026 9:22 AM]
 
 -- 1. Conversations Table
 CREATE TABLE IF NOT EXISTS conversations (
@@ -36,7 +36,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_user
   ON messages (user_id);
 
 -- 3. AI-Generated File Outputs Table (Persisting extracted text, reader scripts, and structured data summaries, NEVER original raw file bytes)
--- {Added file_outputs table for cross-device AI output persistence with foreign-key cascading deletion} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+-- {Added file_outputs table for cross-device AI output persistence with foreign-key cascading deletion} [Commented by: Google AI Studio on 15/10/2026 9:22 AM]
 CREATE TABLE IF NOT EXISTS file_outputs (
   id TEXT PRIMARY KEY,
   conversation_id TEXT NOT NULL,

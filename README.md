@@ -1,4 +1,4 @@
-<!-- {Updated README Project Structure to precisely reflect all project directories, public assets, scripts, and package-lock.json} [Commented by: Google AI Studio on 17/10/2026 03:19 AM] -->
+<!-- {Updated README Project Structure removing deleted single-use scripts/ directory} [Commented by: Google AI Studio on 18/10/2026 08:20 AM] -->
 
 # Project Structure
 
@@ -17,8 +17,6 @@ nanobot/
 ├── package-lock.json           # Exact resolved dependency tree for reproducible CI builds
 ├── public/
 │   └── preview.png             # Application preview banner asset
-├── scripts/
-│   └── generate-preview.js     # Script converting UI SVG into public/preview.png
 ├── tsconfig.json               # TypeScript configuration
 ├── vite.config.ts              # Vite build configuration with Tailwind CSS plugin
 ├── README.md                   # Project documentation
@@ -34,6 +32,7 @@ nanobot/
     ├── App.tsx                 # Main chat interface, sidebar, incognito, and stream handlers
     ├── index.css               # Tailwind CSS imports, neon aura glow, and scrollbar styles
     ├── components/
+    │   ├── AboutModal.tsx      # Standalone About nanobot modal for non-signed-in users
     │   ├── AuthModal.tsx       # Direct registration (username, password, API keys) and signin modal
     │   └── SettingsModal.tsx   # Two-column settings: Account, AI Config, Plugins, About
     └── lib/

@@ -1,6 +1,6 @@
-// {Cloudflare Worker backend persisting user chat history and AI-extracted file outputs with Supabase Bearer token verification and D1 parameterized queries} [Commented by: Google AI Studio on October 15, 2026 at 09:57 AM]
+// {Cloudflare Worker backend persisting user chat history and AI-extracted file outputs with Supabase Bearer token verification and D1 parameterized queries} [Commented by: Google AI Studio on 15/10/2026 09:57 AM]
 
-// {Self-contained Cloudflare D1 database interface definitions for zero-dependency portability} [Commented by: Google AI Studio on October 15, 2026 at 09:57 AM]
+// {Self-contained Cloudflare D1 database interface definitions for zero-dependency portability} [Commented by: Google AI Studio on 15/10/2026 09:57 AM]
 export interface D1Result<T = unknown> {
   results?: T[];
   success?: boolean;
@@ -34,7 +34,7 @@ interface SupabaseUser {
   role?: string;
 }
 
-// {CORS headers helper supporting wildcard or configured origins from runtime environment} [Commented by: Google AI Studio on October 15, 2026 at 09:57 AM]
+// {CORS headers helper supporting wildcard or configured origins from runtime environment} [Commented by: Google AI Studio on 15/10/2026 09:57 AM]
 function getCorsHeaders(origin: string | null, allowedOrigin: string = '*'): Headers {
   const headers = new Headers();
   let permitOrigin = '*';
@@ -80,7 +80,7 @@ function errorResponse(
   return jsonResponse({ success: false, error: message }, status, origin, allowedOrigin);
 }
 
-// {Securely verify Supabase Bearer token against Supabase Auth API using environment secrets} [Commented by: Google AI Studio on October 15, 2026 at 09:57 AM]
+// {Securely verify Supabase Bearer token against Supabase Auth API using environment secrets} [Commented by: Google AI Studio on 15/10/2026 09:57 AM]
 // Derives user ID strictly from the verified cryptographic session; never trusts client-supplied user ID
 async function authenticateRequest(
   request: Request,
@@ -156,7 +156,7 @@ export default {
     const url = new URL(request.url);
     const pathname = url.pathname;
 
-    // {Public health check and diagnostic endpoint verifying environment variables and D1 binding} [Commented by: Google AI Studio on October 15, 2026 at 09:57 AM]
+    // {Public health check and diagnostic endpoint verifying environment variables and D1 binding} [Commented by: Google AI Studio on 15/10/2026 09:57 AM]
     if (pathname === '/' || pathname === '/health' || pathname === '/api/health') {
       return sendJson(
         {
@@ -258,7 +258,7 @@ export default {
         }
 
         // 3. DELETE /api/conversations -> Delete all conversations, messages, and file outputs for the authenticated user
-        // {Explicit transactional cleanup deleting file outputs, messages, and conversations} [Commented by: Google AI Studio on October 15, 2026 at 09:57 AM]
+        // {Explicit transactional cleanup deleting file outputs, messages, and conversations} [Commented by: Google AI Studio on 15/10/2026 09:57 AM]
         if (pathname === '/api/conversations' && request.method === 'DELETE') {
           await env.DB.prepare(`DELETE FROM file_outputs WHERE user_id = ?`).bind(verifiedUserId).run();
           await env.DB.prepare(`DELETE FROM messages WHERE user_id = ?`).bind(verifiedUserId).run();
@@ -313,7 +313,7 @@ export default {
           }
 
           // POST /api/conversations/:id/outputs -> Save or update an AI-generated output (e.g. extracted text or script results)
-          // {Enforced payload size safety checks and parameterized storage of AI output only} [Commented by: Google AI Studio on October 15, 2026 at 09:57 AM]
+          // {Enforced payload size safety checks and parameterized storage of AI output only} [Commented by: Google AI Studio on 15/10/2026 09:57 AM]
           if (request.method === 'POST') {
             const body: any = await request.json().catch(() => null);
             if (!body || typeof body !== 'object') {
@@ -559,7 +559,7 @@ export default {
             return sendJson({ success: true, updated_at: nowIso }, 200);
           }
 
-          // {Explicit cascade deletion: remove file_outputs, messages, and conversation without leaving orphans} [Commented by: Google AI Studio on October 15, 2026 at 09:57 AM]
+          // {Explicit cascade deletion: remove file_outputs, messages, and conversation without leaving orphans} [Commented by: Google AI Studio on 15/10/2026 09:57 AM]
           if (request.method === 'DELETE') {
             await env.DB.prepare(`DELETE FROM file_outputs WHERE conversation_id = ? AND user_id = ?`)
               .bind(conversationId, verifiedUserId)

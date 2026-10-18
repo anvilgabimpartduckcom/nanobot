@@ -1,4 +1,4 @@
-// {Cloudflare Worker REST API client for Nanobot chat persistence with Supabase Bearer authentication} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
+// {Cloudflare Worker REST API client for Nanobot chat persistence with Supabase Bearer authentication} [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
 
 import { supabase } from './supabase';
 
@@ -28,7 +28,7 @@ export interface WorkerApiResponse<T> {
   isNetworkError?: boolean;
 }
 
-// {Cloud-persisted AI-generated file outputs for cross-device chat context} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+// {Cloud-persisted AI-generated file outputs for cross-device chat context} [Commented by: Google AI Studio on 15/10/2026 9:22 AM]
 export interface WorkerFileOutput {
   id?: string;
   conversation_id?: string;
@@ -42,7 +42,7 @@ export interface WorkerFileOutput {
   updated_at?: string;
 }
 
-// {Configured Cloudflare Worker base URL with fallback to production deployment} [Commented by: Google AI Studio on October 14, 2026 at 10:55 AM]
+// {Configured Cloudflare Worker base URL with fallback to production deployment} [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
 const WORKER_BASE_URL = (
   (import.meta.env.VITE_CLOUDFLARE_WORKER_URL as string) ||
   'https://nanobot-api.mud-amiable-tweed.workers.dev'
@@ -225,7 +225,7 @@ export const workerClient = {
     );
   },
 
-  // {Retrieve persisted AI-extracted outputs for a conversation} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+  // {Retrieve persisted AI-extracted outputs for a conversation} [Commented by: Google AI Studio on 15/10/2026 9:22 AM]
   async getFileOutputs(
     conversationId: string
   ): Promise<WorkerApiResponse<{ outputs: WorkerFileOutput[] }>> {
@@ -235,7 +235,7 @@ export const workerClient = {
     );
   },
 
-  // {Persist an AI-generated file extraction or reader script result to Cloudflare D1} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+  // {Persist an AI-generated file extraction or reader script result to Cloudflare D1} [Commented by: Google AI Studio on 15/10/2026 9:22 AM]
   async saveFileOutput(
     conversationId: string,
     output: WorkerFileOutput
@@ -249,7 +249,7 @@ export const workerClient = {
     );
   },
 
-  // {Delete a persisted AI output for a file from Cloudflare D1} [Commented by: Google AI Studio on October 15, 2026 at 9:22 AM]
+  // {Delete a persisted AI output for a file from Cloudflare D1} [Commented by: Google AI Studio on 15/10/2026 9:22 AM]
   async deleteFileOutput(
     conversationId: string,
     fileId: string

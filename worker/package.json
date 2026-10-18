@@ -2,7 +2,7 @@
   "name": "nanobot-api",
   "version": "1.2.0",
   "private": true,
-  "description": "{Cloudflare Worker backend package configuration for Nanobot API deployment} [Commented by: Google AI Studio on October 15, 2026 at 10:16 AM]",
+  "description": "{Cloudflare Worker backend package configuration for Nanobot API deployment} [Commented by: Google AI Studio on 15/10/2026 10:16 AM]",
   "main": "src/index.ts",
   "scripts": {
     "deploy": "wrangler deploy",

@@ -269,7 +269,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </a>
                 </label>
                 <input
-                  type="text"
+                  type="password"
                   required
                   value={openrouterKey}
                   onChange={(e) => setOpenrouterKey(e.target.value)}
@@ -291,7 +291,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </a>
                 </label>
                 <input
-                  type="text"
+                  type="password"
                   required
                   value={tavilyKey}
                   onChange={(e) => setTavilyKey(e.target.value)}
@@ -310,14 +310,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 {loading ? 'Creating Account...' : 'Create Account'}
               </button>
 
-              <div className="text-center pt-2">
-                <button
-                  type="button"
-                  onClick={() => handleSwitchMode('signin')}
-                  className="text-xs text-neutral-400 hover:text-emerald-400 transition-colors cursor-pointer"
-                >
-                  Already have an account? <span className="underline font-medium">Sign In</span>
-                </button>
+              <div className="text-center pt-2 space-y-2">
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchMode('signin')}
+                    className="text-xs text-neutral-400 hover:text-emerald-400 transition-colors cursor-pointer"
+                  >
+                    Already have an account? <span className="underline font-medium">Sign In</span>
+                  </button>
+                </div>
+                {/* {Added direct help link for account setup and key configuration} [Commented by: Google AI Studio on 18/10/2026 12:58 AM] */}
+                <div>
+                  <span className="text-xs text-neutral-400">
+                    Need Help with Creating Account?{' '}
+                    <a
+                      href="https://tropical-chime-8c1.notion.site/How-to-set-up-nanobot-3fab104092f3801db298e6c12617a2be"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-emerald-400 hover:text-emerald-300 underline font-medium"
+                    >
+                      Visit here
+                    </a>
+                  </span>
+                </div>
               </div>
             </form>
           </div>
