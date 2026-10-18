@@ -674,9 +674,9 @@ export default function App() {
       return;
     }
 
-    // Determine API Keys
-    const orKey = currentUser?.openrouter_key || import.meta.env.VITE_OPENROUTER_API_KEY || '';
-    const tvKey = currentUser?.tavily_key || import.meta.env.VITE_TAVILY_API_KEY || '';
+    // {Determined API keys strictly from authenticated user profile, removing obsolete global env fallbacks} [Commented by: Google AI Studio on 18/10/2026 12:50 PM]
+    const orKey = currentUser?.openrouter_key || '';
+    const tvKey = currentUser?.tavily_key || '';
 
     if (!orKey && !trimmedPrompt.startsWith('#')) {
       alert('Please Sign In or configure your OpenRouter API Key in Account Settings.');
@@ -1218,9 +1218,9 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
           sidebarOpen ? 'flex' : 'hidden'
         } w-[300px] h-full bg-[#0a0a0a] border-r border-[#262626] flex-col p-[15px] z-40 shrink-0`}
       >
-        {/* {Removed close button from sidebar history header per user focus-mode instruction} [Commented by: Google AI Studio on 18/10/2026 08:23 AM] */}
+        {/* {Increased History title font size per focus-mode instruction} [Commented by: Google AI Studio on 18/10/2026 01:07 PM] */}
         <div className="flex items-center justify-between pb-3 border-b border-[#262626] mb-3">
-          <h3 className="font-semibold text-sm tracking-wide text-neutral-300">
+          <h3 className="font-semibold text-base tracking-wide text-neutral-300">
             History ◴
           </h3>
         </div>
@@ -1285,9 +1285,10 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         )}
 
         {/* History List */}
+        {/* {Increased empty history text font size per focus-mode instruction} [Commented by: Google AI Studio on 18/10/2026 01:07 PM] */}
         <div className="flex-1 overflow-y-auto space-y-1">
           {chats.length === 0 ? (
-            <div className="text-xs text-neutral-600 p-2 italic">No chat history yet</div>
+            <div className="text-sm text-neutral-500 p-2 italic">No chat history yet</div>
           ) : filteredChats.length === 0 ? (
             <div className="text-xs text-neutral-500 p-2 italic text-center space-y-1.5">
               <div>No chats matching &quot;{historySearchQuery}&quot;</div>
@@ -1356,17 +1357,20 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
       {/* MAIN VIEWPORT */}
       <main className="flex-1 relative flex flex-col items-center h-full overflow-hidden">
         {/* Top Controls (Left: Sidebar & New Chat) */}
-        <div className="absolute top-4 left-4 flex gap-2 z-30">
+        {/* {Configured responsive controls so New Chat and auth/action buttons vanish on mobile when sidebar is open, leaving only close sidebar button} [Commented by: Google AI Studio on 18/10/2026 01:07 PM] */}
+        <div className={`absolute top-4 ${sidebarOpen ? 'max-sm:left-2 left-4' : 'left-4'} flex gap-2 z-30`}>
           <button
             onClick={() => setSidebarOpen((prev) => !prev)}
             className="w-10 h-10 bg-transparent text-white border border-[#333] rounded-[8px] flex items-center justify-center text-[20px] hover:border-neutral-500 cursor-pointer"
-            title="Toggle History"
+            title={sidebarOpen ? 'Close History' : 'Toggle History'}
           >
             {sidebarOpen ? '✕' : '◴'}
           </button>
           <button
             onClick={handleStartNewChat}
-            className="w-10 h-10 bg-transparent text-white border border-[#333] rounded-[8px] flex items-center justify-center text-[20px] hover:border-neutral-500 cursor-pointer"
+            className={`w-10 h-10 bg-transparent text-white border border-[#333] rounded-[8px] flex items-center justify-center text-[20px] hover:border-neutral-500 cursor-pointer ${
+              sidebarOpen ? 'max-sm:hidden' : ''
+            }`}
             title="New Chat"
           >
             💬
@@ -1382,7 +1386,9 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
 
         {/* Top-Right Controls */}
         {/* {Added Export active chat history button triggering plain text backup} [Commented by: Google AI Studio on 16/10/2026 10:55 PM] */}
-        <div className="absolute top-4 right-4 flex items-center gap-2 z-30">
+        <div className={`absolute top-4 right-4 flex items-center gap-2 z-30 ${
+          sidebarOpen ? 'max-sm:hidden' : ''
+        }`}>
           {activeChat && (
             <button
               onClick={handleExportActiveChat}

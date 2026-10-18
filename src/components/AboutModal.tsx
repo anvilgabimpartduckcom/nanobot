@@ -52,14 +52,12 @@ export const AboutModal: React.FC<AboutModalProps> = ({
           <p className="text-sm leading-relaxed">
             Everyone should get to use AI, and that too without giving away their data. So we created nanobot, an open source AI chatbot which respects your privacy, and is free to use. Users bring their own API keys, which helps in further keeping nanobot completely free to use.
           </p>
+          {/* {Rendered developer email in plain text box without hyperlink per user instruction} [Commented by: Google AI Studio on 18/10/2026 01:11 PM] */}
           <p className="text-sm leading-relaxed">
             For more information, or under any problems, please contact developer via email:{' '}
-            <a
-              href="mailto:molecule-sip-sauna@duck.com"
-              className="text-emerald-400 hover:underline font-mono"
-            >
+            <span className="inline-block bg-[#1a1a1a] border border-[#333] text-neutral-200 px-2 py-0.5 rounded font-mono text-xs select-all">
               molecule-sip-sauna@duck.com
-            </a>
+            </span>
           </p>
           <p className="text-sm leading-relaxed">
             You can also get information about more features of nanobot at the{' '}
