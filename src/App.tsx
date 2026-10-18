@@ -1218,16 +1218,11 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
           sidebarOpen ? 'flex' : 'hidden'
         } w-[300px] h-full bg-[#0a0a0a] border-r border-[#262626] flex-col p-[15px] z-40 shrink-0`}
       >
+        {/* {Removed close button from sidebar history header per user focus-mode instruction} [Commented by: Google AI Studio on 18/10/2026 08:23 AM] */}
         <div className="flex items-center justify-between pb-3 border-b border-[#262626] mb-3">
           <h3 className="font-semibold text-sm tracking-wide text-neutral-300">
             History ◴
           </h3>
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="text-neutral-400 hover:text-white p-1 text-sm cursor-pointer"
-          >
-            ✕
-          </button>
         </div>
 
         {/* Chat History Search Bar (Available exclusively to signed-in users) */}
