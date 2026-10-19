@@ -4,8 +4,18 @@ import React, { useState, useEffect, useRef } from 'react';
 import { AuthModal } from './components/AuthModal';
 import { SettingsModal } from './components/SettingsModal';
 import { AboutModal } from './components/AboutModal';
-// {Imported R2 tiered archive storage and Tavily extract utility} [Commented by: Google AI Studio on 14/10/2026 10:35 AM]
-import { UserProfile, isSupabaseConfigured, supabase, fetchUserEncryptedChats, persistEncryptedChatRecord, removeEncryptedChatRecord } from './lib/supabase';
+// {Imported Supabase persistence: profiles and AI file code outputs saved to Supabase; user chats saved exclusively to Cloudflare; cascading 30-day purge support} [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
+import {
+  UserProfile,
+  isSupabaseConfigured,
+  supabase,
+  FileCodeOutput,
+  saveFileCodeOutputToSupabase,
+  fetchFileCodeOutputsFromSupabase,
+  deleteFileCodeOutputsFromSupabase,
+  purgeExpiredFileCodeOutputs,
+  removeEncryptedChatRecord
+} from './lib/supabase';
 import { deriveKeyFromPassword, encryptData, decryptData, encryptText, decryptText } from './lib/crypto';
 import { analyzeFileWithScript, ProcessedFile } from './lib/fileReader';
 import { performDynamicSearch, runDeepResearch, extractUrlsWithTavily } from './lib/tavily';
@@ -89,6 +99,7 @@ export default function App() {
   const chatAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const importFileInputRef = useRef<HTMLInputElement>(null);
 
   // Current Date/Time helper
   const getCurrentDateTime = () =>
@@ -129,7 +140,6 @@ export default function App() {
       deriveKeyFromPassword(passwordSecret, currentUser.salt || 'default_nanobot_salt')
         .then((key) => {
           setCryptoKey(key);
-          loadEncryptedChats(currentUser.id, key);
           loadWorkerConversations(key);
         })
         .catch((err) => {
@@ -140,12 +150,22 @@ export default function App() {
       loadWorkerConversations();
     } else {
       setCryptoKey(null);
-      // Load unencrypted fallback chats if guest
+      // {Filter out and purge all files and caches for chats older than 30 days} [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
       try {
         const stored = JSON.parse(localStorage.getItem('nanobot_chats') || '[]');
-        // Filter out chats older than 30 days
         const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-        const validChats = stored.filter((c: ChatSession) => Date.now() - (c.updated || 0) < thirtyDaysMs);
+        const now = Date.now();
+        const validChats = stored.filter((c: ChatSession) => {
+          const isExpired = now - (c.updated || 0) >= thirtyDaysMs;
+          if (isExpired) {
+            deleteOriginalFilesForChat(c.id).catch(() => {});
+            deleteArchiveFromR2(c.id);
+            localStorage.removeItem('nanobot_files_' + c.id);
+            removeEncryptedChatRecord(c.id);
+          }
+          return !isExpired;
+        });
+        localStorage.setItem('nanobot_chats', JSON.stringify(validChats));
         setChats(validChats);
       } catch {
         setChats([]);
@@ -228,6 +248,115 @@ export default function App() {
     setTimeout(() => setToastNotice(null), 3000);
   };
 
+  // {Parse and import previously exported nanobot .txt files to resume or reference past conversations} [Commented by: Google AI Studio on 19/10/2026 10:46 AM]
+  const parseExportedChatText = (text: string): { title: string; messages: ChatMessage[] } | null => {
+    if (!text || (!text.includes('[USER]:') && !text.includes('[NANOBOT AI]:'))) {
+      return null;
+    }
+
+    const titleMatch = text.match(/Title:\s*(.+)/i);
+    const title = titleMatch ? titleMatch[1].trim() : 'Imported Chat';
+
+    const messages: ChatMessage[] = [];
+    const messageBlocks = text.split(/-{30,}/g);
+
+    for (const block of messageBlocks) {
+      const trimmed = block.trim();
+      if (!trimmed) continue;
+
+      const isUser = trimmed.includes('[USER]:');
+      const isAI = trimmed.includes('[NANOBOT AI]:') || trimmed.includes('[AI]:');
+      if (!isUser && !isAI) continue;
+
+      const role: 'user' | 'ai' = isUser ? 'user' : 'ai';
+      let body = trimmed.replace(/^\[(USER|NANOBOT AI|AI)\]:\s*/i, '');
+
+      let reasoning: string | undefined = undefined;
+      const reasoningMatch = body.match(/\[Reasoning \/ Thinking\]:\s*([\s\S]*?)(?=\[(Sources \/ Citations|Attachments)\]:|$)/i);
+      if (reasoningMatch) {
+        reasoning = reasoningMatch[1].trim();
+        body = body.replace(reasoningMatch[0], '');
+      }
+
+      const sources: Array<{ title: string; url: string }> = [];
+      const sourcesMatch = body.match(/\[Sources \/ Citations\]:\s*([\s\S]*?)(?=\[(Attachments|Reasoning)\]:|$)/i);
+      if (sourcesMatch) {
+        const sourceLines = sourcesMatch[1].split('\n');
+        for (const sLine of sourceLines) {
+          const sMatch = sLine.match(/^-\s*(.*?):\s*(https?:\/\/\S+)/i);
+          if (sMatch) {
+            sources.push({ title: sMatch[1].trim() || 'Source', url: sMatch[2].trim() });
+          }
+        }
+        body = body.replace(sourcesMatch[0], '');
+      }
+
+      const displayAttachments: Array<{ type: string; name: string }> = [];
+      const attachmentsMatch = body.match(/\[Attachments\]:\s*(.+)/i);
+      if (attachmentsMatch) {
+        const names = attachmentsMatch[1].split(',').map((n) => n.trim()).filter(Boolean);
+        names.forEach((name) => {
+          displayAttachments.push({ type: 'file', name });
+        });
+        body = body.replace(attachmentsMatch[0], '');
+      }
+
+      body = body
+        .replace(/={30,}/g, '')
+        .replace(/End of chat history[\s\S]*$/i, '')
+        .trim();
+
+      if (body || reasoning) {
+        messages.push({
+          role,
+          content: body,
+          reasoning,
+          sources: sources.length > 0 ? sources : undefined,
+          displayAttachments: displayAttachments.length > 0 ? displayAttachments : undefined
+        });
+      }
+    }
+
+    if (messages.length === 0) return null;
+    return { title, messages };
+  };
+
+  const handleImportChatFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      const parsed = parseExportedChatText(content);
+      if (!parsed || parsed.messages.length === 0) {
+        setToastNotice('Could not recognize nanobot chat format in file.');
+        setTimeout(() => setToastNotice(null), 3500);
+        return;
+      }
+
+      // {Instantiate imported chat session with unique timestamp ID conforming to ChatSession schema} [Commented by: Google AI Studio on 19/10/2026 10:50 AM]
+      const importedChat: ChatSession = {
+        id: (Date.now() + Math.floor(Math.random() * 1000)).toString(),
+        title: parsed.title,
+        messages: parsed.messages,
+        pinned: false,
+        updated: Date.now()
+      };
+
+      setChats((prev) => [importedChat, ...prev]);
+      setActiveChatId(importedChat.id);
+      persistChat(importedChat);
+      setToastNotice(`✓ Imported chat: "${importedChat.title}" (${importedChat.messages.length} messages)`);
+      setTimeout(() => setToastNotice(null), 4000);
+
+      if (importFileInputRef.current) {
+        importFileInputRef.current.value = '';
+      }
+    };
+    reader.readAsText(file);
+  };
+
   // {Global keyboard listener for Ctrl+S or Cmd+S to export active chat history} [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -260,18 +389,44 @@ export default function App() {
             })
           );
 
+          const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+          const now = Date.now();
+          // {Auto-purge conversations, files, code outputs, and text messages older than 30 days} [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
+          purgeExpiredFileCodeOutputs(currentUser.id).catch(() => {});
+
           setChats((prev) => {
             const map = new Map<string, ChatSession>();
-            prev.forEach((c) => map.set(c.id, c));
+            prev.forEach((c) => {
+              if (now - (c.updated || 0) < thirtyDaysMs) {
+                map.set(c.id, c);
+              } else {
+                deleteOriginalFilesForChat(c.id).catch(() => {});
+                deleteArchiveFromR2(c.id);
+                localStorage.removeItem('nanobot_files_' + c.id);
+                workerClient.deleteConversation(c.id).catch(() => {});
+                deleteFileCodeOutputsFromSupabase(currentUser.id, c.id).catch(() => {});
+                removeEncryptedChatRecord(c.id);
+              }
+            });
             decryptedConvs.forEach((wc) => {
-              const existing = map.get(wc.id);
-              map.set(wc.id, {
-                id: wc.id,
-                title: wc.title,
-                pinned: Boolean(wc.pinned),
-                messages: existing?.messages || [],
-                updated: wc.updated_at ? new Date(wc.updated_at).getTime() : Date.now(),
-              });
+              const updatedTime = wc.updated_at ? new Date(wc.updated_at).getTime() : now;
+              if (now - updatedTime < thirtyDaysMs) {
+                const existing = map.get(wc.id);
+                map.set(wc.id, {
+                  id: wc.id,
+                  title: wc.title,
+                  pinned: Boolean(wc.pinned),
+                  messages: existing?.messages || [],
+                  updated: updatedTime,
+                });
+              } else {
+                deleteOriginalFilesForChat(wc.id).catch(() => {});
+                deleteArchiveFromR2(wc.id);
+                localStorage.removeItem('nanobot_files_' + wc.id);
+                workerClient.deleteConversation(wc.id).catch(() => {});
+                deleteFileCodeOutputsFromSupabase(currentUser.id, wc.id).catch(() => {});
+                removeEncryptedChatRecord(wc.id);
+              }
             });
             const merged = Array.from(map.values()).sort(
               (a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.updated - a.updated
@@ -306,23 +461,48 @@ export default function App() {
     const localFileIds = new Set(localFiles.map((f) => f.fileId));
 
     if (currentUser) {
-      // Fetch persisted AI file outputs from Cloudflare D1
+      // {Fetch persisted AI file code outputs strictly from Supabase public.file_code_outputs table} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
       try {
-        const outRes = await workerClient.getFileOutputs(id);
-        if (outRes.success && outRes.data?.outputs) {
+        const supabaseOutputs = await fetchFileCodeOutputsFromSupabase(currentUser.id, id);
+        if (supabaseOutputs && supabaseOutputs.length > 0) {
           const decryptedOutputs = await Promise.all(
-            outRes.data.outputs.map(async (o) => {
-              let content = o.output_content;
+            supabaseOutputs.map(async (o) => {
+              let content = o.extracted_output;
               if (cryptoKey && content && content.startsWith('enc:')) {
                 content = await decryptText(content, cryptoKey);
               }
-              return { ...o, output_content: content };
+              return {
+                id: o.id || o.source_file_id,
+                conversation_id: o.conversation_id,
+                user_id: o.user_id,
+                source_file_id: o.source_file_id,
+                file_name: o.file_name,
+                file_type: o.file_type,
+                output_type: o.output_type,
+                output_content: content + (o.reader_code ? `\n\n[Python Reader Script]:\n${o.reader_code}` : ''),
+                created_at: o.created_at || new Date().toISOString()
+              };
             })
           );
           setChatFileOutputs((prev) => ({ ...prev, [id]: decryptedOutputs }));
+        } else {
+          // Fallback check to Cloudflare Worker D1 if previously saved
+          const outRes = await workerClient.getFileOutputs(id);
+          if (outRes.success && outRes.data?.outputs) {
+            const decryptedOutputs = await Promise.all(
+              outRes.data.outputs.map(async (o) => {
+                let content = o.output_content;
+                if (cryptoKey && content && content.startsWith('enc:')) {
+                  content = await decryptText(content, cryptoKey);
+                }
+                return { ...o, output_content: content };
+              })
+            );
+            setChatFileOutputs((prev) => ({ ...prev, [id]: decryptedOutputs }));
+          }
         }
       } catch (err) {
-        console.warn('Worker getFileOutputs notice:', err);
+        console.warn('File code outputs fetch notice:', err);
       }
     }
 
@@ -387,58 +567,7 @@ export default function App() {
     }
   };
 
-  // {Integrated remote Supabase encrypted chat syncing with Cloudflare R2 tiered archives} [Commented by: Google AI Studio on 14/10/2026 10:35 AM]
-  const loadEncryptedChats = async (userId: string, key: CryptoKey) => {
-    try {
-      const records = await fetchUserEncryptedChats(userId);
-      const decryptedChats: ChatSession[] = [];
-
-      for (const rec of records) {
-        try {
-          const decryptedTitle = await decryptData(rec.title_ciphertext, rec.iv, key);
-          const decryptedPayload = await decryptData(rec.data_ciphertext, rec.iv, key);
-          const parsed = JSON.parse(decryptedPayload);
-
-          let allMessages: ChatMessage[] = parsed.messages || [];
-
-          // Tiered check: Retrieve older archived messages from Cloudflare R2 if available
-          const r2Archive = await fetchArchiveFromR2(rec.id);
-          if (r2Archive) {
-            try {
-              const decryptedR2 = await decryptData(r2Archive, rec.iv, key);
-              const parsedR2 = JSON.parse(decryptedR2);
-              if (Array.isArray(parsedR2.messages) && parsedR2.messages.length > 0) {
-                allMessages = [...parsedR2.messages, ...allMessages];
-              }
-            } catch (r2Err) {
-              console.warn('R2 archive decrypt note:', r2Err);
-            }
-          }
-
-          decryptedChats.push({
-            id: rec.id,
-            title: decryptedTitle,
-            messages: allMessages,
-            pinned: rec.pinned,
-            updated: new Date(rec.updated_at).getTime()
-          });
-        } catch (decryptErr) {
-          console.warn('Failed to decrypt chat record:', rec.id, decryptErr);
-        }
-      }
-
-      setChats((prev) => {
-        const map = new Map<string, ChatSession>();
-        prev.forEach((c) => map.set(c.id, c));
-        decryptedChats.forEach((dc) => map.set(dc.id, dc));
-        return Array.from(map.values()).sort(
-          (a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.updated - a.updated
-        );
-      });
-    } catch (e) {
-      console.error('Error loading encrypted chats:', e);
-    }
-  };
+  // {User chats are stored and loaded exclusively from Cloudflare Worker D1 and R2 archives; user profiles and code outputs reside in Supabase} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
 
   // Save active chat (Encrypted to Supabase + R2 if signed in, skipped if Incognito)
   // {Enforced file storage isolation: raw files/images stay local, cloud backups store code output only} [Commented by: Google AI Studio on 14/10/2026 10:35 AM]
@@ -530,38 +659,16 @@ export default function App() {
     }
 
     if (currentUser && cryptoKey) {
+      // {Tiered archiving: older messages preserved in Cloudflare R2; active transcripts in Cloudflare Worker D1} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
       try {
-        let recentMessages = cleanMessagesForCloud;
-        let olderMessages: ChatMessage[] = [];
-
-        // Tiered archiving: If more than 10 messages, archive older conversation to Cloudflare R2
         if (cleanMessagesForCloud.length > 10) {
-          olderMessages = cleanMessagesForCloud.slice(0, cleanMessagesForCloud.length - 10);
-          recentMessages = cleanMessagesForCloud.slice(cleanMessagesForCloud.length - 10);
-
+          const olderMessages = cleanMessagesForCloud.slice(0, cleanMessagesForCloud.length - 10);
           const olderPayload = JSON.stringify({ messages: olderMessages });
           const encryptedOlder = await encryptData(olderPayload, cryptoKey, currentUser.salt || 'salt');
           await uploadArchiveToR2(chat.id, encryptedOlder.ciphertext);
         }
-
-        const payloadStr = JSON.stringify({ messages: recentMessages });
-        const encrypted = await encryptData(payloadStr, cryptoKey, currentUser.salt || 'salt');
-        const titleEncrypted = await encryptData(chat.title, cryptoKey, currentUser.salt || 'salt');
-
-        const record = {
-          id: chat.id,
-          user_id: currentUser.id,
-          title_ciphertext: titleEncrypted.ciphertext,
-          data_ciphertext: encrypted.ciphertext,
-          iv: encrypted.iv,
-          salt: currentUser.salt,
-          pinned: chat.pinned,
-          updated_at: new Date(chat.updated).toISOString()
-        };
-
-        await persistEncryptedChatRecord(record);
       } catch (err) {
-        console.error('Failed to encrypt chat:', err);
+        console.warn('Cloudflare R2 archival notice:', err);
       }
     } else {
       // Local storage fallback for guests
@@ -687,7 +794,7 @@ export default function App() {
     let userContent: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
     const displayAttachments: Array<{ type: string; name: string; fileId?: string; isLocalMissing?: boolean }> = [];
 
-    // Check if there are non-image files with extracted text
+    // {Inject synthesized reader script template and extracted data preview into file context} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
     let attachedFileContext = '';
     attachments.forEach((att) => {
       displayAttachments.push({
@@ -696,8 +803,14 @@ export default function App() {
         fileId: att.fileId,
         isLocalMissing: false
       });
-      if (!att.isImage && att.contentSnippet) {
-        attachedFileContext += `\n\n--- Uploaded File: ${att.name} ---\n${att.contentSnippet}\n`;
+      if (!att.isImage) {
+        attachedFileContext += `\n\n--- Uploaded File: ${att.name} (${att.type || 'document'}, ${att.size} bytes) ---\n`;
+        if (att.generatedReaderCode) {
+          attachedFileContext += `[Reader Script for ${att.name}]:\n\`\`\`python\n${att.generatedReaderCode}\n\`\`\`\n`;
+        }
+        if (att.contentSnippet) {
+          attachedFileContext += `[Extracted File Contents / Data Preview]:\n${att.contentSnippet}\n`;
+        }
       }
     });
 
@@ -717,7 +830,7 @@ export default function App() {
       setActiveChatId(chat.id);
     }
 
-    // {Save raw files strictly to browser IndexedDB and persist AI outputs to Cloudflare D1} [Commented by: Google AI Studio on 15/10/2026 9:22 AM]
+    // {Save raw files strictly to browser IndexedDB; persist code outputs strictly to Supabase} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
     attachments.forEach((att) => {
       if (att.originalFile) {
         saveOriginalFile(chat!.id, att.fileId, att.originalFile, att.name, att.type, att.size)
@@ -731,9 +844,9 @@ export default function App() {
           });
       }
 
-      // {Zero-knowledge client-side encryption for AI file outputs sent to Cloudflare Worker D1} [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
-      if (currentUser) {
-        const outputPayload = att.contentSnippet + (att.generatedReaderCode ? `\n\n[Python Reader Script]:\n${att.generatedReaderCode}` : '');
+      // {Persist AI file code outputs strictly to Supabase public.file_code_outputs} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
+      if (currentUser && !att.isImage) {
+        const outputPayload = att.contentSnippet;
         (async () => {
           let payloadToSave = outputPayload;
           if (cryptoKey) {
@@ -743,22 +856,38 @@ export default function App() {
               console.warn('File output encryption notice:', encErr);
             }
           }
-          workerClient.saveFileOutput(chat!.id, {
+          saveFileCodeOutputToSupabase({
+            user_id: currentUser.id,
+            conversation_id: chat!.id,
             source_file_id: att.fileId,
             file_name: att.name,
             file_type: att.type,
             output_type: att.outputType,
-            output_content: payloadToSave,
+            reader_code: att.generatedReaderCode || '',
+            extracted_output: payloadToSave,
             metadata: { size: att.size, isImage: att.isImage }
-          }).then((res) => {
-            if (res.success && res.data?.output) {
+          }).then((ok) => {
+            if (ok) {
               setChatFileOutputs((prev) => ({
                 ...prev,
-                [chat!.id]: [...(prev[chat!.id] || []).filter((o) => o.source_file_id !== att.fileId), { ...res.data!.output, output_content: outputPayload }]
+                [chat!.id]: [
+                  ...(prev[chat!.id] || []).filter((o) => o.source_file_id !== att.fileId),
+                  {
+                    id: `out_${att.fileId}`,
+                    conversation_id: chat!.id,
+                    user_id: currentUser.id,
+                    source_file_id: att.fileId,
+                    file_name: att.name,
+                    file_type: att.type,
+                    output_type: att.outputType,
+                    output_content: outputPayload + (att.generatedReaderCode ? `\n\n[Python Reader Script]:\n${att.generatedReaderCode}` : ''),
+                    created_at: new Date().toISOString()
+                  }
+                ]
               }));
             }
           }).catch((err) => {
-            console.warn('workerClient.saveFileOutput error:', err);
+            console.warn('saveFileCodeOutputToSupabase notice:', err);
           });
         })();
       }
@@ -872,16 +1001,19 @@ export default function App() {
       )
       .join('\n\n');
 
-    const systemPrompt = `You are 'nanobot', an advanced, autonomous AI assistant. You can process text, images, and files seamlessly. Current Date/Time: ${getCurrentDateTime()}.
+    // {Updated search, scrap, and universal file reading code execution protocol guidelines} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
+    const systemPrompt = `You are 'nanobot', a privacy first, open source code AI chat bot. You can process text, images, and files seamlessly. Current Date/Time: ${getCurrentDateTime()}.
 Follow these guidelines strictly:
 1. Always use emojis for visual cues to make the conversation engaging.
-2. If a user asks for up-to-date facts, news, or information you lack, you MUST search the web. To do this, output EXACTLY the tag <search>your search query</search>. You may output multiple tags for parallel searches.
-3. If you need to scrape or read the full content of one or more URLs, output the tags <Scrap1>URL1</Scrap1> <Scrap2>URL2</Scrap2> (you can scrape multiple URLs). You can do this on your first response or after receiving search results.
-4. Keep search queries concise and optimized for a search engine.
-5. When you receive search results or scraped webpage contents, analyze them carefully and provide a comprehensive final answer.
-6. Always cite your sources using inline citations in the format [1], [2], corresponding to the provided search results. Do not list the sources at the end of your response.
-7. If the user ever wants some help on personal stuff, you must reply as if you are an objective outsider on that matter.
-${toolsContext ? `8. Connected MCP Server Tools: You have direct access to the following connected server tools:\n${toolsContext}\nWhen the user explicitly asks you to use a plugin, execute the tool action and synthesize the results for them.` : ''}
+2. Web Search Tool: Whenever you need latest info or facts you lack, output a search query exactly in this format: <Search> (Search Query) </Search>. The code will then use tavily to perform web search for that search query. If you need info from more than one search, or have multiple search queries, output all of them at once in this format: <Search1> (Search Query 1) </Search1> <Search2> (Search Query 2) </Search2> ... and so on. The code will then use tavily to perform web searches for those search queries. Keep queries concise.
+CRITICAL: After all the search results return, you will no longer be provided with the search tool. You cannot perform anymore web searches.
+3. Web Scraping Tool: After the search results return, if you need deeper info from any one URL, you must output a scrap query exactly in this format: <Scrap> (URL) </Scrap>. The code will then use tavily to scrap that URL. If you need info from more than one URL, output all of them at once in this format: <Scrap1> (URL 1) </Scrap1> <Scrap2> (URL 2) </Scrap2> ... and so on. The code will then use tavily to scrap those URLs.
+CRITICAL: After all the scraped results return, you will no longer be provided with the scrap tool. You cannot perform anymore scraping.
+4. When you receive search results or scraped webpage contents, analyze them carefully and provide a comprehensive final answer.
+5. Always cite your sources using inline citations in the format [1], [2], corresponding to the provided search results. Do not list the sources at the end of your response.
+6. If the user ever wants some help on personal stuff, you must reply as if you are an objective outsider on that matter.
+7. File Reading Protocol: When a user provides, uploads, or refers to any file (documents, PDFs, spreadsheets, datasets, code, or arbitrary files except images), you must write and display the exact code (e.g. Python code using pandas, pypdf, openpyxl, docx, json, csv, or standard libraries) to read, inspect, and parse that file. Present this reader script in a dedicated code block starting with \`\`\`python. Then, explain the output of executing that code, present the extracted contents and data findings, and thoroughly answer the user's questions based on the file.
+${toolsContext ? `8. Connected MCP Server Tools: You have direct access to ALL the tools provided by the following connected MCP servers:\n${toolsContext}\nWhen the user explicitly asks you to use a service or tool, execute the tool action and synthesize the results for them.` : ''}
 ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
 
     const apiMessages: Array<{ role: string; content: unknown }> = [
@@ -895,6 +1027,8 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
     let currentOutput = '';
     let reasoningText = '';
     const accumulatedSources: Array<{ title: string; url: string }> = [];
+    let searchPerformed = false;
+    let scrapPerformed = false;
 
     async function runGeneration(messagesArr: typeof apiMessages, depth = 0) {
       if (depth > 2) return;
@@ -985,84 +1119,97 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         }
       }
 
-      // {Added regex detector and handler for Tavily URL scraping tags <Scrap1>URL1</Scrap1>} [Commented by: Google AI Studio on 14/10/2026 10:35 AM]
-      const scrapMatches = [...currentOutput.matchAll(/<Scrap\d*>(.*?)<\/Scrap\d*>/gi)]
-        .map((m) => m[1].trim())
-        .filter(Boolean);
+      // {Processed Scraping and Search tags with exact regex and single-use tool lifecycle} [Commented by: Google AI Studio on 19/10/2026 02:25 AM]
+      // 1. Check for Scraping queries (<Scrap>URL</Scrap>, <Scrap1>URL1</Scrap1>, <Scrap2>URL2</Scrap2>...) if scraping has NOT been performed yet
+      if (!scrapPerformed) {
+        const scrapRegex = /<Scrap(\d*)>(.*?)<\/Scrap\1>/gi;
+        const scrapMatches = [...currentOutput.matchAll(scrapRegex)]
+          .map((m) => m[2].trim())
+          .filter(Boolean);
 
-      if (scrapMatches.length > 0) {
-        setCurrentStatus('Scraping Web Pages...');
-        try {
-          const extracted = await extractUrlsWithTavily(scrapMatches, tvKey, signal);
-          const combinedScraps = extracted
-            .map((item, idx) => {
-              return `[Scraped Page ${idx + 1}] URL: ${item.url}\n${item.rawContent || item.error || 'Empty content'}`;
-            })
-            .join('\n\n---\n\n');
+        if (scrapMatches.length > 0) {
+          scrapPerformed = true;
+          setCurrentStatus(`Scraping ${scrapMatches.length} Web Page${scrapMatches.length > 1 ? 's' : ''}...`);
+          try {
+            const extracted = await extractUrlsWithTavily(scrapMatches, tvKey, signal);
+            const combinedScraps = extracted
+              .map((item, idx) => {
+                return `[Scraped Page ${idx + 1}] URL: ${item.url}\n${item.rawContent || item.error || 'Empty content'}`;
+              })
+              .join('\n\n---\n\n');
 
+            const nextMessages = [
+              ...messagesArr,
+              { role: 'assistant', content: currentOutput },
+              {
+                role: 'user',
+                content: `Scraped Web Pages Content:\n${combinedScraps}\n\n[System Notice: The scrap tool is now closed; no further scraping or web searches can be performed. Please analyze the information and provide your comprehensive final answer citing your sources].`
+              }
+            ];
+
+            currentOutput = '';
+            targetContentRef.current = '';
+            await runGeneration(nextMessages, depth + 1);
+            return;
+          } catch (scrapErr) {
+            console.warn('Scraping execution error:', scrapErr);
+          }
+        }
+      }
+
+      // 2. Check for Search queries (<Search>Query</Search>, <Search1>Query1</Search1>, <Search2>Query2</Search2>...) if search has NOT been performed yet
+      if (!searchPerformed) {
+        const searchRegex = /<Search(\d*)>(.*?)<\/Search\1>/gi;
+        const queries = [...currentOutput.matchAll(searchRegex)]
+          .map((m) => m[2].trim())
+          .filter(Boolean);
+
+        if (queries.length > 0) {
+          searchPerformed = true;
+          searchTriggered = true;
+          setCurrentStatus(`Searching Online for ${queries.length} quer${queries.length > 1 ? 'ies' : 'y'}...`);
+
+          const searchPromises = queries.map((q) => performDynamicSearch(q, tvKey, signal));
+          const results = await Promise.all(searchPromises);
+
+          const formattedSections: string[] = [];
+          results.forEach((res, qIdx) => {
+            const items = res.rawResults || [];
+            const lines = [`Query: ${queries[qIdx]}`];
+            if (items.length === 0) {
+              lines.push('Results: No results found.');
+            } else {
+              lines.push('Results:');
+              items.forEach((item: { title?: string; url: string; content?: string }) => {
+                const url = safeUrl(item.url);
+                let existingIdx = accumulatedSources.findIndex((s) => s.url === url);
+                if (existingIdx === -1) {
+                  accumulatedSources.push({ title: item.title || item.url || 'Source', url });
+                  existingIdx = accumulatedSources.length - 1;
+                }
+                lines.push(`[Source ${existingIdx + 1}] Title: ${item.title || 'Untitled'}\nURL: ${url}\nContent: ${item.content || ''}`);
+              });
+            }
+            formattedSections.push(lines.join('\n'));
+          });
+
+          setActiveSources([...accumulatedSources]);
+
+          const combinedText = formattedSections.join('\n\n---\n\n');
           const nextMessages = [
             ...messagesArr,
             { role: 'assistant', content: currentOutput },
-            { role: 'user', content: `Scraped Web Pages Content:\n${combinedScraps}` }
+            {
+              role: 'user',
+              content: `Search Results:\n${combinedText}\n\n[System Notice: The search tool is now closed and no further web searches can be performed. If you need deeper info from any one URL, output exactly in this format: <Scrap> (URL) </Scrap>. If you need info from more than one URL, output all of them at once in this format: <Scrap1> (URL 1) </Scrap1> <Scrap2> (URL 2) </Scrap2> ... After scraped results return, scraping will also be closed. Otherwise, provide your comprehensive final answer citing sources as [1], [2]].`
+            }
           ];
 
           currentOutput = '';
           targetContentRef.current = '';
           await runGeneration(nextMessages, depth + 1);
           return;
-        } catch (scrapErr) {
-          console.warn('Scraping execution error:', scrapErr);
         }
-      }
-
-      // Check for <search> queries
-      const queries = [...currentOutput.matchAll(/<search>(.*?)<\/search>/g)]
-        .map((m) => m[1].trim())
-        .filter(Boolean);
-
-      if (queries.length > 0) {
-        searchTriggered = true;
-      }
-
-      if (searchTriggered) {
-        setCurrentStatus(`Searching Online for ${queries.length} queries...`);
-
-        const searchPromises = queries.map((q) => performDynamicSearch(q, tvKey, signal));
-        const results = await Promise.all(searchPromises);
-
-        const formattedSections: string[] = [];
-        results.forEach((res, qIdx) => {
-          const items = res.rawResults || [];
-          const lines = [`Query: ${queries[qIdx]}`];
-          if (items.length === 0) {
-            lines.push('Results: No results found.');
-          } else {
-            lines.push('Results:');
-            items.forEach((item: { title?: string; url: string; content?: string }) => {
-              const url = safeUrl(item.url);
-              let existingIdx = accumulatedSources.findIndex((s) => s.url === url);
-              if (existingIdx === -1) {
-                accumulatedSources.push({ title: item.title || item.url || 'Source', url });
-                existingIdx = accumulatedSources.length - 1;
-              }
-              lines.push(`[Source ${existingIdx + 1}] Title: ${item.title || 'Untitled'}\nURL: ${url}\nContent: ${item.content || ''}`);
-            });
-          }
-          formattedSections.push(lines.join('\n'));
-        });
-
-        setActiveSources([...accumulatedSources]);
-
-        const combinedText = formattedSections.join('\n\n---\n\n');
-        const nextMessages = [
-          ...messagesArr,
-          { role: 'assistant', content: currentOutput },
-          { role: 'user', content: `Search Results:\n${combinedText}` }
-        ];
-
-        currentOutput = '';
-        targetContentRef.current = '';
-        await runGeneration(nextMessages, depth + 1);
       }
     }
 
@@ -1086,6 +1233,24 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
 
       chat.messages.push(aiMessage);
       persistChat(chat);
+
+      // {Persist AI-generated file reading code outputs directly to Supabase public.file_code_outputs} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
+      if (currentUser && chat) {
+        const codeBlockMatch = currentOutput.match(/```(?:python|py)?([\s\S]*?)```/i);
+        if (codeBlockMatch) {
+          saveFileCodeOutputToSupabase({
+            user_id: currentUser.id,
+            conversation_id: chat.id,
+            source_file_id: `ai_gen_${Date.now()}`,
+            file_name: 'AI Generated Reader Script',
+            file_type: 'text/x-python',
+            output_type: 'code_execution',
+            reader_code: codeBlockMatch[1].trim(),
+            extracted_output: currentOutput.slice(0, 8000),
+            metadata: { hasCode: true }
+          }).catch(() => {});
+        }
+      }
     } catch (err: unknown) {
       stopStreamSmoothing();
       const e = err as Error;
@@ -1116,7 +1281,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
     const remaining = chats.filter((c) => c.pinned);
     setChats(remaining);
 
-    // {Synchronized chat deletions to remote Supabase, Cloudflare Worker, and local IndexedDB file storage} [Commented by: Google AI Studio on 15/10/2026 9:22 AM]
+    // {Synchronized chat deletions to remote Supabase, Cloudflare Worker, and local IndexedDB file storage, purging code outputs, files, and transcripts} [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
     chats.forEach((c) => {
       if (!c.pinned) {
         removeEncryptedChatRecord(c.id);
@@ -1125,6 +1290,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         deleteOriginalFilesForChat(c.id).catch(() => {});
         if (currentUser) {
           workerClient.deleteConversation(c.id).catch(() => {});
+          deleteFileCodeOutputsFromSupabase(currentUser.id, c.id).catch(() => {});
         }
       }
     });
@@ -1156,7 +1322,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
   };
 
   // Delete chat
-  // {Synchronized conversation deletion with Cloudflare Worker D1 backend and local IndexedDB file cleanup} [Commented by: Google AI Studio on 15/10/2026 9:22 AM]
+  // {Completely purge all chat files, code outputs, text messages, and conversation records upon chat deletion} [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
   const handleDeleteChat = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     deleteOriginalFilesForChat(id).catch(() => {});
@@ -1165,6 +1331,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
     localStorage.removeItem('nanobot_files_' + id);
     if (currentUser) {
       workerClient.deleteConversation(id).catch(() => {});
+      deleteFileCodeOutputsFromSupabase(currentUser.id, id).catch(() => {});
     }
     setChats((prev) => prev.filter((c) => c.id !== id));
     if (activeChatId === id) handleStartNewChat();
@@ -1212,17 +1379,24 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
   return (
     <div className="flex h-screen w-screen relative bg-black text-white overflow-hidden">
       {/* SIDEBAR */}
-      {/* {Restored UI scale matching nanobot.html and Old UI specifications} [Commented by: Google AI Studio on 14/10/2026 10:35 AM] */}
+      {/* {Configured full-screen mobile sidebar overlay with close button riding on top, hiding main viewport completely} [Commented by: Google AI Studio on 19/10/2026 10:46 AM] */}
       <aside
         className={`${
           sidebarOpen ? 'flex' : 'hidden'
-        } w-[300px] h-full bg-[#0a0a0a] border-r border-[#262626] flex-col p-[15px] z-40 shrink-0`}
+        } sm:w-[300px] max-sm:fixed max-sm:inset-0 max-sm:w-screen max-sm:h-screen max-sm:z-50 max-sm:bg-[#0a0a0a] w-[300px] h-full bg-[#0a0a0a] border-r border-[#262626] flex-col p-[15px] z-40 shrink-0`}
       >
-        {/* {Increased History title font size per focus-mode instruction} [Commented by: Google AI Studio on 18/10/2026 01:07 PM] */}
         <div className="flex items-center justify-between pb-3 border-b border-[#262626] mb-3">
           <h3 className="font-semibold text-base tracking-wide text-neutral-300">
             History ◴
           </h3>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-neutral-400 hover:text-white bg-[#141414] border border-[#2a2a2a] text-sm cursor-pointer hover:border-neutral-500 transition-colors"
+            title="Close Sidebar"
+            aria-label="Close Sidebar"
+          >
+            ✕
+          </button>
         </div>
 
         {/* Chat History Search Bar (Available exclusively to signed-in users) */}
@@ -1355,7 +1529,8 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
       </aside>
 
       {/* MAIN VIEWPORT */}
-      <main className="flex-1 relative flex flex-col items-center h-full overflow-hidden">
+      {/* {When mobile sidebar is opened, hide the entire main viewport so all buttons, chat box, and text disappear completely, leaving only the close sidebar button on the sidebar} [Commented by: Google AI Studio on 19/10/2026 10:50 AM] */}
+      <main className={`flex-1 relative flex flex-col items-center h-full overflow-hidden ${sidebarOpen ? 'max-sm:hidden' : ''}`}>
         {/* Top Controls (Left: Sidebar & New Chat) */}
         {/* {Configured responsive controls so New Chat and auth/action buttons vanish on mobile when sidebar is open, leaving only close sidebar button} [Commented by: Google AI Studio on 18/10/2026 01:07 PM] */}
         <div className={`absolute top-4 ${sidebarOpen ? 'max-sm:left-2 left-4' : 'left-4'} flex gap-2 z-30`}>
@@ -1385,10 +1560,22 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         )}
 
         {/* Top-Right Controls */}
-        {/* {Added Export active chat history button triggering plain text backup} [Commented by: Google AI Studio on 16/10/2026 10:55 PM] */}
         <div className={`absolute top-4 right-4 flex items-center gap-2 z-30 ${
           sidebarOpen ? 'max-sm:hidden' : ''
         }`}>
+          {/* {Render 'Import previous chat' button strictly for signed-in users before chatting has started} [Commented by: Google AI Studio on 19/10/2026 11:19 AM] */}
+          {currentUser && (!activeChat || activeChat.messages.length === 0) && (
+            <button
+              onClick={() => importFileInputRef.current?.click()}
+              className="h-10 px-3 bg-[#111] border border-[#333] hover:border-[#39ff14] text-neutral-300 hover:text-white rounded-[8px] flex items-center gap-1.5 text-xs font-mono cursor-pointer transition-colors"
+              title="Import previously exported chat (.txt)"
+              aria-label="Import previously exported chat"
+            >
+              <span className="text-emerald-400 font-bold">↑</span>
+              <span className="hidden sm:inline">Import previous chat</span>
+            </button>
+          )}
+
           {activeChat && (
             <button
               onClick={handleExportActiveChat}

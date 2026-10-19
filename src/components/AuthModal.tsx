@@ -108,8 +108,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           gmail: false,
           google_docs: false,
           notion: false,
-          firecrawl: false,
-          tavily: false
+          firecrawl: false
         },
         salt
       };

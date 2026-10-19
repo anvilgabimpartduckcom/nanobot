@@ -1,9 +1,10 @@
--- {Updated Supabase schema with salt column for multi-device zero-knowledge decryption} [Commented by: Google AI Studio on 10/13/2026 10:51 AM]
+-- {Updated Supabase schema: user profiles, credentials, custom instructions, and AI file code outputs strictly in Supabase; user chats stored exclusively in Cloudflare} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
 
 -- 1. Enable UUID Extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- 2. User Profiles Table (Stores credentials, uniqueness constraints, and salt for encryption key derivation)
+-- 2. User Profiles Table
+-- Stores username, email, zero-knowledge salt, API keys (OpenRouter & Tavily), AI custom instructions, and connected MCP plugins
 CREATE TABLE IF NOT EXISTS public.user_profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email TEXT UNIQUE NOT NULL,
@@ -37,32 +38,33 @@ CREATE POLICY "Allow delete profile"
     ON public.user_profiles FOR DELETE
     USING (true);
 
--- 3. Zero-Knowledge Encrypted Chats Table
--- Contains client-side AES-GCM ciphertexts only. Admins cannot read conversational content.
-CREATE TABLE IF NOT EXISTS public.chats (
-    id TEXT PRIMARY KEY,
+-- 3. AI File Code Outputs Table
+-- Persists the code written by the AI model to read any non-image files, along with execution output and file metadata
+CREATE TABLE IF NOT EXISTS public.file_code_outputs (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     user_id TEXT NOT NULL,
-    title_ciphertext TEXT NOT NULL,
-    data_ciphertext TEXT NOT NULL,
-    iv TEXT NOT NULL,
-    salt TEXT NOT NULL,
-    pinned BOOLEAN DEFAULT FALSE,
+    conversation_id TEXT NOT NULL,
+    source_file_id TEXT NOT NULL,
+    file_name TEXT NOT NULL,
+    file_type TEXT NOT NULL,
+    output_type TEXT NOT NULL, -- 'reader_script' | 'text_extraction' | 'code_execution'
+    reader_code TEXT,          -- The exact code written by the AI model to read/inspect the file
+    extracted_output TEXT NOT NULL, -- The extracted output or data summary resulting from reading the file
+    metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Row Level Security for chats
-ALTER TABLE public.chats ENABLE ROW LEVEL SECURITY;
+-- Row Level Security for file_code_outputs
+ALTER TABLE public.file_code_outputs ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Allow all operations for user chats"
-    ON public.chats FOR ALL
+CREATE POLICY "Allow all operations for file_code_outputs"
+    ON public.file_code_outputs FOR ALL
     USING (true);
 
--- 4. Automatic 30-Day Inactive Chat Purge Function
-CREATE OR REPLACE FUNCTION purge_inactive_chats()
-RETURNS void AS $$
-BEGIN
-    DELETE FROM public.chats
-    WHERE updated_at < (NOW() - INTERVAL '30 days');
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+-- Indexes for fast lookup of conversation file code outputs
+CREATE INDEX IF NOT EXISTS idx_file_code_outputs_user
+    ON public.file_code_outputs (user_id);
+
+CREATE INDEX IF NOT EXISTS idx_file_code_outputs_conversation
+    ON public.file_code_outputs (conversation_id, created_at DESC);

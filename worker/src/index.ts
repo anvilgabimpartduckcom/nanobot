@@ -201,8 +201,24 @@ export default {
       const verifiedUserId = user.id;
 
       try {
-        // 1. GET /api/conversations -> List all conversations for the authenticated user
+        // 1. GET /api/conversations -> List all conversations for the authenticated user (with 30-day auto-purge)
+        // {Enforced 30-day automatic deletion of expired chats, messages, and file outputs from Cloudflare D1} [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
         if (pathname === '/api/conversations' && request.method === 'GET') {
+          const thirtyDaysAgoIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+          try {
+            await env.DB.prepare(
+              `DELETE FROM file_outputs WHERE user_id = ? AND conversation_id IN (SELECT id FROM conversations WHERE user_id = ? AND updated_at < ?)`
+            ).bind(verifiedUserId, verifiedUserId, thirtyDaysAgoIso).run();
+            await env.DB.prepare(
+              `DELETE FROM messages WHERE user_id = ? AND conversation_id IN (SELECT id FROM conversations WHERE user_id = ? AND updated_at < ?)`
+            ).bind(verifiedUserId, verifiedUserId, thirtyDaysAgoIso).run();
+            await env.DB.prepare(
+              `DELETE FROM conversations WHERE user_id = ? AND updated_at < ?`
+            ).bind(verifiedUserId, thirtyDaysAgoIso).run();
+          } catch (purgeErr) {
+            console.warn('30-day auto-purge notice:', purgeErr);
+          }
+
           const { results } = await env.DB.prepare(
             `SELECT id, title, pinned, created_at, updated_at 
              FROM conversations 

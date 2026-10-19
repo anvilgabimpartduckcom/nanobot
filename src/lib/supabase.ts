@@ -39,9 +39,25 @@ export interface UserProfile {
     google_docs: boolean;
     notion: boolean;
     firecrawl: boolean;
-    tavily: boolean;
+    [key: string]: boolean;
   };
   salt: string;
+}
+
+// {Added FileCodeOutput model and Supabase persistence functions for AI file reading code outputs} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
+export interface FileCodeOutput {
+  id?: string;
+  user_id: string;
+  conversation_id: string;
+  source_file_id: string;
+  file_name: string;
+  file_type: string;
+  output_type: string;
+  reader_code?: string;
+  extracted_output: string;
+  metadata?: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface EncryptedChatRecord {
@@ -182,6 +198,125 @@ export async function removeEncryptedChatRecord(chatId: string) {
       await supabase.from('chats').delete().eq('id', chatId);
     } catch (e) {
       console.warn('Supabase delete chat notice:', e);
+    }
+  }
+}
+
+// {Save AI file reader code outputs to Supabase public.file_code_outputs table} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
+export async function saveFileCodeOutputToSupabase(record: FileCodeOutput): Promise<boolean> {
+  const localKey = `nanobot_file_outputs_${record.user_id}_${record.conversation_id}`;
+  try {
+    const existing = JSON.parse(localStorage.getItem(localKey) || '[]');
+    const filtered = existing.filter((o: FileCodeOutput) => o.source_file_id !== record.source_file_id);
+    filtered.push(record);
+    localStorage.setItem(localKey, JSON.stringify(filtered));
+  } catch (err) {
+    console.warn('Local file code output cache note:', err);
+  }
+
+  if (supabase) {
+    try {
+      const { error } = await supabase.from('file_code_outputs').upsert([
+        {
+          user_id: record.user_id,
+          conversation_id: record.conversation_id,
+          source_file_id: record.source_file_id,
+          file_name: record.file_name,
+          file_type: record.file_type,
+          output_type: record.output_type,
+          reader_code: record.reader_code || '',
+          extracted_output: record.extracted_output,
+          metadata: record.metadata || {},
+          updated_at: new Date().toISOString()
+        }
+      ], { onConflict: 'id' });
+      if (error) {
+        console.warn('Supabase file_code_outputs upsert notice:', error.message);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.warn('Supabase file_code_outputs error:', e);
+      return false;
+    }
+  }
+  return true;
+}
+
+// {Fetch AI file reader code outputs from Supabase public.file_code_outputs table} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
+export async function fetchFileCodeOutputsFromSupabase(
+  userId: string,
+  conversationId: string
+): Promise<FileCodeOutput[]> {
+  const localKey = `nanobot_file_outputs_${userId}_${conversationId}`;
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('file_code_outputs')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true });
+
+      if (!error && data) {
+        return data as FileCodeOutput[];
+      }
+    } catch (e) {
+      console.warn('Supabase fetchFileCodeOutputs notice:', e);
+    }
+  }
+
+  try {
+    return JSON.parse(localStorage.getItem(localKey) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+// {Delete AI file reader code outputs from Supabase and local cache when a conversation is deleted} [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
+export async function deleteFileCodeOutputsFromSupabase(
+  userId: string,
+  conversationId: string
+): Promise<boolean> {
+  const localKey = `nanobot_file_outputs_${userId}_${conversationId}`;
+  try {
+    localStorage.removeItem(localKey);
+  } catch (err) {
+    console.warn('Local file code output removal note:', err);
+  }
+
+  if (supabase) {
+    try {
+      const { error } = await supabase
+        .from('file_code_outputs')
+        .delete()
+        .eq('user_id', userId)
+        .eq('conversation_id', conversationId);
+      if (error) {
+        console.warn('Supabase file_code_outputs delete notice:', error.message);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.warn('Supabase file_code_outputs delete error:', e);
+      return false;
+    }
+  }
+  return true;
+}
+
+// {Purge expired AI file reader code outputs older than 30 days from Supabase and local storage} [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
+export async function purgeExpiredFileCodeOutputs(userId: string): Promise<void> {
+  const thirtyDaysAgoIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  if (supabase) {
+    try {
+      await supabase
+        .from('file_code_outputs')
+        .delete()
+        .eq('user_id', userId)
+        .lt('created_at', thirtyDaysAgoIso);
+    } catch (e) {
+      console.warn('Supabase purgeExpiredFileCodeOutputs notice:', e);
     }
   }
 }
