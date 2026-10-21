@@ -1,6 +1,7 @@
-<!-- {Added Latest Updates section and updated MCP plugins reference in README.md} [Commented by: Google AI Studio on 19/10/2026 02:25 AM] -->
+<!-- Added Latest Updates section and updated MCP plugins reference in README.md [Commented by: Google AI Studio on 19/10/2026 02:25 AM] -->
 
-# Project Structure
+#  📁 Project Structure
+<!-- Placed a folder emoji [Commented by: Developer on 21/10/2026 11:20 AM] -->
 
 ```
 nanobot/
@@ -47,7 +48,8 @@ nanobot/
         └── workerClient.ts     # Cloudflare Worker REST API client with Bearer token authentication
 ```
 
-# Latest Updates
+# 📢 Latest Updates
+<!-- Placed a clock emoji [Commented by: Developer on 21/10/2026 11:20 AM] -->
 <!-- {Documented dynamic disappearance of Import previous chat button once chat starts, and comprehensive 30-day and deletion cascading cleanup across IndexedDB files, Supabase code outputs, Cloudflare D1 messages, and R2 archives} [Commented by: Google AI Studio on 19/10/2026 11:21 AM] -->
 
 - **Import Previous Chat Auto-Disappearance**: The "Import previous chat" button is strictly restricted to signed-in users and now dynamically disappears as soon as a chat has started (`activeChat && activeChat.messages.length > 0`), ensuring a distraction-free active chatting interface while remaining readily available in empty zero-state sessions.
