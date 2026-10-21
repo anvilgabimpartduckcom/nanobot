@@ -1,6 +1,7 @@
 <!-- {Added Latest Updates section and updated MCP plugins reference in README.md} [Commented by: Google AI Studio on 19/10/2026 02:25 AM] -->
 
-# Project Structure
+# 📁 Project Structure
+<!-- Placed a folder emoji [Commented by: Developer on 21/10/2026 11:20 AM] -->
 
 ```
 nanobot/
@@ -48,7 +49,8 @@ nanobot/
         └── workerClient.ts     # Cloudflare Worker REST API client with Bearer token authentication
 ```
 
-# Latest Updates
+# 📢 Latest Updates
+<!-- Placed a megaphone emoji [Commented by: Developer on 21/10/2026 11:20 AM] -->
 <!-- {Updated composer chat box vertical positioning to top-[34vh] to prevent neon aura from touching the nanobot text} [Commented by: Google AI Studio on 21/10/2026 06:18 AM] -->
 
 - **Repositioned Chat Box to Prevent Aura Overlap**:
