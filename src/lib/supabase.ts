@@ -42,6 +42,8 @@ export interface UserProfile {
     [key: string]: boolean;
   };
   salt: string;
+  // {Added theme preference support for Neon Black and Minimalist Light themes} [Commented by: Google AI Studio on 20/10/2026 11:27 AM]
+  theme?: 'Neon Black' | 'Minimalist Light';
 }
 
 // {Added FileCodeOutput model and Supabase persistence functions for AI file reading code outputs} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]

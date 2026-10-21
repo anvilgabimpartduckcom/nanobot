@@ -1,7 +1,6 @@
-<!-- Added Latest Updates section and updated MCP plugins reference in README.md [Commented by: Google AI Studio on 19/10/2026 02:25 AM] -->
+<!-- {Added Latest Updates section and updated MCP plugins reference in README.md} [Commented by: Google AI Studio on 19/10/2026 02:25 AM] -->
 
-#  📁 Project Structure
-<!-- Placed a folder emoji [Commented by: Developer on 21/10/2026 11:20 AM] -->
+# Project Structure
 
 ```
 nanobot/
@@ -12,6 +11,7 @@ nanobot/
 │       └── verify-frontend.yml # Automated PR & commit frontend typecheck, lockfile verification, and build
 ├── .gitignore                  # Git ignore rules for node_modules, build outputs, and local env files
 ├── index.html                  # HTML entry point with SEO, KaTeX & Highlight.js CSS
+├── LICENSE                     # Software license file
 ├── metadata.json               # Application identity metadata
 ├── netlify.toml                # Netlify SPA build and redirect rules
 ├── package.json                # Frontend Node.js dependencies and scripts
@@ -35,7 +35,7 @@ nanobot/
     ├── components/
     │   ├── AboutModal.tsx      # Standalone About nanobot modal for non-signed-in users
     │   ├── AuthModal.tsx       # Direct registration (username, password, API keys) and signin modal
-    │   └── SettingsModal.tsx   # Two-column settings: Account, AI Config, Plugins, About
+    │   └── SettingsModal.tsx   # Two-column settings: Account, Appearance, AI Config, Plugins, About
     └── lib/
         ├── crypto.ts           # Web Crypto PBKDF2 key derivation and AES-GCM zero-knowledge encryption
         ├── fileReader.ts       # Universal code-driven file analyzer for non-image files with stable fileIds
@@ -48,15 +48,12 @@ nanobot/
         └── workerClient.ts     # Cloudflare Worker REST API client with Bearer token authentication
 ```
 
-# 📢 Latest Updates
-<!-- Placed a clock emoji [Commented by: Developer on 21/10/2026 11:20 AM] -->
-<!-- {Documented dynamic disappearance of Import previous chat button once chat starts, and comprehensive 30-day and deletion cascading cleanup across IndexedDB files, Supabase code outputs, Cloudflare D1 messages, and R2 archives} [Commented by: Google AI Studio on 19/10/2026 11:21 AM] -->
+# Latest Updates
+<!-- {Updated composer chat box vertical positioning to top-[34vh] to prevent neon aura from touching the nanobot text} [Commented by: Google AI Studio on 21/10/2026 06:18 AM] -->
 
-- **Import Previous Chat Auto-Disappearance**: The "Import previous chat" button is strictly restricted to signed-in users and now dynamically disappears as soon as a chat has started (`activeChat && activeChat.messages.length > 0`), ensuring a distraction-free active chatting interface while remaining readily available in empty zero-state sessions.
-- **Complete Cascade Chat Deletion & 30-Day Auto-Purge Policy**:
-  - Whenever a chat is deleted by the user or when 30 days of inactivity pass, all resources associated with that conversation are permanently and completely wiped across all tiers:
-    - **Original User Files**: Completely purged from local browser IndexedDB (`deleteOriginalFilesForChat` and `cleanupOrphanedFiles`) and local file cache.
-    - **AI Code Outputs**: Completely deleted from Supabase (`public.file_code_outputs` via `deleteFileCodeOutputsFromSupabase` and `purgeExpiredFileCodeOutputs`) and local file output cache.
-    - **Chat Transcripts & Messages**: Permanently deleted from Cloudflare D1 (`workerClient.deleteConversation` cascades across `conversations`, `messages`, and `file_outputs`).
-    - **Archived Backups**: Automatically deleted from Cloudflare R2 storage (`deleteArchiveFromR2`) and local encrypted chat stores (`removeEncryptedChatRecord`).
-  - Implemented automatic 30-day retention enforcement in Cloudflare Worker (`GET /api/conversations`) and client session hydration.
+- **Repositioned Chat Box to Prevent Aura Overlap**:
+  - Moved the chat box container (`div#root > div > main > div:nth-of-type(4) > div:nth-of-type(1)`) slightly downwards from `top-[30vh]` to `top-[34vh]` in the initial zero state.
+  - This provides clean breathing room between the bottom of the 'nanobot' title text (positioned at `top-[19vh]`) and the upper edge of the green neon aura glow (`neon-glow`), keeping the typography sharp and untouched.
+- **Updated Project Structure for LICENSE**:
+  - Added the newly created `LICENSE` file to the Project Structure tree in `README.md`.
+

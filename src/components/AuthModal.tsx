@@ -110,7 +110,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           notion: false,
           firecrawl: false
         },
-        salt
+        salt,
+        // {Set default theme to Neon Black for newly registered user} [Commented by: Google AI Studio on 20/10/2026 11:47 AM]
+        theme: 'Neon Black'
       };
 
       existingUsers.push(newUser);
@@ -127,7 +129,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             ai_instructions: '',
             model_training: true,
             plugins_connected: newUser.plugins_connected,
-            salt: newUser.salt
+            salt: newUser.salt,
+            // {Saved default theme alongside other user provided data in Supabase} [Commented by: Google AI Studio on 20/10/2026 11:47 AM]
+            theme: 'Neon Black'
           }
         ]);
 

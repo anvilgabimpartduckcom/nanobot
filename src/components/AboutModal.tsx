@@ -49,8 +49,18 @@ export const AboutModal: React.FC<AboutModalProps> = ({
 
         <div className="space-y-4 text-neutral-300">
           <h2 className="text-xl font-bold font-serif text-white">About nanobot</h2>
+          {/* {Rewrote description to state 'open source code AI chatbot' and added license hyperlink} [Commented by: Google AI Studio on 21/10/2026 06:08 AM] */}
           <p className="text-sm leading-relaxed">
-            Everyone should get to use AI, and that too without giving away their data. So we created nanobot, an open source AI chatbot which respects your privacy, and is free to use. Users bring their own API keys, which helps in further keeping nanobot completely free to use.
+            Everyone should get to use AI, and that too without giving away their data. So we created nanobot, an open source code AI chatbot which respects your privacy, and is free to use. Users bring their own API keys, which helps in further keeping nanobot completely free to use.
+            <br />
+            <a
+              href="https://github.com/anvilgabimpartduckcom/nanobot/blob/main/LICENSE"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-emerald-400 hover:text-emerald-300 underline font-medium"
+            >
+              See the license under which nanobot comes.
+            </a>
           </p>
           {/* {Rendered developer email in plain text box without hyperlink per user instruction} [Commented by: Google AI Studio on 18/10/2026 01:11 PM] */}
           <p className="text-sm leading-relaxed">
@@ -83,7 +93,18 @@ export const AboutModal: React.FC<AboutModalProps> = ({
             </ol>
           </div>
 
+          {/* {Added hyperlink for latest update in nanobot above Github source code link} [Commented by: Google AI Studio on 21/10/2026 06:08 AM] */}
           <p className="text-sm pt-2 leading-relaxed">
+            <a
+              href="https://github.com/anvilgabimpartduckcom/nanobot#-latest-updates"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-emerald-400 hover:text-emerald-300 underline font-medium"
+            >
+              See the latest update in nanobot
+            </a>
+          </p>
+          <p className="text-sm pt-1 leading-relaxed">
             <a
               href="https://github.com/anvilgabimpartduckcom/nanobot"
               target="_blank"

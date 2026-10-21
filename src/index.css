@@ -5,6 +5,18 @@
   --aura-color: #39ff14;
 }
 
+/* {Added Minimalist Light theme variables, background, typography, and scrollbar definitions} [Commented by: Google AI Studio on 20/10/2026 11:27 AM] */
+html[data-theme="light"],
+.theme-light {
+  --aura-color: #059669;
+}
+
+html[data-theme="light"] body,
+.theme-light body {
+  background: #f8f9fa;
+  color: #0f172a;
+}
+
 body, html {
   margin: 0;
   padding: 0;
@@ -68,3 +80,27 @@ pre code.hljs {
   font-size: 0.9rem;
   line-height: 1.5;
 }
+
+/* {Light theme sleek scrollbar and code block styles} [Commented by: Google AI Studio on 20/10/2026 11:27 AM] */
+html[data-theme="light"] ::-webkit-scrollbar-track,
+.theme-light ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+html[data-theme="light"] ::-webkit-scrollbar-thumb,
+.theme-light ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}
+
+html[data-theme="light"] ::-webkit-scrollbar-thumb:hover,
+.theme-light ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+html[data-theme="light"] pre code.hljs,
+.theme-light pre code.hljs {
+  background: #f8fafc;
+  color: #0f172a;
+  border: 1px solid #e2e8f0;
+}
+

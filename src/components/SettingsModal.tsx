@@ -5,6 +5,9 @@ import { UserProfile, supabase, isSupabaseConfigured, getLocalProfiles, saveLoca
 import { MCP_PLUGINS, PluginDefinition } from '../lib/plugins';
 import { deriveKeyFromPassword, encryptText } from '../lib/crypto';
 
+// {Added theme toggle support between Neon Black and Minimalist Light themes in SettingsModal} [Commented by: Google AI Studio on 20/10/2026 11:28 AM]
+export type AppTheme = 'Neon Black' | 'Minimalist Light';
+
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -12,9 +15,11 @@ interface SettingsModalProps {
   currentPasswordSecret: string;
   onUpdateUser: (updatedUser: UserProfile, newPasswordSecret?: string) => void;
   onDeleteAccount: () => void;
+  theme?: AppTheme;
+  onThemeChange?: (theme: AppTheme) => void;
 }
 
-type TabType = 'account' | 'ai_config' | 'plugins' | 'about';
+type TabType = 'account' | 'appearance' | 'ai_config' | 'plugins' | 'about';
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
@@ -22,9 +27,54 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   user,
   currentPasswordSecret,
   onUpdateUser,
-  onDeleteAccount
+  onDeleteAccount,
+  theme,
+  onThemeChange
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('account');
+  const [currentTheme, setCurrentTheme] = useState<AppTheme>(
+    () => theme || (user.theme as AppTheme) || (localStorage.getItem('nanobot_theme') as AppTheme) || 'Neon Black'
+  );
+
+  const isLight = currentTheme === 'Minimalist Light';
+
+  // {Updated handleSwitchTheme to save chosen theme to Supabase with error handling and local storage sync} [Commented by: Google AI Studio on 20/10/2026 11:47 AM]
+  const handleSwitchTheme = async (nextTheme: AppTheme) => {
+    setCurrentTheme(nextTheme);
+    localStorage.setItem('nanobot_theme', nextTheme);
+    if (onThemeChange) {
+      onThemeChange(nextTheme);
+    }
+    const updated: UserProfile = {
+      ...user,
+      theme: nextTheme
+    };
+    onUpdateUser(updated);
+
+    const profiles = getLocalProfiles();
+    const idx = profiles.findIndex((p) => p.id === user.id);
+    if (idx >= 0) {
+      profiles[idx].theme = nextTheme;
+      saveLocalProfiles(profiles);
+    }
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase
+          .from('user_profiles')
+          .update({ theme: nextTheme })
+          .eq('email', user.email);
+        if (error) {
+          console.warn('Supabase theme update notice:', error.message);
+        }
+      } catch (err) {
+        console.warn('Supabase theme update failed:', err);
+      }
+    }
+
+    setStatusMessage(`Theme switched to ${nextTheme}`);
+    setTimeout(() => setStatusMessage(null), 3000);
+  };
 
   // Account Tab form fields
   const [username, setUsername] = useState(user.username);
@@ -63,6 +113,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleSaveAccount = async () => {
     setStatusMessage(null);
     try {
+      // {Saved chosen theme option to Supabase alongside other user provided data} [Commented by: Google AI Studio on 20/10/2026 11:40 AM]
       const updated: UserProfile = {
         ...user,
         username: username.trim(),
@@ -70,7 +121,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         tavily_key: tavilyKey.trim(),
         model_training: modelTraining,
         ai_instructions: customInstructions,
-        plugins_connected: connectedPlugins as UserProfile['plugins_connected']
+        plugins_connected: connectedPlugins as UserProfile['plugins_connected'],
+        theme: currentTheme
       };
 
       // Update local storage
@@ -103,7 +155,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             tavily_key: encryptedTv,
             model_training: updated.model_training,
             ai_instructions: encryptedInst,
-            plugins_connected: updated.plugins_connected
+            plugins_connected: updated.plugins_connected,
+            theme: currentTheme
           })
           .eq('email', user.email);
       }
@@ -261,18 +314,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-4xl h-[620px] bg-[#0c0c0c] border border-[#2b2b2b] rounded-2xl flex overflow-hidden shadow-2xl text-white">
+      {/* {Themed container supporting both Neon Black and Minimalist Light themes} [Commented by: Google AI Studio on 20/10/2026 11:29 AM] */}
+      <div className={`relative w-full max-w-4xl h-[620px] rounded-2xl flex overflow-hidden shadow-2xl transition-colors duration-200 ${
+        isLight ? 'bg-white border border-neutral-200 text-neutral-900' : 'bg-[#0c0c0c] border border-[#2b2b2b] text-white'
+      }`}>
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 z-10 text-neutral-400 hover:text-white p-2 text-lg"
+          className={`absolute top-4 right-4 z-10 p-2 text-lg transition-colors cursor-pointer ${
+            isLight ? 'text-neutral-400 hover:text-neutral-900' : 'text-neutral-400 hover:text-white'
+          }`}
           aria-label="Close settings"
         >
           ✕
         </button>
 
         {/* Left Column (Menu) */}
-        <div className="w-56 bg-[#080808] border-r border-[#222] p-4 flex flex-col gap-2 shrink-0">
+        <div className={`w-56 p-4 flex flex-col gap-2 shrink-0 transition-colors duration-200 ${
+          isLight ? 'bg-[#f8f9fa] border-r border-neutral-200' : 'bg-[#080808] border-r border-[#222]'
+        }`}>
           <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 mb-2 px-3 pt-2">
             Settings
           </h3>
@@ -281,18 +341,43 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             onClick={() => setActiveTab('account')}
             className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer ${
               activeTab === 'account'
-                ? 'bg-[#1a1a1a] text-white font-semibold'
+                ? isLight
+                  ? 'bg-white text-neutral-900 font-semibold shadow-xs border border-neutral-200'
+                  : 'bg-[#1a1a1a] text-white font-semibold'
+                : isLight
+                ? 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
                 : 'text-neutral-400 hover:text-white hover:bg-[#121212]'
             }`}
           >
             Account
           </button>
 
+          {/* {Added Appearance tab navigation button with live theme indicator} [Commented by: Google AI Studio on 20/10/2026 11:29 AM] */}
+          <button
+            onClick={() => setActiveTab('appearance')}
+            className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer flex items-center justify-between ${
+              activeTab === 'appearance'
+                ? isLight
+                  ? 'bg-white text-neutral-900 font-semibold shadow-xs border border-neutral-200'
+                  : 'bg-[#1a1a1a] text-white font-semibold'
+                : isLight
+                ? 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
+                : 'text-neutral-400 hover:text-white hover:bg-[#121212]'
+            }`}
+          >
+            <span>Appearance</span>
+            <span className="text-xs">{isLight ? '☀️' : '🌙'}</span>
+          </button>
+
           <button
             onClick={() => setActiveTab('ai_config')}
             className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer ${
               activeTab === 'ai_config'
-                ? 'bg-[#1a1a1a] text-white font-semibold'
+                ? isLight
+                  ? 'bg-white text-neutral-900 font-semibold shadow-xs border border-neutral-200'
+                  : 'bg-[#1a1a1a] text-white font-semibold'
+                : isLight
+                ? 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
                 : 'text-neutral-400 hover:text-white hover:bg-[#121212]'
             }`}
           >
@@ -304,7 +389,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             onClick={() => setActiveTab('plugins')}
             className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer ${
               activeTab === 'plugins'
-                ? 'bg-[#1a1a1a] text-white font-semibold'
+                ? isLight
+                  ? 'bg-white text-neutral-900 font-semibold shadow-xs border border-neutral-200'
+                  : 'bg-[#1a1a1a] text-white font-semibold'
+                : isLight
+                ? 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
                 : 'text-neutral-400 hover:text-white hover:bg-[#121212]'
             }`}
           >
@@ -315,7 +404,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             onClick={() => setActiveTab('about')}
             className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer ${
               activeTab === 'about'
-                ? 'bg-[#1a1a1a] text-white font-semibold'
+                ? isLight
+                  ? 'bg-white text-neutral-900 font-semibold shadow-xs border border-neutral-200'
+                  : 'bg-[#1a1a1a] text-white font-semibold'
+                : isLight
+                ? 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
                 : 'text-neutral-400 hover:text-white hover:bg-[#121212]'
             }`}
           >
@@ -335,11 +428,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {activeTab === 'account' && (
             <div className="space-y-5 max-w-xl">
               {/* {Added Supabase Cloud connectivity indicator in Account settings} [Commented by: Google AI Studio on 13/10/2026 03:20 AM] */}
-              <div className="flex items-center justify-between pb-2 border-b border-neutral-800 mb-4">
+              <div className={`flex items-center justify-between pb-2 border-b mb-4 ${
+                isLight ? 'border-neutral-200' : 'border-neutral-800'
+              }`}>
                 <h2 className="text-xl font-bold font-serif">Account Settings</h2>
                 <span className={`text-[11px] font-mono px-2.5 py-0.5 rounded-full border ${
                   isSupabaseConfigured
-                    ? 'bg-emerald-950/60 border-emerald-700 text-emerald-400'
+                    ? isLight
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                      : 'bg-emerald-950/60 border-emerald-700 text-emerald-400'
+                    : isLight
+                    ? 'bg-neutral-100 border-neutral-300 text-neutral-600'
                     : 'bg-neutral-900 border-neutral-700 text-neutral-400'
                 }`}>
                   {isSupabaseConfigured ? '● Supabase Cloud Connected' : '⚡ Netlify Integration Ready'}
@@ -347,37 +446,51 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs uppercase tracking-wider text-neutral-400 mb-1">
+                <label className={`block text-xs uppercase tracking-wider mb-1 ${
+                  isLight ? 'text-neutral-600' : 'text-neutral-400'
+                }`}>
                   Username
                 </label>
                 <input
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full bg-[#141414] border border-[#333] rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-[#39ff14]"
+                  className={`w-full rounded-xl px-4 py-2.5 focus:outline-none transition-colors ${
+                    isLight
+                      ? 'bg-neutral-50 border border-neutral-300 text-neutral-900 focus:border-emerald-600 focus:bg-white'
+                      : 'bg-[#141414] border border-[#333] text-white focus:border-[#39ff14]'
+                  }`}
                 />
               </div>
 
               <div>
-                <label className="block text-xs uppercase tracking-wider text-neutral-400 mb-1">
+                <label className={`block text-xs uppercase tracking-wider mb-1 ${
+                  isLight ? 'text-neutral-600' : 'text-neutral-400'
+                }`}>
                   Password
                 </label>
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-[#141414] border border-[#333] rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-[#39ff14]"
+                  className={`w-full rounded-xl px-4 py-2.5 focus:outline-none transition-colors ${
+                    isLight
+                      ? 'bg-neutral-50 border border-neutral-300 text-neutral-900 focus:border-emerald-600 focus:bg-white'
+                      : 'bg-[#141414] border border-[#333] text-white focus:border-[#39ff14]'
+                  }`}
                 />
               </div>
 
               <div>
-                <label className="block text-xs uppercase tracking-wider text-neutral-400 mb-1">
+                <label className={`block text-xs uppercase tracking-wider mb-1 ${
+                  isLight ? 'text-neutral-600' : 'text-neutral-400'
+                }`}>
                   Enter{' '}
                   <a
                     href="https://openrouter.ai/workspaces"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-400 hover:underline"
+                    className="text-blue-500 hover:underline"
                   >
                     Openrouter API Key
                   </a>
@@ -386,18 +499,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   type="password"
                   value={openrouterKey}
                   onChange={(e) => setOpenrouterKey(e.target.value)}
-                  className="w-full bg-[#141414] border border-[#333] rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-[#39ff14]"
+                  className={`w-full rounded-xl px-4 py-2.5 focus:outline-none transition-colors ${
+                    isLight
+                      ? 'bg-neutral-50 border border-neutral-300 text-neutral-900 focus:border-emerald-600 focus:bg-white'
+                      : 'bg-[#141414] border border-[#333] text-white focus:border-[#39ff14]'
+                  }`}
                 />
               </div>
 
               <div>
-                <label className="block text-xs uppercase tracking-wider text-neutral-400 mb-1">
+                <label className={`block text-xs uppercase tracking-wider mb-1 ${
+                  isLight ? 'text-neutral-600' : 'text-neutral-400'
+                }`}>
                   Enter{' '}
                   <a
                     href="https://app.tavily.com/home"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-400 hover:underline"
+                    className="text-blue-500 hover:underline"
                   >
                     Tavily API Key
                   </a>
@@ -406,12 +525,62 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   type="password"
                   value={tavilyKey}
                   onChange={(e) => setTavilyKey(e.target.value)}
-                  className="w-full bg-[#141414] border border-[#333] rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-[#39ff14]"
+                  className={`w-full rounded-xl px-4 py-2.5 focus:outline-none transition-colors ${
+                    isLight
+                      ? 'bg-neutral-50 border border-neutral-300 text-neutral-900 focus:border-emerald-600 focus:bg-white'
+                      : 'bg-[#141414] border border-[#333] text-white focus:border-[#39ff14]'
+                  }`}
                 />
               </div>
 
+              {/* {Theme toggle in Account Settings for switching between Neon Black and Minimalist Light} [Commented by: Google AI Studio on 20/10/2026 11:29 AM] */}
+              <div className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                isLight ? 'bg-neutral-50 border-neutral-200' : 'bg-[#111] border-[#262626]'
+              }`}>
+                <div>
+                  <div className={`text-xs uppercase tracking-wider font-semibold ${isLight ? 'text-neutral-700' : 'text-neutral-300'}`}>
+                    Theme Mode
+                  </div>
+                  <div className={`text-xs mt-0.5 ${isLight ? 'text-neutral-500' : 'text-neutral-400'}`}>
+                    Active: <span className="font-semibold">{currentTheme}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchTheme('Neon Black')}
+                    className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
+                      currentTheme === 'Neon Black'
+                        ? 'bg-black text-white border border-[#39ff14]/70 font-semibold shadow-xs'
+                        : isLight
+                        ? 'bg-neutral-200 text-neutral-700 hover:text-neutral-900'
+                        : 'bg-[#181818] text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-[#39ff14]"></span>
+                    <span>Neon Black</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchTheme('Minimalist Light')}
+                    className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
+                      currentTheme === 'Minimalist Light'
+                        ? 'bg-white text-neutral-900 border border-emerald-500 font-semibold shadow-xs'
+                        : isLight
+                        ? 'bg-neutral-200 text-neutral-700 hover:text-neutral-900'
+                        : 'bg-[#181818] text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+                    <span>Minimalist Light</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Action Buttons */}
-              <div className="flex items-center justify-between pt-4 border-t border-neutral-800">
+              <div className={`flex items-center justify-between pt-4 border-t ${
+                isLight ? 'border-neutral-200' : 'border-neutral-800'
+              }`}>
                 <button
                   type="button"
                   onClick={handleCancelAccount}
@@ -430,7 +599,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
 
               {/* Delete Account */}
-              <div className="pt-6">
+              <div className="pt-4">
                 <button
                   type="button"
                   onClick={handleDeleteAccount}
@@ -438,6 +607,145 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 >
                   Delete Account
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: APPEARANCE */}
+          {/* {Created dedicated Appearance tab in SettingsModal with preview cards and theme toggling between Neon Black and Minimalist Light} [Commented by: Google AI Studio on 20/10/2026 11:29 AM] */}
+          {activeTab === 'appearance' && (
+            <div className="space-y-6 max-w-xl">
+              <div className={`flex items-center justify-between pb-3 border-b ${
+                isLight ? 'border-neutral-200' : 'border-neutral-800'
+              }`}>
+                <div>
+                  <h2 className="text-xl font-bold font-serif">Appearance & Theme</h2>
+                  <p className={`text-xs mt-1 ${isLight ? 'text-neutral-500' : 'text-neutral-400'}`}>
+                    Switch between the current &apos;Neon Black&apos; theme and &apos;Minimalist Light&apos; theme.
+                  </p>
+                </div>
+                <span className={`text-[11px] font-mono px-2.5 py-1 rounded-full border ${
+                  isLight
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-medium'
+                    : 'bg-[#111] border-[#39ff14]/40 text-[#39ff14]'
+                }`}>
+                  ● {currentTheme}
+                </span>
+              </div>
+
+              {/* Segmented Control Toggle */}
+              <div>
+                <label className={`block text-xs uppercase tracking-wider font-semibold mb-2 ${
+                  isLight ? 'text-neutral-700' : 'text-neutral-400'
+                }`}>
+                  Select Theme
+                </label>
+                <div className={`grid grid-cols-2 p-1.5 rounded-xl border ${
+                  isLight ? 'bg-neutral-100 border-neutral-200' : 'bg-[#111] border-[#2b2b2b]'
+                }`}>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchTheme('Neon Black')}
+                    className={`py-2.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                      currentTheme === 'Neon Black'
+                        ? 'bg-black text-white shadow-md border border-[#39ff14]/70'
+                        : isLight
+                        ? 'text-neutral-600 hover:text-neutral-900'
+                        : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#39ff14] shadow-[0_0_8px_#39ff14]"></span>
+                    <span>Neon Black</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchTheme('Minimalist Light')}
+                    className={`py-2.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                      currentTheme === 'Minimalist Light'
+                        ? 'bg-white text-neutral-900 shadow-md border border-emerald-500'
+                        : isLight
+                        ? 'text-neutral-600 hover:text-neutral-900'
+                        : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
+                    <span>Minimalist Light</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Theme Preview Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                {/* Neon Black Card */}
+                <div
+                  onClick={() => handleSwitchTheme('Neon Black')}
+                  className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+                    currentTheme === 'Neon Black'
+                      ? 'border-[#39ff14] bg-black/90 shadow-[0_0_20px_rgba(57,255,20,0.15)] ring-1 ring-[#39ff14]/50'
+                      : isLight
+                      ? 'border-neutral-200 bg-neutral-900 text-white hover:border-neutral-400'
+                      : 'border-[#262626] bg-[#121212] hover:border-neutral-600'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-full bg-[#39ff14] shadow-[0_0_10px_#39ff14]"></span>
+                        <span className="text-sm font-bold text-white">Neon Black</span>
+                      </div>
+                      {currentTheme === 'Neon Black' && (
+                        <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-950 text-[#39ff14] border border-[#39ff14]/40">
+                          Active
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-neutral-400 leading-relaxed">
+                      Original cyberpunk theme with high contrast, deep obsidian background, and signature neon green aura.
+                    </p>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-neutral-800 flex items-center gap-2">
+                    <span className="w-4 h-4 rounded bg-black border border-neutral-700 inline-block"></span>
+                    <span className="w-4 h-4 rounded bg-[#161616] border border-neutral-700 inline-block"></span>
+                    <span className="w-4 h-4 rounded bg-[#39ff14] inline-block"></span>
+                    <span className="text-[11px] text-neutral-500 ml-auto font-mono">Dark / Neon</span>
+                  </div>
+                </div>
+
+                {/* Minimalist Light Card */}
+                <div
+                  onClick={() => handleSwitchTheme('Minimalist Light')}
+                  className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+                    currentTheme === 'Minimalist Light'
+                      ? 'border-emerald-600 bg-white text-neutral-900 shadow-lg ring-1 ring-emerald-500/30'
+                      : isLight
+                      ? 'border-neutral-300 bg-white text-neutral-900 hover:border-neutral-400'
+                      : 'border-[#262626] bg-neutral-100 text-neutral-900 hover:border-neutral-500'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-full bg-emerald-600"></span>
+                        <span className="text-sm font-bold text-neutral-900">Minimalist Light</span>
+                      </div>
+                      {currentTheme === 'Minimalist Light' && (
+                        <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          Active
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-neutral-600 leading-relaxed">
+                      Clean daylight aesthetic with soft neutral tones, sharp typography, and subtle emerald accents for distraction-free readability.
+                    </p>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-neutral-200 flex items-center gap-2">
+                    <span className="w-4 h-4 rounded bg-white border border-neutral-300 inline-block"></span>
+                    <span className="w-4 h-4 rounded bg-neutral-100 border border-neutral-300 inline-block"></span>
+                    <span className="w-4 h-4 rounded bg-emerald-600 inline-block"></span>
+                    <span className="text-[11px] text-neutral-500 ml-auto font-mono">Daylight / Light</span>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -747,8 +1055,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             return (
               <div className="space-y-4 max-w-xl text-neutral-300">
                 <h2 className="text-xl font-bold font-serif text-white">About nanobot</h2>
+                {/* {Rewrote description to state 'open source code AI chatbot' and added license hyperlink} [Commented by: Google AI Studio on 21/10/2026 06:08 AM] */}
                 <p className="text-sm leading-relaxed">
-                  Everyone should get to use AI, and that too without giving away their data. So we created nanobot, an open source AI chatbot which respects your privacy, and is free to use. Users bring their own API keys, which helps in further keeping nanobot completely free to use.
+                  Everyone should get to use AI, and that too without giving away their data. So we created nanobot, an open source code AI chatbot which respects your privacy, and is free to use. Users bring their own API keys, which helps in further keeping nanobot completely free to use.
+                  <br />
+                  <a
+                    href="https://github.com/anvilgabimpartduckcom/nanobot/blob/main/LICENSE"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-emerald-400 hover:text-emerald-300 underline font-medium"
+                  >
+                    See the license under which nanobot comes.
+                  </a>
                 </p>
                 {/* {Rendered developer email in plain text box without hyperlink per user instruction} [Commented by: Google AI Studio on 18/10/2026 01:11 PM] */}
                 <p className="text-sm leading-relaxed">
@@ -781,7 +1099,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </ol>
                 </div>
 
+                {/* {Added hyperlink for latest update in nanobot above Github source code link} [Commented by: Google AI Studio on 21/10/2026 06:08 AM] */}
                 <p className="text-sm pt-2 leading-relaxed">
+                  <a
+                    href="https://github.com/anvilgabimpartduckcom/nanobot#-latest-updates"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-emerald-400 hover:text-emerald-300 underline font-medium"
+                  >
+                    See the latest update in nanobot
+                  </a>
+                </p>
+                <p className="text-sm pt-1 leading-relaxed">
                   <a
                     href="https://github.com/anvilgabimpartduckcom/nanobot"
                     target="_blank"

@@ -15,9 +15,14 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
     model_training BOOLEAN DEFAULT TRUE,
     plugins_connected JSONB DEFAULT '{"google_drive":false,"gmail":false,"google_docs":false,"notion":false,"firecrawl":false,"tavily":false}'::jsonb,
     salt TEXT NOT NULL DEFAULT '',
+    -- {Added theme column in Supabase user_profiles table with default Neon Black} [Commented by: Google AI Studio on 20/10/2026 11:47 AM]
+    theme TEXT DEFAULT 'Neon Black',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- Migration for existing deployments to add theme column safely
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS theme TEXT DEFAULT 'Neon Black';
 
 -- Row Level Security for user_profiles
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;

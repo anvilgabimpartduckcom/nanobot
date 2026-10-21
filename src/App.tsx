@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { AuthModal } from './components/AuthModal';
-import { SettingsModal } from './components/SettingsModal';
+// {Imported SettingsModal and AppTheme type for Neon Black and Minimalist Light themes} [Commented by: Google AI Studio on 20/10/2026 11:30 AM]
+import { SettingsModal, AppTheme } from './components/SettingsModal';
 import { AboutModal } from './components/AboutModal';
 // {Imported Supabase persistence: profiles and AI file code outputs saved to Supabase; user chats saved exclusively to Cloudflare; cascading 30-day purge support} [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
 import {
@@ -65,6 +66,23 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [isIncognito, setIsIncognito] = useState(false);
+
+  // {Initialized Theme state with persistent storage and DOM synchronization for Neon Black and Minimalist Light} [Commented by: Google AI Studio on 20/10/2026 11:30 AM]
+  const [theme, setTheme] = useState<AppTheme>(() => {
+    return (localStorage.getItem('nanobot_theme') as AppTheme) || 'Neon Black';
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme === 'Minimalist Light' ? 'light' : 'dark');
+    if (theme === 'Minimalist Light') {
+      document.documentElement.classList.add('theme-light');
+      document.documentElement.classList.remove('theme-dark');
+    } else {
+      document.documentElement.classList.add('theme-dark');
+      document.documentElement.classList.remove('theme-light');
+    }
+    localStorage.setItem('nanobot_theme', theme);
+  }, [theme]);
 
   // Chat State
   const [chats, setChats] = useState<ChatSession[]>([]);
@@ -1376,27 +1394,31 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
       })
     : chats;
 
+  // {Rendered container with dynamic theme classes for Neon Black and Minimalist Light} [Commented by: Google AI Studio on 20/10/2026 11:32 AM]
   return (
-    <div className="flex h-screen w-screen relative bg-black text-white overflow-hidden">
+    <div className={`flex h-screen w-screen relative overflow-hidden transition-colors duration-200 ${
+      theme === 'Minimalist Light' ? 'bg-[#f8f9fa] text-neutral-900' : 'bg-black text-white'
+    }`}>
       {/* SIDEBAR */}
-      {/* {Configured full-screen mobile sidebar overlay with close button riding on top, hiding main viewport completely} [Commented by: Google AI Studio on 19/10/2026 10:46 AM] */}
+      {/* {When mobile sidebar is opened, it covers the entire screen, with the close button on the right riding on top and main viewport completely hidden} [Commented by: Google AI Studio on 20/10/2026 11:32 AM] */}
       <aside
         className={`${
           sidebarOpen ? 'flex' : 'hidden'
-        } sm:w-[300px] max-sm:fixed max-sm:inset-0 max-sm:w-screen max-sm:h-screen max-sm:z-50 max-sm:bg-[#0a0a0a] w-[300px] h-full bg-[#0a0a0a] border-r border-[#262626] flex-col p-[15px] z-40 shrink-0`}
+        } sm:w-[300px] max-sm:fixed max-sm:inset-0 max-sm:w-screen max-sm:h-screen max-sm:z-40 w-[300px] h-full flex-col p-[15px] z-40 shrink-0 transition-colors duration-200 ${
+          theme === 'Minimalist Light'
+            ? 'bg-white max-sm:bg-white border-r border-[#e5e7eb] text-neutral-900'
+            : 'bg-[#0a0a0a] max-sm:bg-[#0a0a0a] border-r border-[#262626] text-white'
+        }`}
       >
-        <div className="flex items-center justify-between pb-3 border-b border-[#262626] mb-3">
-          <h3 className="font-semibold text-base tracking-wide text-neutral-300">
+        {/* {Sidebar header with right-padding on mobile to provide clearance for the top-right close button} [Commented by: Google AI Studio on 21/10/2026 05:45 AM] */}
+        <div className={`flex items-center pb-3 border-b mb-3 ${
+          theme === 'Minimalist Light' ? 'border-[#e5e7eb]' : 'border-[#262626]'
+        }`}>
+          <h3 className={`font-semibold text-base tracking-wide ${sidebarOpen ? 'max-sm:pr-12' : ''} ${
+            theme === 'Minimalist Light' ? 'text-neutral-800' : 'text-neutral-300'
+          }`}>
             History ◴
           </h3>
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-neutral-400 hover:text-white bg-[#141414] border border-[#2a2a2a] text-sm cursor-pointer hover:border-neutral-500 transition-colors"
-            title="Close Sidebar"
-            aria-label="Close Sidebar"
-          >
-            ✕
-          </button>
         </div>
 
         {/* Chat History Search Bar (Available exclusively to signed-in users) */}
@@ -1408,7 +1430,11 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
               value={historySearchQuery}
               onChange={(e) => setHistorySearchQuery(e.target.value)}
               placeholder="Search chats by title..."
-              className="w-full bg-[#141414] border border-[#262626] rounded-lg pl-8 pr-7 py-1.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] transition-colors"
+              className={`w-full rounded-lg pl-8 pr-7 py-1.5 text-xs transition-colors focus:outline-none ${
+                theme === 'Minimalist Light'
+                  ? 'bg-neutral-100 border border-neutral-300 text-neutral-900 placeholder-neutral-400 focus:border-emerald-600 focus:bg-white'
+                  : 'bg-[#141414] border border-[#262626] text-white placeholder-neutral-500 focus:border-[#39ff14]'
+              }`}
               aria-label="Search chats by title"
             />
             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-500 text-xs pointer-events-none">
@@ -1479,7 +1505,13 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                 key={c.id}
                 onClick={() => handleSelectChat(c.id)}
                 className={`flex items-center justify-between p-2 rounded-lg cursor-pointer text-xs transition-colors ${
-                  activeChatId === c.id ? 'bg-[#222] text-white' : 'text-neutral-400 hover:bg-[#151515] hover:text-white'
+                  activeChatId === c.id
+                    ? theme === 'Minimalist Light'
+                      ? 'bg-neutral-100 text-neutral-900 font-semibold border-l-2 border-emerald-600 shadow-xs'
+                      : 'bg-[#222] text-white'
+                    : theme === 'Minimalist Light'
+                    ? 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                    : 'text-neutral-400 hover:bg-[#151515] hover:text-white'
                 }`}
               >
                 <span className="truncate max-w-[170px]">{c.title || 'Untitled Chat'}</span>
@@ -1500,7 +1532,9 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         </div>
 
         {/* Sidebar Bottom Controls */}
-        <div className="border-t border-[#262626] pt-4 mt-auto flex flex-col gap-2.5">
+        <div className={`border-t pt-4 mt-auto flex flex-col gap-2.5 ${
+          theme === 'Minimalist Light' ? 'border-neutral-200' : 'border-[#262626]'
+        }`}>
           <button
             onClick={handleClearChatHistory}
             className="w-full bg-[#dc2626] hover:bg-red-700 text-white font-bold py-[10px] px-3 rounded-[6px] text-xs transition-colors cursor-pointer"
@@ -1508,11 +1542,15 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
             Clear Chat History
           </button>
 
-          {/* {Render Settings button for signed-in users or black 'About nanobot' button in exact same position for non-signed-in users} [Commented by: Google AI Studio on 18/10/2026 12:58 AM] */}
+          {/* {Render Settings button for signed-in users or 'About nanobot' button in exact same position for non-signed-in users} [Commented by: Google AI Studio on 20/10/2026 11:32 AM] */}
           {currentUser ? (
             <button
               onClick={() => setIsSettingsOpen(true)}
-              className="w-full bg-black border border-[#333] hover:border-neutral-500 text-white font-bold py-[10px] px-3 rounded-[6px] text-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
+              className={`w-full font-bold py-[10px] px-3 rounded-[6px] text-xs transition-colors cursor-pointer flex items-center justify-center gap-2 ${
+                theme === 'Minimalist Light'
+                  ? 'bg-white border border-neutral-300 hover:border-neutral-500 text-neutral-800 hover:bg-neutral-50 shadow-xs'
+                  : 'bg-black border border-[#333] hover:border-neutral-500 text-white'
+              }`}
             >
               <span>⚙️</span>
               <span>Settings</span>
@@ -1520,7 +1558,11 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
           ) : (
             <button
               onClick={() => setIsAboutModalOpen(true)}
-              className="w-full bg-black border border-[#333] hover:border-neutral-500 text-white font-bold py-[10px] px-3 rounded-[6px] text-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
+              className={`w-full font-bold py-[10px] px-3 rounded-[6px] text-xs transition-colors cursor-pointer flex items-center justify-center gap-2 ${
+                theme === 'Minimalist Light'
+                  ? 'bg-white border border-neutral-300 hover:border-neutral-500 text-neutral-800 hover:bg-neutral-50 shadow-xs'
+                  : 'bg-black border border-[#333] hover:border-neutral-500 text-white'
+              }`}
             >
               <span>About nanobot</span>
             </button>
@@ -1529,24 +1571,36 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
       </aside>
 
       {/* MAIN VIEWPORT */}
-      {/* {When mobile sidebar is opened, hide the entire main viewport so all buttons, chat box, and text disappear completely, leaving only the close sidebar button on the sidebar} [Commented by: Google AI Studio on 19/10/2026 10:50 AM] */}
-      <main className={`flex-1 relative flex flex-col items-center h-full overflow-hidden ${sidebarOpen ? 'max-sm:hidden' : ''}`}>
-        {/* Top Controls (Left: Sidebar & New Chat) */}
-        {/* {Configured responsive controls so New Chat and auth/action buttons vanish on mobile when sidebar is open, leaving only close sidebar button} [Commented by: Google AI Studio on 18/10/2026 01:07 PM] */}
-        <div className={`absolute top-4 ${sidebarOpen ? 'max-sm:left-2 left-4' : 'left-4'} flex gap-2 z-30`}>
+      {/* {When mobile sidebar is opened, this sidebar button rides on top with z-50 in the top-right, while all other buttons, chat box, and text disappear} [Commented by: Google AI Studio on 21/10/2026 05:45 AM] */}
+      <main className="flex-1 relative flex flex-col items-center h-full overflow-hidden">
+        {/* Top Controls (Left: Sidebar Toggle & New Chat; positioned in top-right aligned with History divider line on mobile when sidebar is open) */}
+        {/* {Moved button a bit upwards on mobile with max-sm:top-[11px] to perfectly align bottom edge with divider line under History text} [Commented by: Google AI Studio on 21/10/2026 06:08 AM] */}
+        <div className={`absolute ${
+          sidebarOpen ? 'max-sm:top-[11px] max-sm:right-[15px] max-sm:left-auto top-4 left-4' : 'top-4 left-4'
+        } flex gap-2 z-50`}>
           <button
             onClick={() => setSidebarOpen((prev) => !prev)}
-            className="w-10 h-10 bg-transparent text-white border border-[#333] rounded-[8px] flex items-center justify-center text-[20px] hover:border-neutral-500 cursor-pointer"
+            className={`w-10 h-10 bg-transparent border rounded-[8px] flex items-center justify-center text-[20px] cursor-pointer transition-colors ${
+              theme === 'Minimalist Light'
+                ? 'border-neutral-300 text-neutral-800 hover:border-neutral-500 hover:bg-neutral-100'
+                : 'border-[#333] text-white hover:border-neutral-500'
+            }`}
             title={sidebarOpen ? 'Close History' : 'Toggle History'}
+            aria-label={sidebarOpen ? 'Close History' : 'Toggle History'}
           >
             {sidebarOpen ? '✕' : '◴'}
           </button>
           <button
             onClick={handleStartNewChat}
-            className={`w-10 h-10 bg-transparent text-white border border-[#333] rounded-[8px] flex items-center justify-center text-[20px] hover:border-neutral-500 cursor-pointer ${
+            className={`w-10 h-10 bg-transparent border rounded-[8px] flex items-center justify-center text-[20px] cursor-pointer transition-colors ${
               sidebarOpen ? 'max-sm:hidden' : ''
+            } ${
+              theme === 'Minimalist Light'
+                ? 'border-neutral-300 text-neutral-800 hover:border-neutral-500 hover:bg-neutral-100'
+                : 'border-[#333] text-white hover:border-neutral-500'
             }`}
             title="New Chat"
+            aria-label="New Chat"
           >
             💬
           </button>
@@ -1554,7 +1608,9 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
 
         {/* Toast Notification */}
         {toastNotice && (
-          <div className="absolute top-5 left-1/2 -translate-x-1/2 z-40 bg-[#161616] border border-emerald-500/80 text-emerald-400 px-4 py-2 rounded-xl text-xs font-mono shadow-2xl flex items-center gap-2">
+          <div className={`absolute top-5 left-1/2 -translate-x-1/2 z-40 bg-[#161616] border border-emerald-500/80 text-emerald-400 px-4 py-2 rounded-xl text-xs font-mono shadow-2xl flex items-center gap-2 ${
+            sidebarOpen ? 'max-sm:hidden' : ''
+          }`}>
             <span>✓</span> {toastNotice}
           </div>
         )}
@@ -1567,11 +1623,15 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
           {currentUser && (!activeChat || activeChat.messages.length === 0) && (
             <button
               onClick={() => importFileInputRef.current?.click()}
-              className="h-10 px-3 bg-[#111] border border-[#333] hover:border-[#39ff14] text-neutral-300 hover:text-white rounded-[8px] flex items-center gap-1.5 text-xs font-mono cursor-pointer transition-colors"
+              className={`h-10 px-3 rounded-[8px] flex items-center gap-1.5 text-xs font-mono cursor-pointer transition-colors ${
+                theme === 'Minimalist Light'
+                  ? 'bg-white border border-neutral-300 hover:border-emerald-600 text-neutral-700 hover:text-neutral-900 shadow-xs'
+                  : 'bg-[#111] border border-[#333] hover:border-[#39ff14] text-neutral-300 hover:text-white'
+              }`}
               title="Import previously exported chat (.txt)"
               aria-label="Import previously exported chat"
             >
-              <span className="text-emerald-400 font-bold">↑</span>
+              <span className="text-emerald-500 font-bold">↑</span>
               <span className="hidden sm:inline">Import previous chat</span>
             </button>
           )}
@@ -1579,11 +1639,15 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
           {activeChat && (
             <button
               onClick={handleExportActiveChat}
-              className="h-10 px-3 bg-[#111] border border-[#333] hover:border-[#39ff14] text-neutral-300 hover:text-white rounded-[8px] flex items-center gap-1.5 text-xs font-mono cursor-pointer transition-colors"
+              className={`h-10 px-3 rounded-[8px] flex items-center gap-1.5 text-xs font-mono cursor-pointer transition-colors ${
+                theme === 'Minimalist Light'
+                  ? 'bg-white border border-neutral-300 hover:border-emerald-600 text-neutral-700 hover:text-neutral-900 shadow-xs'
+                  : 'bg-[#111] border border-[#333] hover:border-[#39ff14] text-neutral-300 hover:text-white'
+              }`}
               title="Export active chat history as plain text (Ctrl+S)"
               aria-label="Export active chat history as plain text"
             >
-              <span className="text-emerald-400 font-bold">↓</span>
+              <span className="text-emerald-500 font-bold">↓</span>
               <span className="hidden sm:inline">Export (Ctrl+S)</span>
             </button>
           )}
@@ -1592,13 +1656,21 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
             <>
               <button
                 onClick={() => setAuthModalMode('signin')}
-                className="bg-black border border-[#333] hover:border-neutral-500 text-white font-semibold px-4 py-2 rounded-lg text-xs transition-colors cursor-pointer"
+                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                  theme === 'Minimalist Light'
+                    ? 'bg-white border border-neutral-300 hover:border-neutral-500 text-neutral-900 shadow-xs'
+                    : 'bg-black border border-[#333] hover:border-neutral-500 text-white'
+                }`}
               >
                 Sign In
               </button>
               <button
                 onClick={() => setAuthModalMode('signup')}
-                className="bg-black border border-[#333] hover:border-neutral-500 text-white font-semibold px-4 py-2 rounded-lg text-xs transition-colors cursor-pointer"
+                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                  theme === 'Minimalist Light'
+                    ? 'bg-neutral-900 border border-neutral-900 hover:bg-neutral-800 text-white shadow-xs'
+                    : 'bg-black border border-[#333] hover:border-neutral-500 text-white'
+                }`}
               >
                 Sign Up
               </button>
@@ -1606,7 +1678,11 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
           ) : (
             <button
               onClick={() => setIsIncognito((prev) => !prev)}
-              className="w-10 h-10 bg-[#111] border border-[#333] hover:border-[#39ff14] rounded-[8px] flex items-center justify-center text-[20px] cursor-pointer transition-colors"
+              className={`w-10 h-10 rounded-[8px] flex items-center justify-center text-[20px] cursor-pointer transition-colors ${
+                theme === 'Minimalist Light'
+                  ? 'bg-white border border-neutral-300 hover:border-emerald-600'
+                  : 'bg-[#111] border border-[#333] hover:border-[#39ff14]'
+              }`}
               title={isIncognito ? 'Incognito Mode Active (Click to switch to Normal)' : 'Normal Chat (Click for Incognito Mode)'}
             >
               {isIncognito ? '☀️' : '🕶️'}
@@ -1616,22 +1692,31 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
 
         {/* Offline Warning */}
         {!isOnline && (
-          <div className="absolute top-14 text-red-500 font-bold text-sm z-20">
+          <div className={`absolute top-14 text-red-500 font-bold text-sm z-20 ${
+            sidebarOpen ? 'max-sm:hidden' : ''
+          }`}>
             Offline 🛜
           </div>
         )}
 
         {/* Main Heading (Visible in zero state matching 19vh and 3.5rem) */}
         {!activeChat && (
-          <h1 className="absolute top-[19vh] text-[3.5rem] font-bold font-serif text-white tracking-tight pointer-events-none select-none">
+          <h1 className={`absolute top-[19vh] text-[3.5rem] font-bold font-serif tracking-tight pointer-events-none select-none transition-colors ${
+            sidebarOpen ? 'max-sm:hidden' : ''
+          } ${
+            theme === 'Minimalist Light' ? 'text-neutral-900' : 'text-white'
+          }`}>
             nanobot
           </h1>
         )}
 
         {/* Chat Messages Area */}
+        {/* {Hide chat area on mobile when sidebar is open so sidebar covers full screen} [Commented by: Google AI Studio on 20/10/2026 11:40 AM] */}
         <div
           ref={chatAreaRef}
           className={`w-full flex-1 overflow-y-auto px-4 md:px-12 pt-20 pb-44 flex flex-col gap-6 ${
+            sidebarOpen ? 'max-sm:hidden' : ''
+          } ${
             !activeChat ? 'hidden' : 'flex'
           }`}
         >
@@ -1650,7 +1735,11 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                 className={`flex flex-col ${isUser ? 'items-end' : 'items-start w-full'}`}
               >
                 {isUser ? (
-                  <div className="bg-[#181818] border border-[#2a2a2a] px-4 py-3 rounded-2xl max-w-[85%] md:max-w-[75%] text-sm leading-relaxed break-words">
+                  <div className={`px-4 py-3 rounded-2xl max-w-[85%] md:max-w-[75%] text-sm leading-relaxed break-words transition-colors ${
+                    theme === 'Minimalist Light'
+                      ? 'bg-white border border-neutral-200 text-neutral-900 shadow-xs'
+                      : 'bg-[#181818] border border-[#2a2a2a] text-neutral-100'
+                  }`}>
                     <div>{escapeHtml(textContent)}</div>
                     {m.displayAttachments && m.displayAttachments.length > 0 && (
                       <div className="mt-2 text-xs text-neutral-400 space-y-1.5 border-t border-neutral-700/60 pt-1.5">
@@ -1672,7 +1761,9 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                     )}
                   </div>
                 ) : (
-                  <div className="w-full text-neutral-200 text-sm leading-relaxed">
+                  <div className={`w-full text-sm leading-relaxed transition-colors ${
+                    theme === 'Minimalist Light' ? 'text-neutral-800' : 'text-neutral-200'
+                  }`}>
                     {/* Reasoning Accordion if present */}
                     {m.reasoning && (
                       <div className="mb-3 border-l-2 border-[#333] pl-3 py-1">
@@ -1785,10 +1876,12 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         </div>
 
         {/* Composer Wrap */}
-        {/* {Restored UI scale: composer container 750px at top 30vh / bottom 45px, 20px radius, 15px padding, 36px send button} [Commented by: Google AI Studio on 14/10/2026 10:35 AM] */}
+        {/* {Moved chat box slightly downwards to top-[34vh] so the neon aura does not touch the nanobot title text} [Commented by: Google AI Studio on 21/10/2026 06:17 AM] */}
         <div
           className={`absolute left-1/2 -translate-x-1/2 w-full max-w-[750px] px-4 transition-all duration-300 z-20 ${
-            activeChat ? 'bottom-[45px]' : 'top-[30vh]'
+            sidebarOpen ? 'max-sm:hidden' : ''
+          } ${
+            activeChat ? 'bottom-[45px]' : 'top-[34vh]'
           }`}
         >
           {/* {Storage quota and sync status notices} [Commented by: Google AI Studio on 15/10/2026 09:57 AM] */}
@@ -1816,14 +1909,22 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
               </button>
             </div>
           )}
-          <div className="w-full bg-[#111] border border-[#333] rounded-[20px] p-[15px] flex flex-col gap-2.5 neon-glow">
+          <div className={`w-full rounded-[20px] p-[15px] flex flex-col gap-2.5 transition-all duration-200 ${
+            theme === 'Minimalist Light'
+              ? 'bg-white border border-neutral-300 shadow-xl'
+              : 'bg-[#111] border border-[#333] neon-glow'
+          }`}>
             {/* Attachments Preview */}
             {attachments.length > 0 && (
               <div className="flex gap-2 overflow-x-auto py-1">
                 {attachments.map((att) => (
                   <div
                     key={att.id}
-                    className="relative group shrink-0 bg-[#1c1c1c] border border-[#333] rounded-xl px-3 py-2 flex items-center gap-2 text-xs"
+                    className={`relative group shrink-0 rounded-xl px-3 py-2 flex items-center gap-2 text-xs transition-colors ${
+                      theme === 'Minimalist Light'
+                        ? 'bg-neutral-100 border border-neutral-300 text-neutral-800'
+                        : 'bg-[#1c1c1c] border border-[#333] text-neutral-300'
+                    }`}
                   >
                     {att.isImage ? (
                       <img
@@ -1834,7 +1935,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                     ) : (
                       <span>📄</span>
                     )}
-                    <span className="truncate max-w-[120px] text-neutral-300">
+                    <span className="truncate max-w-[120px]">
                       {att.name}
                     </span>
                     <button
@@ -1861,7 +1962,11 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
               }}
               placeholder="Ask Anything..."
               rows={1}
-              className="w-full bg-transparent border-none text-white resize-none outline-none text-[16px] leading-[1.5] placeholder-neutral-500 min-h-[52px] max-h-[160px]"
+              className={`w-full bg-transparent border-none resize-none outline-none text-[16px] leading-[1.5] min-h-[52px] max-h-[160px] transition-colors ${
+                theme === 'Minimalist Light'
+                  ? 'text-neutral-900 placeholder-neutral-400'
+                  : 'text-white placeholder-neutral-500'
+              }`}
             />
 
             {/* Bottom Controls */}
@@ -1870,7 +1975,11 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="text-neutral-400 hover:text-white p-1 text-[1.2rem] cursor-pointer transition-colors"
+                  className={`p-1 text-[1.2rem] cursor-pointer transition-colors ${
+                    theme === 'Minimalist Light'
+                      ? 'text-neutral-600 hover:text-neutral-900'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
                   title="Upload Image, PDF, Code, or any Data File"
                 >
                   ➕
@@ -1918,11 +2027,13 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
           onSuccess={(user, secret) => {
             setCurrentUser(user);
             setPasswordSecret(secret);
+            if (user.theme) setTheme(user.theme);
           }}
         />
       )}
 
       {/* SETTINGS MODAL */}
+      {/* {Passed theme and onThemeChange props to SettingsModal for switching between Neon Black and Minimalist Light} [Commented by: Google AI Studio on 20/10/2026 11:33 AM] */}
       {currentUser && (
         <SettingsModal
           isOpen={isSettingsOpen}
@@ -1932,12 +2043,15 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
           onUpdateUser={(updated, newSecret) => {
             setCurrentUser(updated);
             if (newSecret) setPasswordSecret(newSecret);
+            if (updated.theme) setTheme(updated.theme);
           }}
           onDeleteAccount={() => {
             setCurrentUser(null);
             setPasswordSecret('');
             handleStartNewChat();
           }}
+          theme={theme}
+          onThemeChange={(newTheme) => setTheme(newTheme)}
         />
       )}
 
