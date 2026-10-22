@@ -187,7 +187,54 @@ export default {
       );
     }
 
-    // All endpoints under /api/* (except health) require authenticated Supabase Bearer token
+    // {Public read-only share retrieval endpoint with 30-day retention and X-Robots-Tag anti-scraper headers} [Commented by: Google AI Studio on 22/10/2026 04:49 AM]
+    const publicShareMatch = pathname.match(/^\/api\/public\/shares\/([^/]+)$/);
+    if (publicShareMatch && request.method === 'GET') {
+      if (!env.DB || typeof env.DB.prepare !== 'function') {
+        return sendError('D1 database binding "DB" is not available on Cloudflare Worker', 500);
+      }
+      const shareId = decodeURIComponent(publicShareMatch[1]);
+      const nowIso = new Date().toISOString();
+
+      try {
+        // Enforce 30-day retention cleanup on shares
+        await env.DB.prepare(`DELETE FROM shared_chats WHERE expires_at < ?`).bind(nowIso).run().catch(() => {});
+
+        const shareRecord = await env.DB.prepare(
+          `SELECT id, title, messages_json, created_at, expires_at FROM shared_chats WHERE id = ?`
+        )
+          .bind(shareId)
+          .first<{ id: string; title: string; messages_json: string; created_at: string; expires_at: string }>();
+
+        if (!shareRecord || shareRecord.expires_at < nowIso) {
+          return sendError('Shared chat does not exist or has expired after the 30-day retention period.', 404);
+        }
+
+        const headers = getCorsHeaders(origin, allowedOrigin);
+        headers.set('Content-Type', 'application/json');
+        headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive, nosnippet');
+        headers.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            share: {
+              id: shareRecord.id,
+              title: shareRecord.title,
+              messages: JSON.parse(shareRecord.messages_json),
+              created_at: shareRecord.created_at,
+              expires_at: shareRecord.expires_at,
+            },
+          }),
+          { status: 200, headers }
+        );
+      } catch (err: unknown) {
+        const error = err as Error;
+        return sendError(`Failed to retrieve shared chat: ${error.message}`, 500);
+      }
+    }
+
+    // All endpoints under /api/* (except health and public shares) require authenticated Supabase Bearer token
     if (pathname.startsWith('/api/')) {
       if (!env.DB || typeof env.DB.prepare !== 'function') {
         return sendError('D1 database binding "DB" is not available on Cloudflare Worker', 500);
@@ -229,6 +276,51 @@ export default {
             .all();
 
           return sendJson({ success: true, conversations: results || [] }, 200);
+        }
+
+        // {Authenticated creation of a shareable chat session snapshot retaining the 30-day retention policy} [Commented by: Google AI Studio on 22/10/2026 04:49 AM]
+        if (pathname === '/api/shares' && request.method === 'POST') {
+          const body: any = await request.json().catch(() => null);
+          if (!body || typeof body !== 'object' || !Array.isArray(body.messages)) {
+            return sendError('Invalid share payload: messages array is required', 400);
+          }
+
+          // Ensure table exists in D1
+          await env.DB.prepare(
+            `CREATE TABLE IF NOT EXISTS shared_chats (
+              id TEXT PRIMARY KEY,
+              user_id TEXT NOT NULL,
+              title TEXT NOT NULL,
+              messages_json TEXT NOT NULL,
+              created_at TEXT NOT NULL,
+              expires_at TEXT NOT NULL
+            )`
+          ).run().catch(() => {});
+
+          const shareId = crypto.randomUUID();
+          const title = typeof body.title === 'string' && body.title.trim() ? body.title.trim() : 'Shared Chat';
+          const now = Date.now();
+          const nowIso = new Date(now).toISOString();
+          const expiresIso = new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString();
+          const messagesJson = JSON.stringify(body.messages);
+
+          await env.DB.prepare(
+            `INSERT INTO shared_chats (id, user_id, title, messages_json, created_at, expires_at)
+             VALUES (?, ?, ?, ?, ?, ?)`
+          )
+            .bind(shareId, verifiedUserId, title, messagesJson, nowIso, expiresIso)
+            .run();
+
+          return sendJson(
+            {
+              success: true,
+              shareId,
+              title,
+              created_at: nowIso,
+              expires_at: expiresIso,
+            },
+            201
+          );
         }
 
         // 2. POST /api/conversations -> Create or upsert a conversation record
@@ -474,7 +566,13 @@ export default {
               }
 
               // Handle batch messages array if provided
+              // {Guaranteed preservation of reasoning text alongside content without duplicate message records} [Commented by: Google AI Studio on 22/10/2026 04:49 AM]
               if (Array.isArray(body.messages)) {
+                await env.DB.prepare(`DELETE FROM messages WHERE conversation_id = ? AND user_id = ?`)
+                  .bind(conversationId, verifiedUserId)
+                  .run()
+                  .catch(() => {});
+
                 const statements = [];
                 for (const msg of body.messages) {
                   const msgId = msg.id || crypto.randomUUID();

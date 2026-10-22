@@ -8,6 +8,7 @@ nanobot/
 ├── .env.example                # Environment variable reference for Netlify and Cloudflare secrets
 ├── .github/
 │   └── workflows/
+│       ├── codeql.yml          # GitHub Actions CodeQL security scanning
 │       ├── deploy-worker.yml   # Automated Cloudflare Worker deployment via Wrangler & GitHub Secrets
 │       └── verify-frontend.yml # Automated PR & commit frontend typecheck, lockfile verification, and build
 ├── .gitignore                  # Git ignore rules for node_modules, build outputs, and local env files
@@ -22,10 +23,11 @@ nanobot/
 ├── tsconfig.json               # TypeScript configuration
 ├── vite.config.ts              # Vite build configuration with Tailwind CSS plugin
 ├── README.md                   # Project documentation
+├── SECURITY.md                 # Security policy and vulnerability reporting instructions
 ├── worker/                     # Cloudflare Worker backend
 │   ├── package.json            # Worker dependencies & Wrangler scripts
-│   ├── src/index.ts            # Worker REST API with Supabase token verification, D1 queries & file output endpoints
-│   ├── schema.sql              # Cloudflare D1 tables (conversations, messages, file_outputs)
+│   ├── src/index.ts            # Worker REST API with Supabase token verification, D1 queries, public share snapshots, and file output endpoints
+│   ├── schema.sql              # Cloudflare D1 tables (conversations, messages, file_outputs, shared_chats)
 │   └── wrangler.toml           # Cloudflare Wrangler configuration & D1 binding
 ├── supabase/
 │   └── schema.sql              # PostgreSQL tables (user_profiles, file_code_outputs) and RLS policies
@@ -51,11 +53,12 @@ nanobot/
 
 # 📢 Latest Updates
 <!-- Placed a megaphone emoji [Commented by: Developer on 21/10/2026 11:20 AM] -->
-<!-- {Updated composer chat box vertical positioning to top-[34vh] to prevent neon aura from touching the nanobot text} [Commented by: Google AI Studio on 21/10/2026 06:18 AM] -->
+<!-- {Updated Latest Updates with lowercase account copy fix and centered Made in INDIA attribution in About sections} [Commented by: Google AI Studio on 22/10/2026 05:38 AM] -->
 
-- **Repositioned Chat Box to Prevent Aura Overlap**:
-  - Moved the chat box container (`div#root > div > main > div:nth-of-type(4) > div:nth-of-type(1)`) slightly downwards from `top-[30vh]` to `top-[34vh]` in the initial zero state.
-  - This provides clean breathing room between the bottom of the 'nanobot' title text (positioned at `top-[19vh]`) and the upper edge of the green neon aura glow (`neon-glow`), keeping the typography sharp and untouched.
-- **Updated Project Structure for LICENSE**:
-  - Added the newly created `LICENSE` file to the Project Structure tree in `README.md`.
+- **AuthModal Sign-Up Copy Correction**:
+  - Corrected the capitalization of "Account" to lowercase "account" in the bottom setup help link: changed "Need Help with creating Account? Visit here" to "Need Help with creating account? Visit here".
+
+- **Made in INDIA Attribution in About Sections**:
+  - Added a centered attribution line `Made in INDIA 🇮🇳 ❤️` directly under `All terms and conditions are under these services.` across both the standalone `AboutModal` (for visitors) and `SettingsModal` (for authenticated users).
+
 

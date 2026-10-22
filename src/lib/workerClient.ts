@@ -259,4 +259,37 @@ export const workerClient = {
       { method: 'DELETE' }
     );
   },
+
+  // {Create a public shareable snapshot for a chat session with 30-day retention} [Commented by: Google AI Studio on 22/10/2026 04:50 AM]
+  async createShare(
+    title: string,
+    messages: WorkerMessage[]
+  ): Promise<WorkerApiResponse<{ shareId: string; title: string; expires_at: string }>> {
+    return workerFetch<{ shareId: string; title: string; expires_at: string }>('/api/shares', {
+      method: 'POST',
+      body: JSON.stringify({ title, messages }),
+    });
+  },
+
+  // {Retrieve a public shared chat snapshot without authentication, protected with anti-scraping headers} [Commented by: Google AI Studio on 22/10/2026 04:50 AM]
+  async getPublicShare(
+    shareId: string
+  ): Promise<{ success: boolean; share?: { id: string; title: string; messages: WorkerMessage[]; created_at: string; expires_at: string }; error?: string }> {
+    try {
+      const endpoint = `${WORKER_BASE_URL}/api/public/shares/${encodeURIComponent(shareId)}`;
+      const res = await fetch(endpoint, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        return { success: false, error: errText || `Failed to load shared chat (${res.status})` };
+      }
+      const data = await res.json();
+      return data;
+    } catch (e: unknown) {
+      const err = e as Error;
+      return { success: false, error: err.message };
+    }
+  },
 };

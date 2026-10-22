@@ -1068,9 +1068,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     See the license under which nanobot comes.
                   </a>
                 </p>
-                {/* {Rendered developer email in plain text box without hyperlink per user instruction} [Commented by: Google AI Studio on 18/10/2026 01:11 PM] */}
+                {/* {Updated developer contact section to include GitHub discussions link and preserved email box per user specification} [Commented by: Google AI Studio on 22/10/2026 04:47 AM] */}
                 <p className="text-sm leading-relaxed">
-                  For more information, or under any problems, please contact developer via email:{' '}
+                  For more information, For reporting a bug, issue, or vulnerability, join the{' '}
+                  <a
+                    href="https://github.com/anvilgabimpartduckcom/nanobot/discussions/2"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-emerald-400 hover:text-emerald-300 underline font-medium"
+                  >
+                    GitHub discussion
+                  </a>{' '}
+                  or email at{' '}
                   <span className="inline-block bg-[#1a1a1a] border border-[#333] text-neutral-200 px-2 py-0.5 rounded font-mono text-xs select-all">
                     molecule-sip-sauna@duck.com
                   </span>
@@ -1127,6 +1136,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </p>
                   <p className="text-[11px] text-neutral-500">
                     All terms and conditions are under these services.
+                  </p>
+                  {/* {Added centered 'Made in INDIA 🇮🇳 ❤️' statement under terms and conditions} [Commented by: Google AI Studio on 22/10/2026 05:36 AM] */}
+                  <p className="text-center text-xs text-neutral-300 font-medium pt-2">
+                    Made in INDIA 🇮🇳 ❤️
                   </p>
                 </div>
               </div>

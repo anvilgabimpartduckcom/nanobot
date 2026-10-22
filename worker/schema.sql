@@ -61,3 +61,17 @@ CREATE INDEX IF NOT EXISTS idx_file_outputs_user
 
 CREATE INDEX IF NOT EXISTS idx_file_outputs_source_file 
   ON file_outputs (source_file_id);
+
+-- 4. Shared Chats Table (Public snapshot links with 30-day retention and scraper protection)
+-- {Added shared_chats table for 30-day snapshot sharing with automatic expiration} [Commented by: Google AI Studio on 22/10/2026 04:48 AM]
+CREATE TABLE IF NOT EXISTS shared_chats (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  messages_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_shared_chats_expires 
+  ON shared_chats (expires_at);

@@ -105,6 +105,20 @@ export default function App() {
   const [chatFileOutputs, setChatFileOutputs] = useState<Record<string, WorkerFileOutput[]>>({});
   const [quotaErrorNotice, setQuotaErrorNotice] = useState<string | null>(null);
 
+  // {Auto-scroll state: track whether user scrolled up during stream and whether down-arrow snapping is active} [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+  const [isUserScrolledUp, setIsUserScrolledUp] = useState<boolean>(false);
+  const [isAutoScrollActive, setIsAutoScrollActive] = useState<boolean>(false);
+
+  // {Shared chat state for public URL loading, read-only viewing, and seamless forking into user history} [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+  const [sharedChatView, setSharedChatView] = useState<{
+    id: string;
+    title: string;
+    messages: ChatMessage[];
+    created_at: string;
+    expires_at: string;
+  } | null>(null);
+  const [isSharing, setIsSharing] = useState<boolean>(false);
+
   // Stream Smoothing Buffer
   const [streamDisplayContent, setStreamDisplayContent] = useState('');
   const targetContentRef = useRef('');
@@ -264,6 +278,133 @@ export default function App() {
 
     setToastNotice('Chat history exported as plain text file!');
     setTimeout(() => setToastNotice(null), 3000);
+  };
+
+  // {Create a public share URL for the active chat session with 30-day retention, available exclusively to signed in users} [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+  const handleShareActiveChat = async () => {
+    if (!currentUser) {
+      setToastNotice('Sign in required to share chat sessions.');
+      setTimeout(() => setToastNotice(null), 3500);
+      return;
+    }
+
+    const targetChat = chats.find((c) => c.id === activeChatId) || (activeChatId ? null : chats[0]);
+    if (!targetChat || targetChat.messages.length === 0) {
+      setToastNotice('No active chat messages to share.');
+      setTimeout(() => setToastNotice(null), 3000);
+      return;
+    }
+
+    setIsSharing(true);
+    try {
+      // Strip any bulky local file bytes; keep extracted text, scripts, sources, and reasoning
+      const cleanMessages = targetChat.messages.map((m) => {
+        if (Array.isArray(m.content)) {
+          const textParts = m.content
+            .filter((c) => c.type === 'text')
+            .map((c) => c.text || '')
+            .join('\n');
+          return {
+            role: m.role,
+            content: textParts || '[Shared Content]',
+            sources: m.sources,
+            reasoning: m.reasoning,
+            displayAttachments: m.displayAttachments?.map((a) => ({ type: a.type, name: a.name })),
+          };
+        }
+        return {
+          role: m.role,
+          content: m.content,
+          sources: m.sources,
+          reasoning: m.reasoning,
+          displayAttachments: m.displayAttachments?.map((a) => ({ type: a.type, name: a.name })),
+        };
+      });
+
+      const res = await workerClient.createShare(targetChat.title, cleanMessages as WorkerMessage[]);
+      if (res.success && res.data?.shareId) {
+        const shareUrl = `${window.location.origin}/?share=${res.data.shareId}`;
+        await navigator.clipboard.writeText(shareUrl).catch(() => {});
+        setToastNotice('✓ Public share link copied to clipboard! (30-day retention)');
+        setTimeout(() => setToastNotice(null), 4500);
+      } else {
+        throw new Error(res.error || 'Failed to generate share URL');
+      }
+    } catch (err: unknown) {
+      const error = err as Error;
+      setToastNotice(`Share notice: ${error.message}`);
+      setTimeout(() => setToastNotice(null), 4000);
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  // {Detect public share parameter in URL on page load, load view-only snapshot, and set anti-scraping robots headers} [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const shareId = params.get('share');
+    if (shareId) {
+      // Anti-scraping meta tag: prevents web scrapers from discovering or indexing shared chats
+      let robotsMeta = document.querySelector('meta[name="robots"]');
+      if (robotsMeta) {
+        robotsMeta.setAttribute('content', 'noindex, nofollow, noarchive');
+      }
+
+      workerClient.getPublicShare(shareId).then((res) => {
+        if (res.success && res.share) {
+          setSharedChatView({
+            id: res.share.id,
+            title: res.share.title,
+            messages: res.share.messages as ChatMessage[],
+            created_at: res.share.created_at,
+            expires_at: res.share.expires_at,
+          });
+        } else {
+          setToastNotice(res.error || 'Shared chat is unavailable or expired.');
+          setTimeout(() => setToastNotice(null), 5000);
+        }
+      }).catch((err) => {
+        setToastNotice(`Failed to load shared chat: ${err.message}`);
+        setTimeout(() => setToastNotice(null), 4000);
+      });
+    }
+  }, []);
+
+  // {Fork shared chat into user's personal chat history as an independent separate chat session} [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+  const handleContinueSharedChat = () => {
+    if (!sharedChatView) return;
+
+    if (!currentUser) {
+      setToastNotice('Please sign in or create an account to continue and save this shared chat.');
+      setAuthModalMode('signin');
+      return;
+    }
+
+    const forkedChat: ChatSession = {
+      id: Date.now().toString(),
+      title: sharedChatView.title,
+      messages: JSON.parse(JSON.stringify(sharedChatView.messages)),
+      pinned: false,
+      updated: Date.now(),
+    };
+
+    setChats((prev) => [forkedChat, ...prev]);
+    setActiveChatId(forkedChat.id);
+    persistChat(forkedChat);
+
+    // Clear shared view and remove share URL parameter without reloading
+    setSharedChatView(null);
+    const newUrl = window.location.pathname;
+    window.history.replaceState({}, '', newUrl);
+
+    // Restore standard indexing meta tag
+    const robotsMeta = document.querySelector('meta[name="robots"]');
+    if (robotsMeta) {
+      robotsMeta.setAttribute('content', 'index, follow');
+    }
+
+    setToastNotice('✓ Shared chat added to your history as a separate chat!');
+    setTimeout(() => setToastNotice(null), 4000);
   };
 
   // {Parse and import previously exported nanobot .txt files to resume or reference past conversations} [Commented by: Google AI Studio on 19/10/2026 10:46 AM]
@@ -707,9 +848,81 @@ export default function App() {
     }
   };
 
-  useEffect(() => {
+  // {Detects manual upward scroll during active AI response stream} [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+  const handleChatScroll = () => {
+    if (!chatAreaRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = chatAreaRef.current;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    if (distanceFromBottom > 50) {
+      setIsUserScrolledUp(true);
+      if (isGenerating) {
+        setIsAutoScrollActive(false);
+      }
+    } else if (distanceFromBottom <= 20) {
+      setIsUserScrolledUp(false);
+    }
+  };
+
+  // {Down arrow button click snaps chat to bottom and re-engages continuous auto-scroll} [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+  const handleScrollToBottomClick = () => {
+    setIsAutoScrollActive(true);
+    setIsUserScrolledUp(false);
     scrollToBottom();
-  }, [chats, currentStatus, streamDisplayContent]);
+  };
+
+  // {Auto-scroll snaps view to bottom when activated or on initial renders} [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+  useEffect(() => {
+    if (isGenerating) {
+      if (isAutoScrollActive) {
+        scrollToBottom();
+      }
+    } else {
+      scrollToBottom();
+    }
+  }, [chats, currentStatus, streamDisplayContent, isAutoScrollActive, isGenerating]);
+
+  // {Automated descriptive title generator parsing initial user message and AI response instead of slicing 30 chars} [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+  const generateChatSessionTitle = (userMessage: string, aiResponse: string): string => {
+    try {
+      let cleanPrompt = userMessage
+        .replace(/\[Uploaded File:[\s\S]*?\]/gi, '')
+        .replace(/\[Preserved AI Output[\s\S]*?\]/gi, '')
+        .replace(/```[\s\S]*?```/g, '')
+        .trim();
+
+      cleanPrompt = cleanPrompt.replace(/^(can you (please )?|could you |help me (to )?|i want to |i need to |how (do|to|can) (i|we)|what is |tell me about |please |write (a|me)? )/i, '').trim();
+
+      const firstLine = cleanPrompt.split(/[\n?.!]/)[0]?.trim() || '';
+      const promptWords = firstLine.split(/\s+/).filter(Boolean);
+      let candidate = '';
+      if (promptWords.length >= 2 && promptWords.length <= 7) {
+        candidate = promptWords.join(' ');
+      } else if (promptWords.length > 7) {
+        candidate = promptWords.slice(0, 6).join(' ');
+      }
+
+      if (!candidate || candidate.length < 5 || /^(hello|hi|hey|test|question|help)$/i.test(candidate)) {
+        const cleanAi = aiResponse.replace(/```[\s\S]*?```/g, '').replace(/\[Sources[\s\S]*?\]/g, '').trim();
+        const aiWords = cleanAi.split(/[\n.!?]/)[0]?.trim().split(/\s+/).filter(Boolean) || [];
+        if (aiWords.length >= 2) {
+          candidate = aiWords.slice(0, 5).join(' ');
+        }
+      }
+
+      if (!candidate) candidate = 'New Discussion';
+
+      const titleCased = candidate
+        .split(/\s+/)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(' ')
+        .slice(0, 45)
+        .trim();
+
+      return titleCased || 'New Chat';
+    } catch {
+      return userMessage.slice(0, 30) || 'New Chat';
+    }
+  };
 
   // Smooth Token Streaming Ticker
   const startStreamSmoothing = () => {
@@ -836,7 +1049,21 @@ export default function App() {
 
     // Create or locate chat session
     let chat = activeChat;
-    if (!chat) {
+    // {Seamlessly fork shared chat session into a separate personal chat when user submits a prompt} [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+    if (!chat && sharedChatView) {
+      chat = {
+        id: Date.now().toString(),
+        title: sharedChatView.title,
+        messages: JSON.parse(JSON.stringify(sharedChatView.messages)),
+        pinned: false,
+        updated: Date.now()
+      };
+      setChats((prev) => [chat!, ...prev]);
+      setActiveChatId(chat.id);
+      setSharedChatView(null);
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    } else if (!chat) {
       chat = {
         id: Date.now().toString(),
         title: promptSummary.slice(0, 30),
@@ -958,6 +1185,9 @@ export default function App() {
 
     // Initialize Generation
     setIsGenerating(true);
+    // {Reset auto-scroll flags: auto-scroll activates when user clicks down arrow after scrolling up} [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+    setIsUserScrolledUp(false);
+    setIsAutoScrollActive(false);
     setCurrentReasoning('');
     setReasoningExpanded(false);
     setActiveSources([]);
@@ -992,6 +1222,15 @@ export default function App() {
         };
 
         chat.messages.push(aiMsg);
+        // {Generate concise descriptive title for new chat session parsing first user message and AI response} [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+        if (chat.messages.length === 2) {
+          const firstUserContent = typeof chat.messages[0].content === 'string'
+            ? chat.messages[0].content
+            : '';
+          const descriptiveTitle = generateChatSessionTitle(firstUserContent, researchResult.content);
+          chat.title = descriptiveTitle;
+          setChats((prev) => prev.map((c) => (c.id === chat!.id ? { ...c, title: descriptiveTitle } : c)));
+        }
         persistChat(chat);
         setCurrentStatus(null);
       } catch (err: unknown) {
@@ -1250,6 +1489,17 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
       };
 
       chat.messages.push(aiMessage);
+      // {Generate concise descriptive title for new chat session parsing first user message and AI response} [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+      if (chat.messages.length === 2) {
+        const firstUserContent = typeof chat.messages[0].content === 'string'
+          ? chat.messages[0].content
+          : Array.isArray(chat.messages[0].content)
+          ? chat.messages[0].content.find((c) => c.type === 'text')?.text || ''
+          : '';
+        const descriptiveTitle = generateChatSessionTitle(firstUserContent, currentOutput);
+        chat.title = descriptiveTitle;
+        setChats((prev) => prev.map((c) => (c.id === chat!.id ? { ...c, title: descriptiveTitle } : c)));
+      }
       persistChat(chat);
 
       // {Persist AI-generated file reading code outputs directly to Supabase public.file_code_outputs} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
@@ -1400,14 +1650,14 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
       theme === 'Minimalist Light' ? 'bg-[#f8f9fa] text-neutral-900' : 'bg-black text-white'
     }`}>
       {/* SIDEBAR */}
-      {/* {When mobile sidebar is opened, it covers the entire screen, with the close button on the right riding on top and main viewport completely hidden} [Commented by: Google AI Studio on 20/10/2026 11:32 AM] */}
+      {/* {Slide-over drawer animation for mobile history sidebar with smooth 300ms ease-in-out transition} [Commented by: Google AI Studio on 22/10/2026 04:51 AM] */}
       <aside
         className={`${
-          sidebarOpen ? 'flex' : 'hidden'
-        } sm:w-[300px] max-sm:fixed max-sm:inset-0 max-sm:w-screen max-sm:h-screen max-sm:z-40 w-[300px] h-full flex-col p-[15px] z-40 shrink-0 transition-colors duration-200 ${
+          sidebarOpen ? 'max-sm:translate-x-0 sm:flex sm:w-[300px]' : 'max-sm:-translate-x-full sm:hidden'
+        } max-sm:fixed max-sm:inset-0 max-sm:w-screen max-sm:h-screen max-sm:z-40 max-sm:flex w-[300px] h-full flex-col p-[15px] z-40 shrink-0 transform transition-transform duration-300 ease-in-out transition-colors ${
           theme === 'Minimalist Light'
-            ? 'bg-white max-sm:bg-white border-r border-[#e5e7eb] text-neutral-900'
-            : 'bg-[#0a0a0a] max-sm:bg-[#0a0a0a] border-r border-[#262626] text-white'
+            ? 'bg-white max-sm:bg-white border-r border-[#e5e7eb] text-neutral-900 shadow-2xl sm:shadow-none'
+            : 'bg-[#0a0a0a] max-sm:bg-[#0a0a0a] border-r border-[#262626] text-white shadow-2xl sm:shadow-none'
         }`}
       >
         {/* {Sidebar header with right-padding on mobile to provide clearance for the top-right close button} [Commented by: Google AI Studio on 21/10/2026 05:45 AM] */}
@@ -1652,6 +1902,25 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
             </button>
           )}
 
+          {/* Share Button (Available exclusively to signed-in users) */}
+          {/* {Share button generating a public snapshot URL with 30-day retention and anti-scraping protections} [Commented by: Google AI Studio on 22/10/2026 04:51 AM] */}
+          {currentUser && activeChat && (
+            <button
+              onClick={handleShareActiveChat}
+              disabled={isSharing}
+              className={`h-10 px-3 rounded-[8px] flex items-center gap-1.5 text-xs font-mono cursor-pointer transition-colors ${
+                theme === 'Minimalist Light'
+                  ? 'bg-white border border-neutral-300 hover:border-emerald-600 text-neutral-700 hover:text-neutral-900 shadow-xs'
+                  : 'bg-[#111] border border-[#333] hover:border-[#39ff14] text-neutral-300 hover:text-white'
+              } disabled:opacity-50`}
+              title="Share chat session with public URL (30-day retention)"
+              aria-label="Share chat session"
+            >
+              <span className="text-emerald-500 font-bold">🔗</span>
+              <span className="hidden sm:inline">{isSharing ? 'Sharing...' : 'Share'}</span>
+            </button>
+          )}
+
           {!currentUser ? (
             <>
               <button
@@ -1700,7 +1969,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         )}
 
         {/* Main Heading (Visible in zero state matching 19vh and 3.5rem) */}
-        {!activeChat && (
+        {!activeChat && !sharedChatView && (
           <h1 className={`absolute top-[19vh] text-[3.5rem] font-bold font-serif tracking-tight pointer-events-none select-none transition-colors ${
             sidebarOpen ? 'max-sm:hidden' : ''
           } ${
@@ -1711,16 +1980,44 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         )}
 
         {/* Chat Messages Area */}
-        {/* {Hide chat area on mobile when sidebar is open so sidebar covers full screen} [Commented by: Google AI Studio on 20/10/2026 11:40 AM] */}
+        {/* {Attached onScroll listener for user scroll detection during active AI streaming} [Commented by: Google AI Studio on 22/10/2026 04:51 AM] */}
         <div
           ref={chatAreaRef}
+          onScroll={handleChatScroll}
           className={`w-full flex-1 overflow-y-auto px-4 md:px-12 pt-20 pb-44 flex flex-col gap-6 ${
             sidebarOpen ? 'max-sm:hidden' : ''
           } ${
-            !activeChat ? 'hidden' : 'flex'
+            !activeChat && !sharedChatView ? 'hidden' : 'flex'
           }`}
         >
-          {activeChat?.messages.map((m, idx) => {
+          {/* Shared Chat Session Banner */}
+          {/* {View-only shared chat notification banner with 'Continue this chat' action button} [Commented by: Google AI Studio on 22/10/2026 04:51 AM] */}
+          {sharedChatView && (
+            <div className={`p-4 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-2 animate-in fade-in duration-200 ${
+              theme === 'Minimalist Light'
+                ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
+                : 'bg-emerald-950/40 border-emerald-600/60 text-emerald-200'
+            }`}>
+              <div className="space-y-0.5">
+                <div className="text-xs font-semibold flex items-center gap-1.5">
+                  <span>🔗 Shared Chat:</span>
+                  <span className="font-bold">{sharedChatView.title}</span>
+                </div>
+                <div className="text-[11px] opacity-80">
+                  Shared view-only snapshot • Retained for 30 days per policy
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleContinueSharedChat}
+                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-colors cursor-pointer shrink-0 shadow-sm"
+              >
+                Continue this chat ➔
+              </button>
+            </div>
+          )}
+
+          {(sharedChatView ? sharedChatView.messages : (activeChat?.messages || [])).map((m, idx) => {
             const isUser = m.role === 'user';
             const textContent =
               typeof m.content === 'string'
@@ -1881,9 +2178,31 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
           className={`absolute left-1/2 -translate-x-1/2 w-full max-w-[750px] px-4 transition-all duration-300 z-20 ${
             sidebarOpen ? 'max-sm:hidden' : ''
           } ${
-            activeChat ? 'bottom-[45px]' : 'top-[34vh]'
+            activeChat || sharedChatView ? 'bottom-[45px]' : 'top-[34vh]'
           }`}
         >
+          {/* Auto-scroll Snap Button: Appears when user scrolls up during active streaming; clicking snaps to bottom and activates auto-scroll */}
+          {/* {Down arrow floating button snapped to the bottom to resume auto-scroll streaming} [Commented by: Google AI Studio on 22/10/2026 04:51 AM] */}
+          {isGenerating && isUserScrolledUp && (
+            <div className="flex justify-center mb-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
+              <button
+                type="button"
+                onClick={handleScrollToBottomClick}
+                className={`w-9 h-9 rounded-full flex items-center justify-center shadow-xl transition-all hover:scale-110 cursor-pointer z-30 border ${
+                  theme === 'Minimalist Light'
+                    ? 'bg-white border-neutral-300 text-neutral-800 hover:bg-neutral-100 shadow-md'
+                    : 'bg-[#181818] border-[#3a3a3a] text-white hover:bg-[#252525] shadow-black/80'
+                }`}
+                title="Snap to bottom & auto-scroll"
+                aria-label="Snap to bottom & auto-scroll"
+              >
+                <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                </svg>
+              </button>
+            </div>
+          )}
+
           {/* {Storage quota and sync status notices} [Commented by: Google AI Studio on 15/10/2026 09:57 AM] */}
           {quotaErrorNotice && (
             <div className="mb-2 px-3 py-1.5 rounded-lg bg-amber-950/80 border border-amber-600/60 text-amber-200 text-xs flex items-center justify-between shadow-lg">

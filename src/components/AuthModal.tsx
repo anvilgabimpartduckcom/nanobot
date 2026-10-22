@@ -30,11 +30,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // Feedback State
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // {Added separate error flags for username and password uniqueness displayed in red beside their labels} [Commented by: Google AI Studio on 22/10/2026 04:48 AM]
+  const [usernameTakenError, setUsernameTakenError] = useState(false);
+  const [passwordTakenError, setPasswordTakenError] = useState(false);
 
   if (!isOpen) return null;
 
   const handleSwitchMode = (targetMode: 'signin' | 'signup') => {
     setError(null);
+    setUsernameTakenError(false);
+    setPasswordTakenError(false);
     setCurrentMode(targetMode);
     if (onSwitchMode) onSwitchMode(targetMode);
   };
@@ -43,6 +48,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setUsernameTakenError(false);
+    setPasswordTakenError(false);
 
     const uName = username.trim();
     const pwd = password.trim();
@@ -54,33 +61,59 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    if (pwd.length < 6) {
-      setError('Password must be at least 6 characters.');
-      return;
-    }
-
     setLoading(true);
     try {
       const existingUsers = getLocalProfiles();
 
-      // Check global username uniqueness locally
-      const usernameTaken = existingUsers.some(
+      // {Check username uniqueness locally and in Supabase; mark usernameTakenError if duplicate} [Commented by: Google AI Studio on 22/10/2026 04:48 AM]
+      let isUsernameTaken = existingUsers.some(
         (u) => u.username.toLowerCase() === uName.toLowerCase()
       );
-      if (usernameTaken) {
-        throw new Error('Username is already taken. Please choose another username.');
-      }
 
-      // Check remote Supabase table uniqueness if connected
-      if (isSupabaseConfigured && supabase) {
+      if (!isUsernameTaken && isSupabaseConfigured && supabase) {
         const { data: remoteUsers, error: sbCheckErr } = await supabase
           .from('user_profiles')
           .select('username')
           .ilike('username', uName);
 
         if (!sbCheckErr && remoteUsers && remoteUsers.length > 0) {
-          throw new Error('Username is already registered globally. Please choose another.');
+          isUsernameTaken = true;
         }
+      }
+
+      // {Check password uniqueness using deterministic SHA-256 credential hashing; mark passwordTakenError if duplicate} [Commented by: Google AI Studio on 22/10/2026 04:48 AM]
+      const pwdBuffer = await crypto.subtle.digest(
+        'SHA-256',
+        new TextEncoder().encode('nanobot_pass_salt_' + pwd)
+      );
+      const pwdHash = Array.from(new Uint8Array(pwdBuffer))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+
+      const registeredPwdHashes: string[] = JSON.parse(
+        localStorage.getItem('nanobot_registered_password_hashes') || '[]'
+      );
+      let isPasswordTaken = registeredPwdHashes.includes(pwdHash);
+
+      if (!isPasswordTaken && isSupabaseConfigured && supabase) {
+        try {
+          const { data: remotePwds } = await supabase
+            .from('user_profiles')
+            .select('id')
+            .eq('salt', pwdHash);
+          if (remotePwds && remotePwds.length > 0) {
+            isPasswordTaken = true;
+          }
+        } catch {
+          // Ignore remote schema difference if column is absent
+        }
+      }
+
+      if (isUsernameTaken || isPasswordTaken) {
+        if (isUsernameTaken) setUsernameTakenError(true);
+        if (isPasswordTaken) setPasswordTakenError(true);
+        setLoading(false);
+        return;
       }
 
       const salt = generateSalt();
@@ -117,6 +150,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
       existingUsers.push(newUser);
       saveLocalProfiles(existingUsers);
+      // {Saved unique password hash to local registry ensuring passwords cannot be reused across accounts} [Commented by: Google AI Studio on 22/10/2026 04:48 AM]
+      registeredPwdHashes.push(pwdHash);
+      localStorage.setItem('nanobot_registered_password_hashes', JSON.stringify(registeredPwdHashes));
 
       // Save encrypted profile to remote Supabase user_profiles (stored as ciphertexts, unreadable by admin)
       if (isSupabaseConfigured && supabase) {
@@ -226,36 +262,61 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <h2 className="text-2xl font-bold font-serif mb-2 text-center text-white">
               Register to nanobot
             </h2>
+            {/* {Updated register subtitle to 'Enter your username, password, and API keys.'} [Commented by: Google AI Studio on 22/10/2026 04:48 AM] */}
             <p className="text-xs text-neutral-400 text-center mb-6">
-              Enter your username, password, and personal API keys. No email required.
+              Enter your username, password, and API keys.
             </p>
 
             <form onSubmit={handleCreateAccount} className="space-y-4">
               <div>
-                <label className="block text-xs uppercase tracking-wider text-neutral-400 mb-1">
-                  Username
-                </label>
+                {/* {Rendered Username label with red 'Username already taken' error indicator beside it} [Commented by: Google AI Studio on 22/10/2026 04:48 AM] */}
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs uppercase tracking-wider text-neutral-400">
+                    Username
+                  </label>
+                  {usernameTakenError && (
+                    <span className="text-xs font-semibold text-red-500">
+                      Username already taken
+                    </span>
+                  )}
+                </div>
+                {/* {Updated username placeholder to 'Enter username'} [Commented by: Google AI Studio on 22/10/2026 04:48 AM] */}
                 <input
                   type="text"
                   required
                   value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter unique username"
-                  className="w-full bg-[#141414] border border-[#333] rounded-xl px-4 py-2.5 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] transition-colors"
+                  onChange={(e) => {
+                    setUsername(e.target.value);
+                    if (usernameTakenError) setUsernameTakenError(false);
+                  }}
+                  placeholder="Enter username"
+                  className={`w-full bg-[#141414] border ${usernameTakenError ? 'border-red-500 focus:border-red-500' : 'border-[#333] focus:border-[#39ff14]'} rounded-xl px-4 py-2.5 text-white placeholder-neutral-500 focus:outline-none transition-colors`}
                 />
               </div>
 
               <div>
-                <label className="block text-xs uppercase tracking-wider text-neutral-400 mb-1">
-                  Password
-                </label>
+                {/* {Rendered Password label with red 'Password already taken' error indicator beside it} [Commented by: Google AI Studio on 22/10/2026 04:48 AM] */}
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs uppercase tracking-wider text-neutral-400">
+                    Password
+                  </label>
+                  {passwordTakenError && (
+                    <span className="text-xs font-semibold text-red-500">
+                      Password already taken
+                    </span>
+                  )}
+                </div>
+                {/* {Updated password placeholder to 'Enter password'} [Commented by: Google AI Studio on 22/10/2026 04:48 AM] */}
                 <input
                   type="password"
                   required
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter secure password (min 6 chars)"
-                  className="w-full bg-[#141414] border border-[#333] rounded-xl px-4 py-2.5 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] transition-colors"
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (passwordTakenError) setPasswordTakenError(false);
+                  }}
+                  placeholder="Enter password"
+                  className={`w-full bg-[#141414] border ${passwordTakenError ? 'border-red-500 focus:border-red-500' : 'border-[#333] focus:border-[#39ff14]'} rounded-xl px-4 py-2.5 text-white placeholder-neutral-500 focus:outline-none transition-colors`}
                 />
               </div>
 
@@ -323,10 +384,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     Already have an account? <span className="underline font-medium">Sign In</span>
                   </button>
                 </div>
-                {/* {Added direct help link for account setup and key configuration} [Commented by: Google AI Studio on 18/10/2026 12:58 AM] */}
+                {/* {Updated help text to 'Need Help with creating account? Visit here' with lowercase 'a'} [Commented by: Google AI Studio on 22/10/2026 05:36 AM] */}
                 <div>
                   <span className="text-xs text-neutral-400">
-                    Need Help with Creating Account?{' '}
+                    Need Help with creating account?{' '}
                     <a
                       href="https://tropical-chime-8c1.notion.site/How-to-set-up-nanobot-3fab104092f3801db298e6c12617a2be"
                       target="_blank"

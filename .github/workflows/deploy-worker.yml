@@ -15,6 +15,10 @@ concurrency:
   group: deploy-worker-${{ github.ref }}
   cancel-in-progress: true
 
+# {Explicit read-only permissions block resolving CodeQL actions/missing-workflow-permissions vulnerability} [Commented by: Google AI Studio on 22/10/2026 04:47 AM]
+permissions:
+  contents: read
+
 jobs:
   deploy:
     name: Deploy nanobot-api Worker

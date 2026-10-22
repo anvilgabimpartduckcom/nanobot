@@ -16,8 +16,9 @@ on:
       - 'index.html'
       - '.github/workflows/verify-frontend.yml'
   pull_request:
-    branches:
-      - main
+# {Explicit read-only permissions block resolving CodeQL actions/missing-workflow-permissions vulnerability} [Commented by: Google AI Studio on 22/10/2026 04:47 AM]
+permissions:
+  contents: read
 
 jobs:
   verify:

@@ -225,6 +225,17 @@ function extractTextFromPdfBuffer(buffer: ArrayBuffer): string {
   return '';
 }
 
+// {Iterative tag sanitization loop and angle bracket removal resolving CodeQL js/incomplete-multi-character-sanitization} [Commented by: Google AI Studio on 22/10/2026 04:47 AM]
+function sanitizeXmlTagContent(input: string): string {
+  let previous: string;
+  let text = input;
+  do {
+    previous = text;
+    text = text.replace(/<[^>]*>/g, '');
+  } while (text !== previous);
+  return text.replace(/[<>]/g, '');
+}
+
 // Helper: Extract text from Office XML documents (DOCX, XLSX)
 function extractTextFromOfficeBuffer(buffer: ArrayBuffer, ext: string): string {
   try {
@@ -237,7 +248,7 @@ function extractTextFromOfficeBuffer(buffer: ArrayBuffer, ext: string): string {
       const wtMatches = raw.match(/<w:t[^>]*>([^<]+)<\/w:t>/g);
       if (wtMatches && wtMatches.length > 0) {
         const text = wtMatches
-          .map((m) => m.replace(/<[^>]+>/g, ''))
+          .map((m) => sanitizeXmlTagContent(m))
           .join(' ')
           .replace(/\s+/g, ' ');
         if (text.length > 20) return text.slice(0, 24000);
@@ -247,7 +258,7 @@ function extractTextFromOfficeBuffer(buffer: ArrayBuffer, ext: string): string {
       const tMatches = raw.match(/<t[^>]*>([^<]+)<\/t>/g);
       if (tMatches && tMatches.length > 0) {
         const text = tMatches
-          .map((m) => m.replace(/<[^>]+>/g, ''))
+          .map((m) => sanitizeXmlTagContent(m))
           .filter((t) => t.trim().length > 0)
           .slice(0, 300)
           .join(', ');
