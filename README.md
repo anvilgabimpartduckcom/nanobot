@@ -51,12 +51,9 @@ nanobot/
 
 # 📢 Latest Updates
 <!-- Placed a megaphone emoji [Commented by: Google AI Studio on 21/10/2026 11:20 AM] -->
-<!-- Updated Latest Updates with Dependabot markdown-it vulnerability audit and verification of 15.0.3 patch [Commented by: Google AI Studio on 23/10/2026 06:38 AM] -->
+<!-- Updated Latest Updates with removal of Account Settings connectivity indicator pill [Commented by: Google AI Studio on 23/10/2026 07:38 AM] -->
 
-- **Dependabot Security Advisory Audit & markdown-it 15.0.3 Verification**:
-  - Audited the two reported GitHub Dependabot vulnerabilities affecting `markdown-it` versions `>= 15.0.0, < 15.0.3` (algorithmic-complexity DoS on unclosed link reference definitions and quadratic HTML construct scanning with `html: true`).
-  - Confirmed that the codebase is completely secured with the patched `markdown-it@15.0.3` in both `package.json` (`^15.0.3`) and `package-lock.json` (`15.0.3`).
-  - Successfully ran both advisory Proof-of-Concept (PoC) benchmarks, proving linear execution time and zero denial-of-service vulnerability in the installed release.
-  - Audited the entire dependency tree via `npm audit` confirming 0 vulnerabilities across all 210 packages.
+- **Clean UI & Account Settings Header Streamlining**:
+  - Removed the unnecessary Supabase/Netlify status indicator pill (`● Supabase Cloud Connected` / `⚡ Netlify Integration Ready`) from the Account Settings header in `SettingsModal.tsx` per user focus-mode request and clean UI guidelines.
 
 

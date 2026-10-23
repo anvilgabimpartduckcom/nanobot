@@ -427,22 +427,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* TAB 1: ACCOUNT */}
           {activeTab === 'account' && (
             <div className="space-y-5 max-w-xl">
-              {/* Added Supabase Cloud connectivity indicator in Account settings  [Commented by: Google AI Studio on 13/10/2026 03:20 AM] */}
-              <div className={`flex items-center justify-between pb-2 border-b mb-4 ${
+              {/* Removed Supabase/Netlify status indicator pill per user instruction [Commented by: Google AI Studio on 23/10/2026 07:38 AM] */}
+              <div className={`pb-2 border-b mb-4 ${
                 isLight ? 'border-neutral-200' : 'border-neutral-800'
               }`}>
                 <h2 className="text-xl font-bold font-serif">Account Settings</h2>
-                <span className={`text-[11px] font-mono px-2.5 py-0.5 rounded-full border ${
-                  isSupabaseConfigured
-                    ? isLight
-                      ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
-                      : 'bg-emerald-950/60 border-emerald-700 text-emerald-400'
-                    : isLight
-                    ? 'bg-neutral-100 border-neutral-300 text-neutral-600'
-                    : 'bg-neutral-900 border-neutral-700 text-neutral-400'
-                }`}>
-                  {isSupabaseConfigured ? '● Supabase Cloud Connected' : '⚡ Netlify Integration Ready'}
-                </span>
               </div>
 
               <div>
