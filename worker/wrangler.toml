@@ -1,4 +1,4 @@
-# {Configured Cloudflare Worker binding DB, Netlify CORS, and non-secret Supabase project URL variable} [Commented by: Google AI Studio on 17/10/2026 03:22 AM]
+# Configured Cloudflare Worker binding DB, Netlify CORS, and non-secret Supabase project URL variable [Commented by: Google AI Studio on 17/10/2026 03:22 AM]
 
 name = "nanobot-api"
 main = "src/index.ts"

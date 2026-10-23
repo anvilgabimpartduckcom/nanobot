@@ -1,11 +1,11 @@
-/* {Configured neon aura glow, custom scrollbars, and KaTeX code styling} [Commented by: Google AI Studio on 12/10/2026 10:54 AM] */
+/* Configured neon aura glow, custom scrollbars, and KaTeX code styling [Commented by: Google AI Studio on 12/10/2026 10:54 AM] */
 @import "tailwindcss";
 
 :root {
   --aura-color: #39ff14;
 }
 
-/* {Added Minimalist Light theme variables, background, typography, and scrollbar definitions} [Commented by: Google AI Studio on 20/10/2026 11:27 AM] */
+/* Added Minimalist Light theme variables, background, typography, and scrollbar definitions [Commented by: Google AI Studio on 20/10/2026 11:27 AM] */
 html[data-theme="light"],
 .theme-light {
   --aura-color: #059669;
@@ -81,7 +81,7 @@ pre code.hljs {
   line-height: 1.5;
 }
 
-/* {Light theme sleek scrollbar and code block styles} [Commented by: Google AI Studio on 20/10/2026 11:27 AM] */
+/* Light theme sleek scrollbar and code block styles [Commented by: Google AI Studio on 20/10/2026 11:27 AM] */
 html[data-theme="light"] ::-webkit-scrollbar-track,
 .theme-light ::-webkit-scrollbar-track {
   background: #f1f5f9;

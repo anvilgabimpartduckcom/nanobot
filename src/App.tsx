@@ -1,11 +1,11 @@
-// {Created unified nanobot App with Supabase auth, settings, incognito mode, deep research, and smooth streaming} [Commented by: Google AI Studio on 12/10/2026 10:58 AM]
+// Created unified nanobot App with Supabase auth, settings, incognito mode, deep research, and smooth streaming [Commented by: Google AI Studio on 12/10/2026 10:58 AM]
 
 import React, { useState, useEffect, useRef } from 'react';
 import { AuthModal } from './components/AuthModal';
-// {Imported SettingsModal and AppTheme type for Neon Black and Minimalist Light themes} [Commented by: Google AI Studio on 20/10/2026 11:30 AM]
+// Imported SettingsModal and AppTheme type for Neon Black and Minimalist Light themes [Commented by: Google AI Studio on 20/10/2026 11:30 AM]
 import { SettingsModal, AppTheme } from './components/SettingsModal';
 import { AboutModal } from './components/AboutModal';
-// {Imported Supabase persistence: profiles and AI file code outputs saved to Supabase; user chats saved exclusively to Cloudflare; cascading 30-day purge support} [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
+// Imported Supabase persistence: profiles and AI file code outputs saved to Supabase; user chats saved exclusively to Cloudflare; cascading 30-day purge support [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
 import {
   UserProfile,
   isSupabaseConfigured,
@@ -22,11 +22,11 @@ import { analyzeFileWithScript, ProcessedFile } from './lib/fileReader';
 import { performDynamicSearch, runDeepResearch, extractUrlsWithTavily } from './lib/tavily';
 import { uploadArchiveToR2, fetchArchiveFromR2, deleteArchiveFromR2 } from './lib/r2';
 import { markdownToHtml, escapeHtml, safeUrl } from './lib/markdown';
-// {Imported MCP_PLUGINS to equip the AI model with real tools from connected servers} [Commented by: Google AI Studio on 13/10/2026 10:53 AM]
+// Imported MCP_PLUGINS to equip the AI model with real tools from connected servers [Commented by: Google AI Studio on 13/10/2026 10:53 AM]
 import { MCP_PLUGINS } from './lib/plugins';
-// {Imported Cloudflare Worker API client for authenticated chat persistence} [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
+// Imported Cloudflare Worker API client for authenticated chat persistence [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
 import { workerClient, WorkerMessage, WorkerFileOutput } from './lib/workerClient';
-// {Imported IndexedDB storage manager for client-only original user files and orphaned cleanup} [Commented by: Google AI Studio on 15/10/2026 9:22 AM]
+// Imported IndexedDB storage manager for client-only original user files and orphaned cleanup [Commented by: Google AI Studio on 15/10/2026 09:22 AM]
 import {
   saveOriginalFile,
   getOriginalFile,
@@ -57,7 +57,7 @@ const INPUT_MIN_HEIGHT = 52;
 
 export default function App() {
   // Session & Auth State
-  // {Removed email login state and added toast notification state for plain-text chat export} [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
+  // Removed email login state and added toast notification state for plain-text chat export [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [passwordSecret, setPasswordSecret] = useState<string>('');
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null);
@@ -67,7 +67,7 @@ export default function App() {
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [isIncognito, setIsIncognito] = useState(false);
 
-  // {Initialized Theme state with persistent storage and DOM synchronization for Neon Black and Minimalist Light} [Commented by: Google AI Studio on 20/10/2026 11:30 AM]
+  // Initialized Theme state with persistent storage and DOM synchronization for Neon Black and Minimalist Light [Commented by: Google AI Studio on 20/10/2026 11:30 AM]
   const [theme, setTheme] = useState<AppTheme>(() => {
     return (localStorage.getItem('nanobot_theme') as AppTheme) || 'Neon Black';
   });
@@ -88,7 +88,7 @@ export default function App() {
   const [chats, setChats] = useState<ChatSession[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  // {Added history search query state for filtering chat sessions by title} [Commented by: Google AI Studio on 17/10/2026 02:45 AM]
+  // Added history search query state for filtering chat sessions by title [Commented by: Google AI Studio on 17/10/2026 02:45 AM]
   const [historySearchQuery, setHistorySearchQuery] = useState<string>('');
   const [inputText, setInputText] = useState('');
   const [attachments, setAttachments] = useState<ProcessedFile[]>([]);
@@ -98,18 +98,18 @@ export default function App() {
   const [reasoningExpanded, setReasoningExpanded] = useState<false | boolean>(false);
   const [activeSources, setActiveSources] = useState<Array<{ title: string; url: string }>>([]);
   const [showSourcesPopup, setShowSourcesPopup] = useState<number | null>(null);
-  // {Added Cloudflare Worker history sync and non-intrusive status notice state} [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
+  // Added Cloudflare Worker history sync and non-intrusive status notice state [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
   const [isHistorySyncing, setIsHistorySyncing] = useState<boolean>(false);
   const [historyNotice, setHistoryNotice] = useState<string | null>(null);
-  // {Added state for cloud-persisted AI file outputs and local storage quota warnings} [Commented by: Google AI Studio on 15/10/2026 9:22 AM]
+  // Added state for cloud-persisted AI file outputs and local storage quota warnings [Commented by: Google AI Studio on 15/10/2026 09:22 AM]
   const [chatFileOutputs, setChatFileOutputs] = useState<Record<string, WorkerFileOutput[]>>({});
   const [quotaErrorNotice, setQuotaErrorNotice] = useState<string | null>(null);
 
-  // {Auto-scroll state: track whether user scrolled up during stream and whether down-arrow snapping is active} [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+  // Auto-scroll state: track whether user scrolled up during stream and whether down-arrow snapping is active [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
   const [isUserScrolledUp, setIsUserScrolledUp] = useState<boolean>(false);
   const [isAutoScrollActive, setIsAutoScrollActive] = useState<boolean>(false);
 
-  // {Shared chat state for public URL loading, read-only viewing, and seamless forking into user history} [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+  // Shared chat state for public URL loading, read-only viewing, and seamless forking into user history [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
   const [sharedChatView, setSharedChatView] = useState<{
     id: string;
     title: string;
@@ -118,6 +118,18 @@ export default function App() {
     expires_at: string;
   } | null>(null);
   const [isSharing, setIsSharing] = useState<boolean>(false);
+
+  // Quick preview state for sidebar chat item hover preview without selection [Commented by: Google AI Studio on 23/10/2026 12:38 AM]
+  const [quickPreview, setQuickPreview] = useState<{
+    chatId: string;
+    title: string;
+    x: number;
+    y: number;
+    messages: ChatMessage[];
+    isLoading: boolean;
+  } | null>(null);
+  const previewTimerRef = useRef<number | null>(null);
+  const previewCacheRef = useRef<Record<string, ChatMessage[]>>({});
 
   // Stream Smoothing Buffer
   const [streamDisplayContent, setStreamDisplayContent] = useState('');
@@ -167,7 +179,7 @@ export default function App() {
 
   // Derive CryptoKey and load Cloudflare Worker history when user logs in with password
   useEffect(() => {
-    // {Fetch remote chat history from Cloudflare Worker D1 backend upon user login} [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
+    // Fetch remote chat history from Cloudflare Worker D1 backend upon user login [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
     if (currentUser && passwordSecret) {
       deriveKeyFromPassword(passwordSecret, currentUser.salt || 'default_nanobot_salt')
         .then((key) => {
@@ -182,7 +194,7 @@ export default function App() {
       loadWorkerConversations();
     } else {
       setCryptoKey(null);
-      // {Filter out and purge all files and caches for chats older than 30 days} [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
+      // Filter out and purge all files and caches for chats older than 30 days [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
       try {
         const stored = JSON.parse(localStorage.getItem('nanobot_chats') || '[]');
         const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
@@ -205,7 +217,7 @@ export default function App() {
     }
   }, [currentUser, passwordSecret]);
 
-  // {Export currently active chat history as a clean plain text file for local backup and sharing} [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
+  // Export currently active chat history as a clean plain text file for local backup and sharing [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
   const handleExportActiveChat = () => {
     const targetChat = chats.find((c) => c.id === activeChatId) || (activeChatId ? null : chats[0]);
     if (!targetChat || targetChat.messages.length === 0) {
@@ -280,7 +292,7 @@ export default function App() {
     setTimeout(() => setToastNotice(null), 3000);
   };
 
-  // {Create a public share URL for the active chat session with 30-day retention, available exclusively to signed in users} [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+  // Create a public share URL for the active chat session with 30-day retention, available exclusively to signed in users [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
   const handleShareActiveChat = async () => {
     if (!currentUser) {
       setToastNotice('Sign in required to share chat sessions.');
@@ -339,7 +351,7 @@ export default function App() {
     }
   };
 
-  // {Detect public share parameter in URL on page load, load view-only snapshot, and set anti-scraping robots headers} [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+  // Detect public share parameter in URL on page load, load view-only snapshot, and set anti-scraping robots headers [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const shareId = params.get('share');
@@ -370,7 +382,7 @@ export default function App() {
     }
   }, []);
 
-  // {Fork shared chat into user's personal chat history as an independent separate chat session} [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+  // Fork shared chat into user's personal chat history as an independent separate chat session [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
   const handleContinueSharedChat = () => {
     if (!sharedChatView) return;
 
@@ -407,7 +419,7 @@ export default function App() {
     setTimeout(() => setToastNotice(null), 4000);
   };
 
-  // {Parse and import previously exported nanobot .txt files to resume or reference past conversations} [Commented by: Google AI Studio on 19/10/2026 10:46 AM]
+  // Parse and import previously exported nanobot .txt files to resume or reference past conversations [Commented by: Google AI Studio on 19/10/2026 10:46 AM]
   const parseExportedChatText = (text: string): { title: string; messages: ChatMessage[] } | null => {
     if (!text || (!text.includes('[USER]:') && !text.includes('[NANOBOT AI]:'))) {
       return null;
@@ -494,7 +506,7 @@ export default function App() {
         return;
       }
 
-      // {Instantiate imported chat session with unique timestamp ID conforming to ChatSession schema} [Commented by: Google AI Studio on 19/10/2026 10:50 AM]
+      // Instantiate imported chat session with unique timestamp ID conforming to ChatSession schema [Commented by: Google AI Studio on 19/10/2026 10:50 AM]
       const importedChat: ChatSession = {
         id: (Date.now() + Math.floor(Math.random() * 1000)).toString(),
         title: parsed.title,
@@ -516,7 +528,7 @@ export default function App() {
     reader.readAsText(file);
   };
 
-  // {Global keyboard listener for Ctrl+S or Cmd+S to export active chat history} [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
+  // Global keyboard listener for Ctrl+S or Cmd+S to export active chat history [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
@@ -528,7 +540,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [chats, activeChatId]);
 
-  // {Persist and synchronize conversation history with Cloudflare Worker D1 backend using Supabase Bearer token, with zero-knowledge title decryption} [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
+  // Persist and synchronize conversation history with Cloudflare Worker D1 backend using Supabase Bearer token, with zero-knowledge title decryption [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
   const loadWorkerConversations = async (providedKey?: CryptoKey | null) => {
     if (!currentUser) return;
     setIsHistorySyncing(true);
@@ -550,7 +562,7 @@ export default function App() {
 
           const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
           const now = Date.now();
-          // {Auto-purge conversations, files, code outputs, and text messages older than 30 days} [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
+          // Auto-purge conversations, files, code outputs, and text messages older than 30 days [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
           purgeExpiredFileCodeOutputs(currentUser.id).catch(() => {});
 
           setChats((prev) => {
@@ -610,7 +622,7 @@ export default function App() {
     }
   };
 
-  // {Load message history and AI file outputs from Cloudflare Worker with zero-knowledge decryption, verifying local file presence in IndexedDB} [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
+  // Load message history and AI file outputs from Cloudflare Worker with zero-knowledge decryption, verifying local file presence in IndexedDB [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
   const handleSelectChat = async (id: string) => {
     setActiveChatId(id);
     setSidebarOpen(false);
@@ -620,7 +632,7 @@ export default function App() {
     const localFileIds = new Set(localFiles.map((f) => f.fileId));
 
     if (currentUser) {
-      // {Fetch persisted AI file code outputs strictly from Supabase public.file_code_outputs table} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
+      // Fetch persisted AI file code outputs strictly from Supabase public.file_code_outputs table [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
       try {
         const supabaseOutputs = await fetchFileCodeOutputsFromSupabase(currentUser.id, id);
         if (supabaseOutputs && supabaseOutputs.length > 0) {
@@ -726,11 +738,11 @@ export default function App() {
     }
   };
 
-  // {User chats are stored and loaded exclusively from Cloudflare Worker D1 and R2 archives; user profiles and code outputs reside in Supabase} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
+  // User chats are stored and loaded exclusively from Cloudflare Worker D1 and R2 archives; user profiles and code outputs reside in Supabase [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
 
   // Save active chat (Encrypted to Supabase + R2 if signed in, skipped if Incognito)
-  // {Enforced file storage isolation: raw files/images stay local, cloud backups store code output only} [Commented by: Google AI Studio on 14/10/2026 10:35 AM]
-  // {Persist chat session and messages to Cloudflare Worker D1 backend with Supabase token verification} [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
+  // Enforced file storage isolation: raw files/images stay local, cloud backups store code output only [Commented by: Google AI Studio on 14/10/2026 10:35 AM]
+  // Persist chat session and messages to Cloudflare Worker D1 backend with Supabase token verification [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
   const persistChat = async (chat: ChatSession) => {
     if (isIncognito) return; // Do not save incognito chats
 
@@ -749,7 +761,7 @@ export default function App() {
       return m;
     });
 
-    // {Zero-knowledge client-side encryption: encrypt title and message contents before sending to Cloudflare Worker D1 so developer cannot read them} [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
+    // Zero-knowledge client-side encryption: encrypt title and message contents before sending to Cloudflare Worker D1 so developer cannot read them [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
     if (currentUser) {
       (async () => {
         let titleToSync = chat.title;
@@ -818,7 +830,7 @@ export default function App() {
     }
 
     if (currentUser && cryptoKey) {
-      // {Tiered archiving: older messages preserved in Cloudflare R2; active transcripts in Cloudflare Worker D1} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
+      // Tiered archiving: older messages preserved in Cloudflare R2; active transcripts in Cloudflare Worker D1 [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
       try {
         if (cleanMessagesForCloud.length > 10) {
           const olderMessages = cleanMessagesForCloud.slice(0, cleanMessagesForCloud.length - 10);
@@ -848,7 +860,7 @@ export default function App() {
     }
   };
 
-  // {Detects manual upward scroll during active AI response stream} [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+  // Detects manual upward scroll during active AI response stream [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
   const handleChatScroll = () => {
     if (!chatAreaRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = chatAreaRef.current;
@@ -863,14 +875,14 @@ export default function App() {
     }
   };
 
-  // {Down arrow button click snaps chat to bottom and re-engages continuous auto-scroll} [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+  // Down arrow button click snaps chat to bottom and re-engages continuous auto-scroll [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
   const handleScrollToBottomClick = () => {
     setIsAutoScrollActive(true);
     setIsUserScrolledUp(false);
     scrollToBottom();
   };
 
-  // {Auto-scroll snaps view to bottom when activated or on initial renders} [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+  // Auto-scroll snaps view to bottom when activated or on initial renders [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
   useEffect(() => {
     if (isGenerating) {
       if (isAutoScrollActive) {
@@ -881,7 +893,7 @@ export default function App() {
     }
   }, [chats, currentStatus, streamDisplayContent, isAutoScrollActive, isGenerating]);
 
-  // {Automated descriptive title generator parsing initial user message and AI response instead of slicing 30 chars} [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+  // Automated descriptive title generator parsing initial user message and AI response instead of slicing 30 chars [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
   const generateChatSessionTitle = (userMessage: string, aiResponse: string): string => {
     try {
       let cleanPrompt = userMessage
@@ -1012,7 +1024,7 @@ export default function App() {
       return;
     }
 
-    // {Determined API keys strictly from authenticated user profile, removing obsolete global env fallbacks} [Commented by: Google AI Studio on 18/10/2026 12:50 PM]
+    // Determined API keys strictly from authenticated user profile, removing obsolete global env fallbacks [Commented by: Google AI Studio on 18/10/2026 12:50 PM]
     const orKey = currentUser?.openrouter_key || '';
     const tvKey = currentUser?.tavily_key || '';
 
@@ -1025,7 +1037,7 @@ export default function App() {
     let userContent: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
     const displayAttachments: Array<{ type: string; name: string; fileId?: string; isLocalMissing?: boolean }> = [];
 
-    // {Inject synthesized reader script template and extracted data preview into file context} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
+    // Inject synthesized reader script template and extracted data preview into file context [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
     let attachedFileContext = '';
     attachments.forEach((att) => {
       displayAttachments.push({
@@ -1049,7 +1061,7 @@ export default function App() {
 
     // Create or locate chat session
     let chat = activeChat;
-    // {Seamlessly fork shared chat session into a separate personal chat when user submits a prompt} [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+    // Seamlessly fork shared chat session into a separate personal chat when user submits a prompt [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
     if (!chat && sharedChatView) {
       chat = {
         id: Date.now().toString(),
@@ -1075,7 +1087,7 @@ export default function App() {
       setActiveChatId(chat.id);
     }
 
-    // {Save raw files strictly to browser IndexedDB; persist code outputs strictly to Supabase} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
+    // Save raw files strictly to browser IndexedDB; persist code outputs strictly to Supabase [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
     attachments.forEach((att) => {
       if (att.originalFile) {
         saveOriginalFile(chat!.id, att.fileId, att.originalFile, att.name, att.type, att.size)
@@ -1089,7 +1101,7 @@ export default function App() {
           });
       }
 
-      // {Persist AI file code outputs strictly to Supabase public.file_code_outputs} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
+      // Persist AI file code outputs strictly to Supabase public.file_code_outputs [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
       if (currentUser && !att.isImage) {
         const outputPayload = att.contentSnippet;
         (async () => {
@@ -1138,7 +1150,7 @@ export default function App() {
       }
     });
 
-    // {Inject preserved AI outputs when continuing conversation on a device where raw file is missing} [Commented by: Google AI Studio on 15/10/2026 9:22 AM]
+    // Inject preserved AI outputs when continuing conversation on a device where raw file is missing [Commented by: Google AI Studio on 15/10/2026 09:22 AM]
     const existingCloudOutputs = chatFileOutputs[chat.id] || [];
     let cloudOutputsContext = '';
     if (attachments.length === 0 && existingCloudOutputs.length > 0) {
@@ -1149,7 +1161,7 @@ export default function App() {
 
     const fullTextPrompt = trimmedPrompt + attachedFileContext + cloudOutputsContext;
 
-    // {Typed userContent multimodal parts array explicitly for TypeScript safety} [Commented by: Google AI Studio on 12/10/2026 11:00 AM]
+    // Typed userContent multimodal parts array explicitly for TypeScript safety [Commented by: Google AI Studio on 12/10/2026 11:00 AM]
     const imageAttachments = attachments.filter((a) => a.isImage && a.dataUrl);
     if (imageAttachments.length > 0) {
       const parts: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
@@ -1185,7 +1197,7 @@ export default function App() {
 
     // Initialize Generation
     setIsGenerating(true);
-    // {Reset auto-scroll flags: auto-scroll activates when user clicks down arrow after scrolling up} [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+    // Reset auto-scroll flags: auto-scroll activates when user clicks down arrow after scrolling up [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
     setIsUserScrolledUp(false);
     setIsAutoScrollActive(false);
     setCurrentReasoning('');
@@ -1222,7 +1234,7 @@ export default function App() {
         };
 
         chat.messages.push(aiMsg);
-        // {Generate concise descriptive title for new chat session parsing first user message and AI response} [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+        // Generate concise descriptive title for new chat session parsing first user message and AI response [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
         if (chat.messages.length === 2) {
           const firstUserContent = typeof chat.messages[0].content === 'string'
             ? chat.messages[0].content
@@ -1246,7 +1258,7 @@ export default function App() {
       return;
     }
 
-    // {Configured system prompt with real MCP server tool definitions, persona rules, and URL scraping capability} [Commented by: Google AI Studio on 14/10/2026 10:35 AM]
+    // Configured system prompt with real MCP server tool definitions, persona rules, and URL scraping capability [Commented by: Google AI Studio on 14/10/2026 10:35 AM]
     const customInstructions = currentUser?.ai_instructions || '';
     const connectedPlugins = currentUser?.plugins_connected || {};
     const activePlugins = MCP_PLUGINS.filter((p) => connectedPlugins[p.id as keyof typeof connectedPlugins]);
@@ -1258,7 +1270,7 @@ export default function App() {
       )
       .join('\n\n');
 
-    // {Updated search, scrap, and universal file reading code execution protocol guidelines} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
+    // Updated search, scrap, and universal file reading code execution protocol guidelines [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
     const systemPrompt = `You are 'nanobot', a privacy first, open source code AI chat bot. You can process text, images, and files seamlessly. Current Date/Time: ${getCurrentDateTime()}.
 Follow these guidelines strictly:
 1. Always use emojis for visual cues to make the conversation engaging.
@@ -1376,7 +1388,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         }
       }
 
-      // {Processed Scraping and Search tags with exact regex and single-use tool lifecycle} [Commented by: Google AI Studio on 19/10/2026 02:25 AM]
+      // Processed Scraping and Search tags with exact regex and single-use tool lifecycle [Commented by: Google AI Studio on 19/10/2026 02:25 AM]
       // 1. Check for Scraping queries (<Scrap>URL</Scrap>, <Scrap1>URL1</Scrap1>, <Scrap2>URL2</Scrap2>...) if scraping has NOT been performed yet
       if (!scrapPerformed) {
         const scrapRegex = /<Scrap(\d*)>(.*?)<\/Scrap\1>/gi;
@@ -1489,7 +1501,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
       };
 
       chat.messages.push(aiMessage);
-      // {Generate concise descriptive title for new chat session parsing first user message and AI response} [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+      // Generate concise descriptive title for new chat session parsing first user message and AI response [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
       if (chat.messages.length === 2) {
         const firstUserContent = typeof chat.messages[0].content === 'string'
           ? chat.messages[0].content
@@ -1502,7 +1514,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
       }
       persistChat(chat);
 
-      // {Persist AI-generated file reading code outputs directly to Supabase public.file_code_outputs} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
+      // Persist AI-generated file reading code outputs directly to Supabase public.file_code_outputs [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
       if (currentUser && chat) {
         const codeBlockMatch = currentOutput.match(/```(?:python|py)?([\s\S]*?)```/i);
         if (codeBlockMatch) {
@@ -1543,13 +1555,13 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
   };
 
   // Clear chat history
-  // {Synchronized batch chat deletion with Cloudflare Worker D1 backend and local IndexedDB file cleanup} [Commented by: Google AI Studio on 15/10/2026 9:22 AM]
+  // Synchronized batch chat deletion with Cloudflare Worker D1 backend and local IndexedDB file cleanup [Commented by: Google AI Studio on 15/10/2026 09:22 AM]
   const handleClearChatHistory = () => {
     if (!window.confirm('Clear unpinned chats from history?')) return;
     const remaining = chats.filter((c) => c.pinned);
     setChats(remaining);
 
-    // {Synchronized chat deletions to remote Supabase, Cloudflare Worker, and local IndexedDB file storage, purging code outputs, files, and transcripts} [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
+    // Synchronized chat deletions to remote Supabase, Cloudflare Worker, and local IndexedDB file storage, purging code outputs, files, and transcripts [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
     chats.forEach((c) => {
       if (!c.pinned) {
         removeEncryptedChatRecord(c.id);
@@ -1571,7 +1583,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
   };
 
   // Toggle chat pin
-  // {Synchronized conversation pin state with Cloudflare Worker D1 backend} [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
+  // Synchronized conversation pin state with Cloudflare Worker D1 backend [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
   const handleTogglePin = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setChats((prev) =>
@@ -1590,7 +1602,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
   };
 
   // Delete chat
-  // {Completely purge all chat files, code outputs, text messages, and conversation records upon chat deletion} [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
+  // Completely purge all chat files, code outputs, text messages, and conversation records upon chat deletion [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
   const handleDeleteChat = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     deleteOriginalFilesForChat(id).catch(() => {});
@@ -1606,7 +1618,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
   };
 
   // Rename chat
-  // {Synchronized conversation rename with Cloudflare Worker D1 backend} [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
+  // Synchronized conversation rename with Cloudflare Worker D1 backend [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
   const handleRenameChat = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const chat = chats.find((c) => c.id === id);
@@ -1635,7 +1647,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
     e.target.style.height = `${Math.max(e.target.scrollHeight, INPUT_MIN_HEIGHT)}px`;
   };
 
-  // {Filter chat history sessions by title match exclusively for signed-in users} [Commented by: Google AI Studio on 17/10/2026 02:47 AM]
+  // Filter chat history sessions by title match exclusively for signed-in users [Commented by: Google AI Studio on 17/10/2026 02:47 AM]
   const filteredChats = currentUser && historySearchQuery.trim()
     ? chats.filter((c) => {
         const query = historySearchQuery.trim().toLowerCase();
@@ -1644,13 +1656,150 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
       })
     : chats;
 
-  // {Rendered container with dynamic theme classes for Neon Black and Minimalist Light} [Commented by: Google AI Studio on 20/10/2026 11:32 AM]
+  // Helper to extract clean preview text from ChatMessage content [Commented by: Google AI Studio on 23/10/2026 12:38 AM]
+  const getMessageSnippet = (content: ChatMessage['content'], maxLength = 130): string => {
+    let text = '';
+    if (typeof content === 'string') {
+      text = content;
+    } else if (Array.isArray(content)) {
+      text = content
+        .map((part) => part.text || (part.image_url ? '[Image]' : ''))
+        .filter(Boolean)
+        .join(' ');
+    }
+    text = text
+      .replace(/```[\s\S]*?```/g, '[Code]')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/[#*_~>]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (text.length > maxLength) {
+      return text.slice(0, maxLength) + '...';
+    }
+    return text || '(Empty message)';
+  };
+
+  // Quick preview hover handler: shows first 2 messages without selecting chat [Commented by: Google AI Studio on 23/10/2026 12:38 AM]
+  const handleChatTitleMouseEnter = (chat: ChatSession, e: React.MouseEvent<HTMLElement>) => {
+    if (previewTimerRef.current) {
+      clearTimeout(previewTimerRef.current);
+    }
+    const target = e.currentTarget;
+    previewTimerRef.current = window.setTimeout(async () => {
+      const rect = target.getBoundingClientRect();
+      const popupWidth = 320;
+      const popupHeight = 220;
+
+      let x = rect.right + 10;
+      if (x + popupWidth > window.innerWidth) {
+        x = Math.max(10, rect.left - popupWidth - 10);
+      }
+      let y = Math.max(12, rect.top - 8);
+      if (y + popupHeight > window.innerHeight) {
+        y = Math.max(12, window.innerHeight - popupHeight - 12);
+      }
+
+      if (chat.messages && chat.messages.length > 0) {
+        setQuickPreview({
+          chatId: chat.id,
+          title: chat.title || 'Untitled Chat',
+          x,
+          y,
+          messages: chat.messages.slice(0, 2),
+          isLoading: false
+        });
+        return;
+      }
+
+      if (previewCacheRef.current[chat.id]) {
+        setQuickPreview({
+          chatId: chat.id,
+          title: chat.title || 'Untitled Chat',
+          x,
+          y,
+          messages: previewCacheRef.current[chat.id].slice(0, 2),
+          isLoading: false
+        });
+        return;
+      }
+
+      if (currentUser) {
+        setQuickPreview({
+          chatId: chat.id,
+          title: chat.title || 'Untitled Chat',
+          x,
+          y,
+          messages: [],
+          isLoading: true
+        });
+
+        try {
+          const res = await workerClient.getMessages(chat.id);
+          if (res.success && res.data?.messages) {
+            const loadedMessages: ChatMessage[] = await Promise.all(
+              res.data.messages.slice(0, 2).map(async (m) => {
+                let plainContent = m.content;
+                let plainReasoning = m.reasoning;
+                if (cryptoKey) {
+                  if (plainContent && plainContent.startsWith('enc:')) {
+                    plainContent = await decryptText(plainContent, cryptoKey);
+                  }
+                  if (plainReasoning && plainReasoning.startsWith('enc:')) {
+                    plainReasoning = await decryptText(plainReasoning, cryptoKey);
+                  }
+                }
+                return {
+                  role: m.role,
+                  content: plainContent,
+                  sources: m.sources,
+                  reasoning: plainReasoning
+                };
+              })
+            );
+            previewCacheRef.current[chat.id] = loadedMessages;
+            setQuickPreview((prev) =>
+              prev && prev.chatId === chat.id
+                ? { ...prev, messages: loadedMessages, isLoading: false }
+                : prev
+            );
+          } else {
+            setQuickPreview((prev) =>
+              prev && prev.chatId === chat.id ? { ...prev, isLoading: false } : prev
+            );
+          }
+        } catch {
+          setQuickPreview((prev) =>
+            prev && prev.chatId === chat.id ? { ...prev, isLoading: false } : prev
+          );
+        }
+      } else {
+        setQuickPreview({
+          chatId: chat.id,
+          title: chat.title || 'Untitled Chat',
+          x,
+          y,
+          messages: [],
+          isLoading: false
+        });
+      }
+    }, 140);
+  };
+
+  const handleChatTitleMouseLeave = () => {
+    if (previewTimerRef.current) {
+      clearTimeout(previewTimerRef.current);
+      previewTimerRef.current = null;
+    }
+    setQuickPreview(null);
+  };
+
+  // Rendered container with dynamic theme classes for Neon Black and Minimalist Light [Commented by: Google AI Studio on 20/10/2026 11:32 AM]
   return (
     <div className={`flex h-screen w-screen relative overflow-hidden transition-colors duration-200 ${
       theme === 'Minimalist Light' ? 'bg-[#f8f9fa] text-neutral-900' : 'bg-black text-white'
     }`}>
       {/* SIDEBAR */}
-      {/* {Slide-over drawer animation for mobile history sidebar with smooth 300ms ease-in-out transition} [Commented by: Google AI Studio on 22/10/2026 04:51 AM] */}
+      {/* Slide-over drawer animation for mobile history sidebar with smooth 300ms ease-in-out transition  [Commented by: Google AI Studio on 22/10/2026 04:51 AM] */}
       <aside
         className={`${
           sidebarOpen ? 'max-sm:translate-x-0 sm:flex sm:w-[300px]' : 'max-sm:-translate-x-full sm:hidden'
@@ -1660,7 +1809,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
             : 'bg-[#0a0a0a] max-sm:bg-[#0a0a0a] border-r border-[#262626] text-white shadow-2xl sm:shadow-none'
         }`}
       >
-        {/* {Sidebar header with right-padding on mobile to provide clearance for the top-right close button} [Commented by: Google AI Studio on 21/10/2026 05:45 AM] */}
+        {/* Sidebar header with right-padding on mobile to provide clearance for the top-right close button  [Commented by: Google AI Studio on 21/10/2026 05:45 AM] */}
         <div className={`flex items-center pb-3 border-b mb-3 ${
           theme === 'Minimalist Light' ? 'border-[#e5e7eb]' : 'border-[#262626]'
         }`}>
@@ -1672,7 +1821,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         </div>
 
         {/* Chat History Search Bar (Available exclusively to signed-in users) */}
-        {/* {Restricted chat history search bar visibility and title filtering exclusively to signed-in users} [Commented by: Google AI Studio on 17/10/2026 02:47 AM] */}
+        {/* Restricted chat history search bar visibility and title filtering exclusively to signed-in users  [Commented by: Google AI Studio on 17/10/2026 02:47 AM] */}
         {currentUser && (
           <div className="relative mb-3">
             <input
@@ -1703,7 +1852,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
           </div>
         )}
 
-        {/* {Cloudflare Worker history sync indicator and non-intrusive offline fallback status} [Commented by: Google AI Studio on 14/10/2026 10:55 AM] */}
+        {/* Cloudflare Worker history sync indicator and non-intrusive offline fallback status  [Commented by: Google AI Studio on 14/10/2026 10:55 AM] */}
         {isHistorySyncing && (
           <div className="text-[10px] text-neutral-400 mb-2 flex items-center gap-1.5 px-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -1721,7 +1870,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
             </button>
           </div>
         )}
-        {/* {Non-intrusive IndexedDB storage quota warning} [Commented by: Google AI Studio on 15/10/2026 9:22 AM] */}
+        {/* Non-intrusive IndexedDB storage quota warning  [Commented by: Google AI Studio on 15/10/2026 09:22 AM] */}
         {quotaErrorNotice && (
           <div className="bg-[#2a0e0e] border border-[#dc2626] text-rose-200 px-2 py-1.5 rounded text-[10px] mb-2 flex items-center justify-between">
             <span className="leading-tight">{quotaErrorNotice}</span>
@@ -1735,8 +1884,8 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         )}
 
         {/* History List */}
-        {/* {Increased empty history text font size per focus-mode instruction} [Commented by: Google AI Studio on 18/10/2026 01:07 PM] */}
-        <div className="flex-1 overflow-y-auto space-y-1">
+        {/* Increased empty history text font size per focus-mode instruction  [Commented by: Google AI Studio on 18/10/2026 01:07 PM] */}
+        <div className="flex-1 overflow-y-auto space-y-1" onScroll={handleChatTitleMouseLeave}>
           {chats.length === 0 ? (
             <div className="text-sm text-neutral-500 p-2 italic">No chat history yet</div>
           ) : filteredChats.length === 0 ? (
@@ -1764,7 +1913,15 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                     : 'text-neutral-400 hover:bg-[#151515] hover:text-white'
                 }`}
               >
-                <span className="truncate max-w-[170px]">{c.title || 'Untitled Chat'}</span>
+                {/* Chat title with quick preview on hover without selecting [Commented by: Google AI Studio on 23/10/2026 12:40 AM] */}
+                <span
+                  onMouseEnter={(e) => handleChatTitleMouseEnter(c, e)}
+                  onMouseLeave={handleChatTitleMouseLeave}
+                  className="truncate max-w-[170px] hover:text-emerald-400 transition-colors"
+                  title="Hover for quick preview"
+                >
+                  {c.title || 'Untitled Chat'}
+                </span>
                 <div className="flex items-center gap-1.5 opacity-60 hover:opacity-100">
                   <span onClick={(e) => handleRenameChat(c.id, e)} title="Rename">
                     ✏️
@@ -1792,7 +1949,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
             Clear Chat History
           </button>
 
-          {/* {Render Settings button for signed-in users or 'About nanobot' button in exact same position for non-signed-in users} [Commented by: Google AI Studio on 20/10/2026 11:32 AM] */}
+          {/* Render Settings button for signed-in users or 'About nanobot' button in exact same position for non-signed-in users  [Commented by: Google AI Studio on 20/10/2026 11:32 AM] */}
           {currentUser ? (
             <button
               onClick={() => setIsSettingsOpen(true)}
@@ -1821,10 +1978,10 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
       </aside>
 
       {/* MAIN VIEWPORT */}
-      {/* {When mobile sidebar is opened, this sidebar button rides on top with z-50 in the top-right, while all other buttons, chat box, and text disappear} [Commented by: Google AI Studio on 21/10/2026 05:45 AM] */}
+      {/* When mobile sidebar is opened, this sidebar button rides on top with z-50 in the top-right, while all other buttons, chat box, and text disappear  [Commented by: Google AI Studio on 21/10/2026 05:45 AM] */}
       <main className="flex-1 relative flex flex-col items-center h-full overflow-hidden">
         {/* Top Controls (Left: Sidebar Toggle & New Chat; positioned in top-right aligned with History divider line on mobile when sidebar is open) */}
-        {/* {Moved button a bit upwards on mobile with max-sm:top-[11px] to perfectly align bottom edge with divider line under History text} [Commented by: Google AI Studio on 21/10/2026 06:08 AM] */}
+        {/* Moved button a bit upwards on mobile with max-sm:top-[11px] to perfectly align bottom edge with divider line under History text  [Commented by: Google AI Studio on 21/10/2026 06:08 AM] */}
         <div className={`absolute ${
           sidebarOpen ? 'max-sm:top-[11px] max-sm:right-[15px] max-sm:left-auto top-4 left-4' : 'top-4 left-4'
         } flex gap-2 z-50`}>
@@ -1869,7 +2026,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         <div className={`absolute top-4 right-4 flex items-center gap-2 z-30 ${
           sidebarOpen ? 'max-sm:hidden' : ''
         }`}>
-          {/* {Render 'Import previous chat' button strictly for signed-in users before chatting has started} [Commented by: Google AI Studio on 19/10/2026 11:19 AM] */}
+          {/* Render 'Import previous chat' button strictly for signed-in users before chatting has started  [Commented by: Google AI Studio on 19/10/2026 11:19 AM] */}
           {currentUser && (!activeChat || activeChat.messages.length === 0) && (
             <button
               onClick={() => importFileInputRef.current?.click()}
@@ -1903,7 +2060,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
           )}
 
           {/* Share Button (Available exclusively to signed-in users) */}
-          {/* {Share button generating a public snapshot URL with 30-day retention and anti-scraping protections} [Commented by: Google AI Studio on 22/10/2026 04:51 AM] */}
+          {/* Share button generating a public snapshot URL with 30-day retention and anti-scraping protections  [Commented by: Google AI Studio on 22/10/2026 04:51 AM] */}
           {currentUser && activeChat && (
             <button
               onClick={handleShareActiveChat}
@@ -1980,7 +2137,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         )}
 
         {/* Chat Messages Area */}
-        {/* {Attached onScroll listener for user scroll detection during active AI streaming} [Commented by: Google AI Studio on 22/10/2026 04:51 AM] */}
+        {/* Attached onScroll listener for user scroll detection during active AI streaming  [Commented by: Google AI Studio on 22/10/2026 04:51 AM] */}
         <div
           ref={chatAreaRef}
           onScroll={handleChatScroll}
@@ -1991,7 +2148,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
           }`}
         >
           {/* Shared Chat Session Banner */}
-          {/* {View-only shared chat notification banner with 'Continue this chat' action button} [Commented by: Google AI Studio on 22/10/2026 04:51 AM] */}
+          {/* View-only shared chat notification banner with 'Continue this chat' action button  [Commented by: Google AI Studio on 22/10/2026 04:51 AM] */}
           {sharedChatView && (
             <div className={`p-4 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-2 animate-in fade-in duration-200 ${
               theme === 'Minimalist Light'
@@ -2043,7 +2200,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                         {m.displayAttachments.map((att, aIdx) => (
                           <div key={aIdx} className="flex items-center gap-2 flex-wrap">
                             <span>{att.type === 'image' ? '🖼️ Image' : `📄 ${att.name}`}</span>
-                            {/* {Clear UI distinction when raw file bytes reside only in original browser while preserved cloud output is loaded} [Commented by: Google AI Studio on 15/10/2026 9:22 AM] */}
+                            {/* Clear UI distinction when raw file bytes reside only in original browser while preserved cloud output is loaded  [Commented by: Google AI Studio on 15/10/2026 09:22 AM] */}
                             {att.isLocalMissing ? (
                               <span
                                 className="text-[10px] text-amber-300 bg-amber-950/60 border border-amber-800/60 px-1.5 py-0.5 rounded font-mono"
@@ -2173,7 +2330,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         </div>
 
         {/* Composer Wrap */}
-        {/* {Moved chat box slightly downwards to top-[34vh] so the neon aura does not touch the nanobot title text} [Commented by: Google AI Studio on 21/10/2026 06:17 AM] */}
+        {/* Moved chat box slightly downwards to top-[34vh] so the neon aura does not touch the nanobot title text  [Commented by: Google AI Studio on 21/10/2026 06:17 AM] */}
         <div
           className={`absolute left-1/2 -translate-x-1/2 w-full max-w-[750px] px-4 transition-all duration-300 z-20 ${
             sidebarOpen ? 'max-sm:hidden' : ''
@@ -2182,7 +2339,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
           }`}
         >
           {/* Auto-scroll Snap Button: Appears when user scrolls up during active streaming; clicking snaps to bottom and activates auto-scroll */}
-          {/* {Down arrow floating button snapped to the bottom to resume auto-scroll streaming} [Commented by: Google AI Studio on 22/10/2026 04:51 AM] */}
+          {/* Down arrow floating button snapped to the bottom to resume auto-scroll streaming  [Commented by: Google AI Studio on 22/10/2026 04:51 AM] */}
           {isGenerating && isUserScrolledUp && (
             <div className="flex justify-center mb-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
               <button
@@ -2203,7 +2360,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
             </div>
           )}
 
-          {/* {Storage quota and sync status notices} [Commented by: Google AI Studio on 15/10/2026 09:57 AM] */}
+          {/* Storage quota and sync status notices  [Commented by: Google AI Studio on 15/10/2026 09:57 AM] */}
           {quotaErrorNotice && (
             <div className="mb-2 px-3 py-1.5 rounded-lg bg-amber-950/80 border border-amber-600/60 text-amber-200 text-xs flex items-center justify-between shadow-lg">
               <span>⚠️ {quotaErrorNotice}</span>
@@ -2336,7 +2493,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
       </main>
 
       {/* AUTH MODAL */}
-      {/* {Removed email login concept completely: Sign Up directly opens for username, password, and API keys} [Commented by: Google AI Studio on 16/10/2026 10:55 PM] */}
+      {/* Removed email login concept completely: Sign Up directly opens for username, password, and API keys  [Commented by: Google AI Studio on 16/10/2026 10:55 PM] */}
       {authModalMode && (
         <AuthModal
           mode={authModalMode}
@@ -2352,7 +2509,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
       )}
 
       {/* SETTINGS MODAL */}
-      {/* {Passed theme and onThemeChange props to SettingsModal for switching between Neon Black and Minimalist Light} [Commented by: Google AI Studio on 20/10/2026 11:33 AM] */}
+      {/* Passed theme and onThemeChange props to SettingsModal for switching between Neon Black and Minimalist Light  [Commented by: Google AI Studio on 20/10/2026 11:33 AM] */}
       {currentUser && (
         <SettingsModal
           isOpen={isSettingsOpen}
@@ -2374,12 +2531,75 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         />
       )}
 
-      {/* {Standalone About modal for non-signed-in users} [Commented by: Google AI Studio on 18/10/2026 12:58 AM] */}
+      {/* Standalone About modal for non-signed-in users  [Commented by: Google AI Studio on 18/10/2026 12:58 AM] */}
       <AboutModal
         isOpen={isAboutModalOpen}
         onClose={() => setIsAboutModalOpen(false)}
         connectedPlugins={currentUser?.plugins_connected}
       />
+
+      {/* Quick Preview Tooltip for sidebar chat title hover without selecting [Commented by: Google AI Studio on 23/10/2026 12:40 AM] */}
+      {quickPreview && (
+        <div
+          style={{ top: `${quickPreview.y}px`, left: `${quickPreview.x}px` }}
+          className={`fixed z-60 w-80 max-w-[calc(100vw-24px)] rounded-xl shadow-2xl p-3.5 pointer-events-none transition-all duration-150 animate-in fade-in zoom-in-95 border ${
+            theme === 'Minimalist Light'
+              ? 'bg-white/95 border-neutral-300 text-neutral-900 shadow-neutral-300/50 backdrop-blur-md'
+              : 'bg-[#121212]/95 border-[#333] text-neutral-200 shadow-black/80 backdrop-blur-md'
+          }`}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-inherit opacity-90">
+            <span className="text-xs font-semibold truncate max-w-[200px]">
+              {quickPreview.title}
+            </span>
+            <span className={`text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded font-medium border ${
+              theme === 'Minimalist Light'
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                : 'bg-emerald-950/60 text-emerald-400 border-emerald-800/60'
+            }`}>
+              Quick Preview
+            </span>
+          </div>
+
+          {/* Content: First 2 messages */}
+          {quickPreview.isLoading ? (
+            <div className="py-4 text-center text-xs opacity-60 flex items-center justify-center gap-2">
+              <span className="animate-spin inline-block">⏳</span>
+              <span>Loading preview messages...</span>
+            </div>
+          ) : quickPreview.messages.length === 0 ? (
+            <div className="py-3 text-center text-xs italic opacity-50">
+              No messages in this conversation yet.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {quickPreview.messages.slice(0, 2).map((msg, idx) => (
+                <div
+                  key={idx}
+                  className={`rounded-lg p-2 text-[11px] leading-relaxed border ${
+                    msg.role === 'user'
+                      ? theme === 'Minimalist Light'
+                        ? 'bg-neutral-100 border-neutral-200 text-neutral-800'
+                        : 'bg-[#1c1c1c] border-[#2c2c2c] text-neutral-300'
+                      : theme === 'Minimalist Light'
+                      ? 'bg-emerald-50/70 border-emerald-200 text-neutral-900'
+                      : 'bg-[#0f241a] border-emerald-900/40 text-emerald-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 font-semibold text-[10px] uppercase tracking-wider mb-1 opacity-75">
+                    <span>{msg.role === 'user' ? '👤 User' : '⚡ nanobot'}</span>
+                    <span className="text-[9px] opacity-60 font-mono">#{idx + 1}</span>
+                  </div>
+                  <p className="line-clamp-3 text-[11px]">
+                    {getMessageSnippet(msg.content)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-# {GitHub Actions workflow verifying frontend build and TypeScript checks} [Commented by: Google AI Studio on 15/10/2026 10:16 AM]
+# GitHub Actions workflow verifying frontend build and TypeScript checks [Commented by: Google AI Studio on 15/10/2026 10:16 AM]
 
 name: Verify Frontend Build
 
@@ -8,7 +8,6 @@ on:
       - main
     paths:
       - 'src/**'
-      - 'public/**'
       - 'package.json'
       - 'package-lock.json'
       - 'vite.config.ts'
@@ -16,7 +15,7 @@ on:
       - 'index.html'
       - '.github/workflows/verify-frontend.yml'
   pull_request:
-# {Explicit read-only permissions block resolving CodeQL actions/missing-workflow-permissions vulnerability} [Commented by: Google AI Studio on 22/10/2026 04:47 AM]
+# Explicit read-only permissions block resolving CodeQL actions/missing-workflow-permissions vulnerability [Commented by: Google AI Studio on 22/10/2026 04:47 AM]
 permissions:
   contents: read
 
@@ -28,11 +27,11 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # {Configured Node.js setup with npm cache and reproducible npm ci using committed package-lock.json} [Commented by: Google AI Studio on 17/10/2026 03:13 AM]
+      # Configured Node.js 24 LTS setup with npm cache and reproducible npm ci using committed package-lock.json [Commented by: Google AI Studio on 22/10/2026 06:25 AM]
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: 'npm'
           cache-dependency-path: 'package-lock.json'
 

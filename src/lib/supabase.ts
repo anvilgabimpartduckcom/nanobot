@@ -1,8 +1,8 @@
-// {Enhanced Supabase client with live table syncing and connection probing} [Commented by: Google AI Studio on 10/13/2026 03:17 AM]
+// Enhanced Supabase client with live table syncing and connection probing [Commented by: Google AI Studio on 13/10/2026 03:17 AM]
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// {Added multi-prefix environment variable support for Netlify and Supabase} [Commented by: Google AI Studio on 10/13/2026 10:17 AM]
+// Added multi-prefix environment variable support for Netlify and Supabase [Commented by: Google AI Studio on 13/10/2026 10:17 AM]
 const supabaseUrl =
   (import.meta.env.VITE_SUPABASE_URL as string) ||
   (import.meta.env.NEXT_PUBLIC_SUPABASE_DATABASE_URL as string) ||
@@ -42,11 +42,11 @@ export interface UserProfile {
     [key: string]: boolean;
   };
   salt: string;
-  // {Added theme preference support for Neon Black and Minimalist Light themes} [Commented by: Google AI Studio on 20/10/2026 11:27 AM]
+  // Added theme preference support for Neon Black and Minimalist Light themes [Commented by: Google AI Studio on 20/10/2026 11:27 AM]
   theme?: 'Neon Black' | 'Minimalist Light';
 }
 
-// {Added FileCodeOutput model and Supabase persistence functions for AI file reading code outputs} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
+// Added FileCodeOutput model and Supabase persistence functions for AI file reading code outputs [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
 export interface FileCodeOutput {
   id?: string;
   user_id: string;
@@ -204,7 +204,7 @@ export async function removeEncryptedChatRecord(chatId: string) {
   }
 }
 
-// {Save AI file reader code outputs to Supabase public.file_code_outputs table} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
+// Save AI file reader code outputs to Supabase public.file_code_outputs table [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
 export async function saveFileCodeOutputToSupabase(record: FileCodeOutput): Promise<boolean> {
   const localKey = `nanobot_file_outputs_${record.user_id}_${record.conversation_id}`;
   try {
@@ -245,7 +245,7 @@ export async function saveFileCodeOutputToSupabase(record: FileCodeOutput): Prom
   return true;
 }
 
-// {Fetch AI file reader code outputs from Supabase public.file_code_outputs table} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
+// Fetch AI file reader code outputs from Supabase public.file_code_outputs table [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
 export async function fetchFileCodeOutputsFromSupabase(
   userId: string,
   conversationId: string
@@ -275,7 +275,7 @@ export async function fetchFileCodeOutputsFromSupabase(
   }
 }
 
-// {Delete AI file reader code outputs from Supabase and local cache when a conversation is deleted} [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
+// Delete AI file reader code outputs from Supabase and local cache when a conversation is deleted [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
 export async function deleteFileCodeOutputsFromSupabase(
   userId: string,
   conversationId: string
@@ -307,7 +307,7 @@ export async function deleteFileCodeOutputsFromSupabase(
   return true;
 }
 
-// {Purge expired AI file reader code outputs older than 30 days from Supabase and local storage} [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
+// Purge expired AI file reader code outputs older than 30 days from Supabase and local storage [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
 export async function purgeExpiredFileCodeOutputs(userId: string): Promise<void> {
   const thirtyDaysAgoIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   if (supabase) {

@@ -1,11 +1,11 @@
-// {Created two-column SettingsModal with Account, AI Configuration, MCP Plugins, and Notion Docs} [Commented by: Google AI Studio on 12/10/2026 10:56 AM]
+// Created two-column SettingsModal with Account, AI Configuration, MCP Plugins, and Notion Docs [Commented by: Google AI Studio on 12/10/2026 10:56 AM]
 
 import React, { useState } from 'react';
 import { UserProfile, supabase, isSupabaseConfigured, getLocalProfiles, saveLocalProfiles } from '../lib/supabase';
 import { MCP_PLUGINS, PluginDefinition } from '../lib/plugins';
 import { deriveKeyFromPassword, encryptText } from '../lib/crypto';
 
-// {Added theme toggle support between Neon Black and Minimalist Light themes in SettingsModal} [Commented by: Google AI Studio on 20/10/2026 11:28 AM]
+// Added theme toggle support between Neon Black and Minimalist Light themes in SettingsModal [Commented by: Google AI Studio on 20/10/2026 11:28 AM]
 export type AppTheme = 'Neon Black' | 'Minimalist Light';
 
 interface SettingsModalProps {
@@ -38,7 +38,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const isLight = currentTheme === 'Minimalist Light';
 
-  // {Updated handleSwitchTheme to save chosen theme to Supabase with error handling and local storage sync} [Commented by: Google AI Studio on 20/10/2026 11:47 AM]
+  // Updated handleSwitchTheme to save chosen theme to Supabase with error handling and local storage sync [Commented by: Google AI Studio on 20/10/2026 11:47 AM]
   const handleSwitchTheme = async (nextTheme: AppTheme) => {
     setCurrentTheme(nextTheme);
     localStorage.setItem('nanobot_theme', nextTheme);
@@ -109,11 +109,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   if (!isOpen) return null;
 
   // Handle Account Save
-  // {Zero-knowledge encryption for updated API credentials before storing in Supabase} [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
+  // Zero-knowledge encryption for updated API credentials before storing in Supabase [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
   const handleSaveAccount = async () => {
     setStatusMessage(null);
     try {
-      // {Saved chosen theme option to Supabase alongside other user provided data} [Commented by: Google AI Studio on 20/10/2026 11:40 AM]
+      // Saved chosen theme option to Supabase alongside other user provided data [Commented by: Google AI Studio on 20/10/2026 11:40 AM]
       const updated: UserProfile = {
         ...user,
         username: username.trim(),
@@ -270,7 +270,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  // {Configured MCP permission authorization and account connection flow} [Commented by: Google AI Studio on 19/10/2026 02:25 AM]
+  // Configured MCP permission authorization and account connection flow [Commented by: Google AI Studio on 19/10/2026 02:25 AM]
   const handlePluginAction = (plugin: PluginDefinition) => {
     if (connectedPlugins[plugin.id]) {
       const nextPlugins = {
@@ -314,7 +314,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      {/* {Themed container supporting both Neon Black and Minimalist Light themes} [Commented by: Google AI Studio on 20/10/2026 11:29 AM] */}
+      {/* Themed container supporting both Neon Black and Minimalist Light themes  [Commented by: Google AI Studio on 20/10/2026 11:29 AM] */}
       <div className={`relative w-full max-w-4xl h-[620px] rounded-2xl flex overflow-hidden shadow-2xl transition-colors duration-200 ${
         isLight ? 'bg-white border border-neutral-200 text-neutral-900' : 'bg-[#0c0c0c] border border-[#2b2b2b] text-white'
       }`}>
@@ -352,7 +352,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             Account
           </button>
 
-          {/* {Added Appearance tab navigation button with live theme indicator} [Commented by: Google AI Studio on 20/10/2026 11:29 AM] */}
+          {/* Added Appearance tab navigation button with live theme indicator  [Commented by: Google AI Studio on 20/10/2026 11:29 AM] */}
           <button
             onClick={() => setActiveTab('appearance')}
             className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer flex items-center justify-between ${
@@ -384,7 +384,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             AI Configuration
           </button>
 
-          {/* {Configured Plugin Marketplace navigation tab in SettingsModal} [Commented by: Google AI Studio on 19/10/2026 10:50 AM] */}
+          {/* Configured Plugin Marketplace navigation tab in SettingsModal  [Commented by: Google AI Studio on 19/10/2026 10:50 AM] */}
           <button
             onClick={() => setActiveTab('plugins')}
             className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer ${
@@ -427,7 +427,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* TAB 1: ACCOUNT */}
           {activeTab === 'account' && (
             <div className="space-y-5 max-w-xl">
-              {/* {Added Supabase Cloud connectivity indicator in Account settings} [Commented by: Google AI Studio on 13/10/2026 03:20 AM] */}
+              {/* Added Supabase Cloud connectivity indicator in Account settings  [Commented by: Google AI Studio on 13/10/2026 03:20 AM] */}
               <div className={`flex items-center justify-between pb-2 border-b mb-4 ${
                 isLight ? 'border-neutral-200' : 'border-neutral-800'
               }`}>
@@ -533,7 +533,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 />
               </div>
 
-              {/* {Theme toggle in Account Settings for switching between Neon Black and Minimalist Light} [Commented by: Google AI Studio on 20/10/2026 11:29 AM] */}
+              {/* Theme toggle in Account Settings for switching between Neon Black and Minimalist Light  [Commented by: Google AI Studio on 20/10/2026 11:29 AM] */}
               <div className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
                 isLight ? 'bg-neutral-50 border-neutral-200' : 'bg-[#111] border-[#262626]'
               }`}>
@@ -612,7 +612,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           )}
 
           {/* TAB: APPEARANCE */}
-          {/* {Created dedicated Appearance tab in SettingsModal with preview cards and theme toggling between Neon Black and Minimalist Light} [Commented by: Google AI Studio on 20/10/2026 11:29 AM] */}
+          {/* Created dedicated Appearance tab in SettingsModal with preview cards and theme toggling between Neon Black and Minimalist Light  [Commented by: Google AI Studio on 20/10/2026 11:29 AM] */}
           {activeTab === 'appearance' && (
             <div className="space-y-6 max-w-xl">
               <div className={`flex items-center justify-between pb-3 border-b ${
@@ -813,7 +813,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           )}
 
           {/* TAB 3: PLUGIN MARKETPLACE */}
-          {/* {Configured Plugin Marketplace section with toggle switches to authorize MCP permissions and enable tools for chat} [Commented by: Google AI Studio on 19/10/2026 10:50 AM] */}
+          {/* Configured Plugin Marketplace section with toggle switches to authorize MCP permissions and enable tools for chat  [Commented by: Google AI Studio on 19/10/2026 10:50 AM] */}
           {activeTab === 'plugins' && (
             <div className="space-y-4 max-w-xl">
               <div>
@@ -1031,7 +1031,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           )}
 
           {/* TAB 4: ABOUT NANOBOT */}
-          {/* {Updated About nanobot documentation with privacy statement, developer contact, Notion 101 link, Ctrl+S backup warning, GitHub source link, and dynamic alphabetical service credits with active plugin insertion} [Commented by: Google AI Studio on 16/10/2026 10:55 PM] */}
+          {/* Updated About nanobot documentation with privacy statement, developer contact, Notion 101 link, Ctrl+S backup warning, GitHub source link, and dynamic alphabetical service credits with active plugin insertion  [Commented by: Google AI Studio on 16/10/2026 10:55 PM] */}
           {activeTab === 'about' && (() => {
             const baseServices = [
               'Cloudflare',
@@ -1055,7 +1055,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             return (
               <div className="space-y-4 max-w-xl text-neutral-300">
                 <h2 className="text-xl font-bold font-serif text-white">About nanobot</h2>
-                {/* {Rewrote description to state 'open source code AI chatbot' and added license hyperlink} [Commented by: Google AI Studio on 21/10/2026 06:08 AM] */}
+                {/* Rewrote description to state 'open source code AI chatbot' and added license hyperlink  [Commented by: Google AI Studio on 21/10/2026 06:08 AM] */}
                 <p className="text-sm leading-relaxed">
                   Everyone should get to use AI, and that too without giving away their data. So we created nanobot, an open source code AI chatbot which respects your privacy, and is free to use. Users bring their own API keys, which helps in further keeping nanobot completely free to use.
                   <br />
@@ -1068,7 +1068,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     See the license under which nanobot comes.
                   </a>
                 </p>
-                {/* {Updated developer contact section to include GitHub discussions link and preserved email box per user specification} [Commented by: Google AI Studio on 22/10/2026 04:47 AM] */}
+                {/* Updated developer contact section to include GitHub discussions link and preserved email box per user specification  [Commented by: Google AI Studio on 22/10/2026 04:47 AM] */}
                 <p className="text-sm leading-relaxed">
                   For more information, For reporting a bug, issue, or vulnerability, join the{' '}
                   <a
@@ -1108,7 +1108,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </ol>
                 </div>
 
-                {/* {Added hyperlink for latest update in nanobot above Github source code link} [Commented by: Google AI Studio on 21/10/2026 06:08 AM] */}
+                {/* Added hyperlink for latest update in nanobot above Github source code link  [Commented by: Google AI Studio on 21/10/2026 06:08 AM] */}
                 <p className="text-sm pt-2 leading-relaxed">
                   <a
                     href="https://github.com/anvilgabimpartduckcom/nanobot#-latest-updates"
@@ -1137,7 +1137,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <p className="text-[11px] text-neutral-500">
                     All terms and conditions are under these services.
                   </p>
-                  {/* {Added centered 'Made in INDIA 🇮🇳 ❤️' statement under terms and conditions} [Commented by: Google AI Studio on 22/10/2026 05:36 AM] */}
+                  {/* Added centered 'Made in INDIA 🇮🇳 ❤️' statement under terms and conditions  [Commented by: Google AI Studio on 22/10/2026 05:36 AM] */}
                   <p className="text-center text-xs text-neutral-300 font-medium pt-2">
                     Made in INDIA 🇮🇳 ❤️
                   </p>

@@ -1,4 +1,4 @@
-// {Implemented client-side Web Crypto AES-GCM-256 zero-knowledge encryption} [Commented by: Google AI Studio on 12/10/2026 10:48 AM]
+// Implemented client-side Web Crypto AES-GCM-256 zero-knowledge encryption [Commented by: Google AI Studio on 12/10/2026 10:48 AM]
 
 export interface EncryptedPayload {
   ciphertext: string;
@@ -105,7 +105,7 @@ export async function decryptData(ciphertextBase64: string, ivBase64: string, ke
   }
 }
 
-// {Added helper functions for zero-knowledge transparent string encryption and decryption to keep user data unreadable in Cloudflare and Supabase} [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
+// Added helper functions for zero-knowledge transparent string encryption and decryption to keep user data unreadable in Cloudflare and Supabase [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
 export async function encryptText(text: string, key: CryptoKey, salt: string): Promise<string> {
   if (!text) return text;
   try {

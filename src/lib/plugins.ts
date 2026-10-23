@@ -1,4 +1,4 @@
-// {Updated MCP plugins registry with OAuth2 scopes, comprehensive tool descriptions, and permission metadata} [Commented by: Google AI Studio on 19/10/2026 10:46 AM]
+// Updated MCP plugins registry with OAuth2 scopes, comprehensive tool descriptions, and permission metadata [Commented by: Google AI Studio on 19/10/2026 10:46 AM]
 
 export interface MCPToolDefinition {
   name: string;

@@ -1,7 +1,7 @@
-<!-- {Added Latest Updates section and updated MCP plugins reference in README.md} [Commented by: Google AI Studio on 19/10/2026 02:25 AM] -->
+<!-- Added Latest Updates section and updated MCP plugins reference in README.md [Commented by: Google AI Studio on 19/10/2026 02:25 AM] -->
 
 # 📁 Project Structure
-<!-- Placed a folder emoji [Commented by: Developer on 21/10/2026 11:20 AM] -->
+<!-- Placed a folder emoji [Commented by: Google AI Studio on 21/10/2026 11:20 AM] -->
 
 ```
 nanobot/
@@ -18,8 +18,6 @@ nanobot/
 ├── netlify.toml                # Netlify SPA build and redirect rules
 ├── package.json                # Frontend Node.js dependencies and scripts
 ├── package-lock.json           # Exact resolved dependency tree for reproducible CI builds
-├── public/
-│   └── preview.png             # Application preview banner asset
 ├── tsconfig.json               # TypeScript configuration
 ├── vite.config.ts              # Vite build configuration with Tailwind CSS plugin
 ├── README.md                   # Project documentation
@@ -52,13 +50,13 @@ nanobot/
 ```
 
 # 📢 Latest Updates
-<!-- Placed a megaphone emoji [Commented by: Developer on 21/10/2026 11:20 AM] -->
-<!-- {Updated Latest Updates with lowercase account copy fix and centered Made in INDIA attribution in About sections} [Commented by: Google AI Studio on 22/10/2026 05:38 AM] -->
+<!-- Placed a megaphone emoji [Commented by: Google AI Studio on 21/10/2026 11:20 AM] -->
+<!-- Updated Latest Updates with Supabase Oct 30 2026 Data API access grants for public schema tables [Commented by: Google AI Studio on 23/10/2026 12:50 AM] -->
 
-- **AuthModal Sign-Up Copy Correction**:
-  - Corrected the capitalization of "Account" to lowercase "account" in the bottom setup help link: changed "Need Help with creating Account? Visit here" to "Need Help with creating account? Visit here".
-
-- **Made in INDIA Attribution in About Sections**:
-  - Added a centered attribution line `Made in INDIA 🇮🇳 ❤️` directly under `All terms and conditions are under these services.` across both the standalone `AboutModal` (for visitors) and `SettingsModal` (for authenticated users).
+- **Supabase Oct 30, 2026 Data API Access Policy Compatibility**:
+  - Audited all Supabase SQL definitions, schema migrations, and client interactions across the codebase.
+  - Added explicit least-privilege `GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role` and table-level `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.user_profiles, public.file_code_outputs TO anon, authenticated, service_role` in `supabase/schema.sql`.
+  - Preserved strict Row Level Security (RLS) policies and client-side zero-knowledge encryption guarantees on sensitive fields (user credentials, salt, custom instructions, and code outputs).
+  - Ensured fresh database setups, schema replays, and migrations remain immediately accessible to PostgREST and `@supabase/supabase-js` without encountering `42501` permission errors under the new Supabase policy.
 
 

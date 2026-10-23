@@ -1,7 +1,10 @@
--- {Updated Supabase schema: user profiles, credentials, custom instructions, and AI file code outputs strictly in Supabase; user chats stored exclusively in Cloudflare} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
+-- Updated Supabase schema: user profiles, credentials, custom instructions, and AI file code outputs strictly in Supabase; user chats stored exclusively in Cloudflare [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
 
--- 1. Enable UUID Extension
+-- 1. Enable UUID Extension & Schema Usage
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Explicit schema usage grants for PostgREST Data API [Commented by: Google AI Studio on 23/10/2026 12:48 AM]
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 
 -- 2. User Profiles Table
 -- Stores username, email, zero-knowledge salt, API keys (OpenRouter & Tavily), AI custom instructions, and connected MCP plugins
@@ -15,7 +18,7 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
     model_training BOOLEAN DEFAULT TRUE,
     plugins_connected JSONB DEFAULT '{"google_drive":false,"gmail":false,"google_docs":false,"notion":false,"firecrawl":false,"tavily":false}'::jsonb,
     salt TEXT NOT NULL DEFAULT '',
-    -- {Added theme column in Supabase user_profiles table with default Neon Black} [Commented by: Google AI Studio on 20/10/2026 11:47 AM]
+    -- Added theme column in Supabase user_profiles table with default Neon Black [Commented by: Google AI Studio on 20/10/2026 11:47 AM]
     theme TEXT DEFAULT 'Neon Black',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -43,6 +46,9 @@ CREATE POLICY "Allow delete profile"
     ON public.user_profiles FOR DELETE
     USING (true);
 
+-- Explicit Data API grants for public.user_profiles ensuring PostgREST exposure under Supabase Oct 30 2026 policy [Commented by: Google AI Studio on 23/10/2026 12:48 AM]
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.user_profiles TO anon, authenticated, service_role;
+
 -- 3. AI File Code Outputs Table
 -- Persists the code written by the AI model to read any non-image files, along with execution output and file metadata
 CREATE TABLE IF NOT EXISTS public.file_code_outputs (
@@ -66,6 +72,9 @@ ALTER TABLE public.file_code_outputs ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow all operations for file_code_outputs"
     ON public.file_code_outputs FOR ALL
     USING (true);
+
+-- Explicit Data API grants for public.file_code_outputs ensuring PostgREST exposure under Supabase Oct 30 2026 policy [Commented by: Google AI Studio on 23/10/2026 12:48 AM]
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.file_code_outputs TO anon, authenticated, service_role;
 
 -- Indexes for fast lookup of conversation file code outputs
 CREATE INDEX IF NOT EXISTS idx_file_code_outputs_user
