@@ -51,9 +51,9 @@ nanobot/
 
 # 📢 Latest Updates
 <!-- Placed a megaphone emoji [Commented by: Google AI Studio on 21/10/2026 11:20 AM] -->
-<!-- Updated Latest Updates with removal of Account Settings connectivity indicator pill [Commented by: Google AI Studio on 23/10/2026 07:38 AM] -->
+<!-- Updated Latest Updates with updated version of SECURITY.md [Commented by: Developer on 24/10/2026 01:23 PM] -->
 
-- **Clean UI & Account Settings Header Streamlining**:
-  - Removed the unnecessary Supabase/Netlify status indicator pill (`● Supabase Cloud Connected` / `⚡ Netlify Integration Ready`) from the Account Settings header in `SettingsModal.tsx` per user focus-mode request and clean UI guidelines.
+- **Updated SECURITY.md file**:
+  - Made the SECURITY.md file and made 'GitHub discussions' into a hyperlink.
 
 
