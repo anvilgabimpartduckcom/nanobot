@@ -1,1 +1,233 @@
-Coming soon.
+# Source Available But Not For Sale License (SACBNFS License)
+
+Copyright (c) 2026 anvilgabimpartduckcom (Owner of this repository)
+
+All rights reserved except as expressly permitted by the SACBNFS License.
+
+## 1. Definitions
+
+For purposes of this License:
+
+**1.1. "Licensor"** means the copyright holder or other person legally authorized to grant rights under this License.
+
+**1.2. "Software"** means the source code, object code, scripts, libraries, modules, configuration files, documentation that forms part of the licensed codebase, and other materials expressly distributed under this License.
+
+**1.3. "Original Software"** means the Software as originally published or otherwise made available by the Licensor.
+
+**1.4. "Modified Software"** means the Software or any portion of it that has been changed, adapted, translated, extended, or incorporated into a derivative work.
+
+**1.5. "Redistribution"** means making the Software or any portion of it available to another person, whether through Git repositories, downloads, package registries, websites, physical media, hosted services, or other means.
+
+**1.6. "Commercial Use"** means using the Software, directly or indirectly, for commercial advantage, monetary compensation, business operations, or the provision of products or services for commercial purposes.
+
+**1.7. "Sale"** means selling, licensing for a fee, sublicensing for consideration, renting, leasing, or otherwise providing the Software or access to it in exchange for money or other consideration.
+
+**1.8. "Written Permission"** means explicit authorization documented in writing by the Licensor or an authorized representative. Public availability, silence, or the existence of a GitHub feature does not constitute Written Permission.
+
+## 2. Limited Permissions
+
+Subject to compliance with this License, the Licensor grants each recipient a limited, non-exclusive, worldwide, royalty-free, non-transferable license to:
+
+a. Read, view, inspect, and study the Software.
+
+b. Run and execute the Software for permitted non-commercial purposes.
+
+c. Analyze, test, debug, and experiment with the Software.
+
+d. Modify, adapt, translate, and create Modified Software for private, non-commercial purposes.
+
+e. Use the Software for personal learning, academic study, research, and other lawful non-commercial activities.
+
+These permissions do not grant a general right to publish, redistribute, sell, or commercially exploit the Software.
+
+All rights not expressly granted under this License are reserved by the Licensor.
+
+## 3. Prohibition on Sale
+
+The Software is not offered for sale under this License.
+
+Without prior Written Permission from the Licensor, no recipient may:
+
+a. Sell the Original Software or any copy of it.
+
+b. Sell, license for a fee, sublicense for consideration, rent, or lease the Modified Software.
+
+c. Charge a fee for downloading, obtaining, accessing, or receiving the Software or any portion of it.
+
+d. Include the Software in a paid product, paid package, paid subscription, or other commercial offering.
+
+e. Sell access to a repository, distribution channel, hosted copy, or service whose purpose includes providing access to the Software in violation of this License.
+
+f. Circumvent these restrictions by changing the Software's name, format, packaging, interface, or distribution method.
+
+This prohibition applies to the Original Software, Modified Software, and copies of either.
+
+## 4. Prohibition on Commercial Use
+
+Commercial Use of the Software is prohibited without prior Written Permission from the Licensor.
+
+Without such permission, no recipient may:
+
+a. Use the Software to operate or support a commercial business.
+
+b. Incorporate the Software into a commercial product or service.
+
+c. Use the Software in a paid application or other product intended for commercial exploitation.
+
+d. Use the Software to perform work for a commercial client where the Software contributes to the commercial deliverable.
+
+e. Use the Software to generate revenue or provide a commercial advantage to a business or organization.
+
+f. Use the Software as part of a commercial research, development, or production workflow.
+
+Whether an activity constitutes Commercial Use depends on its purpose, circumstances, and nature, as well as applicable law.
+
+## 5. Prohibition on Redistribution
+
+Redistribution of the Original Software or Modified Software is prohibited unless the Licensor grants prior Written Permission.
+
+Without such permission, no recipient may:
+
+a. Publish a fork or mirror of the Software on GitHub or another platform.
+
+b. Republish the Software in another public or private repository.
+
+c. Upload the Software to package registries, code-sharing platforms, download websites, or similar services.
+
+d. Distribute the Software to other people through archives, physical media, messaging services, or other channels.
+
+e. Publish or distribute Modified Software, including free or non-commercial copies.
+
+f. Redistribute substantial portions of the Software as a standalone product or as part of another project.
+
+The ability to access, clone, or fork a repository through a platform does not, by itself, grant permission to redistribute the Software under this License.
+
+## 6. Private Modifications
+
+Recipients may create and maintain private modifications of the Software, provided that their activities comply with this License.
+
+Recipients may keep their modifications private and are not required by this License to publish them merely because they have modified the Software.
+
+However, private modification does not authorize recipients to:
+
+a. Sell or commercially exploit the Software or Modified Software.
+
+b. Use the Software for prohibited commercial purposes.
+
+c. Redistribute the Software or Modified Software without Written Permission.
+
+d. Circumvent any other restriction in this License.
+
+## 7. Authorized Publication of Modified Software
+
+The Licensor may grant Written Permission to publish or redistribute the Software or Modified Software.
+
+Unless the Written Permission expressly states otherwise, anyone receiving such authorization must:
+
+a. Publish the complete corresponding source code of the authorized Modified Software, including the modifications being distributed.
+
+b. Preserve all applicable copyright notices, license notices, and attribution information.
+
+c. Clearly identify the changes made and distinguish the Modified Software from the Original Software.
+
+d. Include a copy of this License with the published Software.
+
+e. Comply with the scope and conditions of the Written Permission.
+
+f. Refrain from selling or commercially exploiting the Software unless the Written Permission expressly authorizes that activity.
+
+Permission to publish one version or make one distribution does not automatically authorize subsequent distributions, unrelated modifications, or additional recipients to redistribute the Software.
+
+## 8. Attribution and Copyright Notices
+
+Recipients must preserve existing copyright notices, authorship notices, license notices, and other applicable attribution information included with the Software.
+
+Where publication has been authorized, recipients must:
+
+a. Give appropriate credit to the original Licensor.
+
+b. Retain the applicable copyright and license notices.
+
+c. Clearly identify their own modifications.
+
+d. Avoid implying that the Licensor endorses their modifications or derived projects unless the Licensor has expressly agreed.
+
+Attribution does not grant additional permission to sell, redistribute, or commercially use the Software.
+
+## 9. Ownership and Contributions
+
+The Licensor retains all ownership rights, title, and interest in the Original Software, subject to applicable law.
+
+This License grants limited permissions to use the Software; it does not transfer ownership of the Original Software to any recipient.
+
+Each contributor retains the copyright and other rights they independently hold in their own original contributions, subject to applicable law and the rights of other parties.
+
+A recipient may not use ownership of their contributions to override this License or authorize activities that violate the rights of the Licensor.
+
+Any transfer or assignment of contribution ownership must be established through a separate, legally effective agreement.
+
+## 10. Limited Patent License
+
+To the extent the Licensor owns or controls patent rights that are necessarily infringed by the use of the Original Software as distributed by the Licensor, the Licensor grants recipients a limited, non-exclusive, worldwide, royalty-free patent license to use those patent rights solely for activities expressly permitted under this License.
+
+This patent license does not authorize any sale, Commercial Use, or Redistribution prohibited by this License.
+
+No patent rights are granted beyond those expressly stated in this section.
+
+The patent license terminates when the recipient's rights under this License terminate, subject to applicable law.
+
+## 11. Third-Party Components
+
+The Software may contain or depend on third-party materials governed by separate licenses.
+
+This License does not replace or override those licenses and does not grant rights that the Licensor does not possess.
+
+Recipients are responsible for identifying and complying with applicable third-party license terms.
+
+Where a third-party license grants rights that cannot lawfully be restricted by this License, those rights remain subject to the applicable license and law.
+
+## 12. No Warranty
+
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, WHETHER EXPRESS, IMPLIED, OR STATUTORY, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT.
+
+THE LICENSOR DOES NOT WARRANT THAT THE SOFTWARE WILL BE ERROR-FREE, SECURE, AVAILABLE, OR SUITABLE FOR ANY PARTICULAR PURPOSE.
+
+## 13. Limitation of Liability
+
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE LICENSOR SHALL NOT BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE, WHETHER IN CONTRACT, TORT, OR OTHERWISE.
+
+NOTHING IN THIS SECTION EXCLUDES OR LIMITS LIABILITY THAT CANNOT LAWFULLY BE EXCLUDED OR LIMITED.
+
+## 14. Termination
+
+The permissions granted under this License automatically terminate if a recipient materially violates its terms.
+
+Upon termination, the recipient must stop all activities that require permission under this License and cease any unauthorized use, sale, or redistribution of the Software.
+
+Termination does not eliminate obligations or liabilities that arose before termination, nor does it extinguish provisions that by their nature are intended to survive termination.
+
+The Licensor may reinstate a terminated license by providing Written Permission.
+
+## 15. Written Exceptions
+
+The Licensor may grant specific exceptions, additional permissions, or alternative licensing terms in writing.
+
+An exception applies only to the materials, activities, recipients, and period expressly identified in that permission.
+
+No exception shall be inferred from silence, public accessibility, prior conduct, or the existence of a public repository.
+
+## 16. Severability
+
+If any provision of this License is held invalid or unenforceable under applicable law, that provision shall be limited or severed to the minimum extent necessary, and the remaining provisions shall continue in effect to the extent permitted by law.
+
+## 17. Revised Versions
+
+The Licensor may publish revised versions of this License.
+
+Unless expressly stated otherwise, a revised version does not automatically replace the terms governing a previously distributed copy of the Software.
+
+## 18. Governing Law
+
+The interpretation and enforcement of this License are subject to applicable law. Any determination of governing law or jurisdiction must comply with applicable legal requirements.
+
+---
