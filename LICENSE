@@ -1,233 +1,151 @@
-# Source Available But Not For Sale License (SACBNFS License)
+SOURCE AVAILABLE BUT NOT FOR SALE LICENSE (SACBNFS LICENSE)
 
 Copyright (c) 2026 anvilgabimpartduckcom (Owner of this repository)
 
-All rights reserved except as expressly permitted by the SACBNFS License.
+All rights are reserved unless this License specifically allows something.
 
-## 1. Definitions
+1. DEFINITIONS
 
-For purposes of this License:
+For this License:
 
-**1.1. "Licensor"** means the copyright holder or other person legally authorized to grant rights under this License.
+1.1. "Licensor" means anvilgabimpartduckcom, the owner of the original code covered by this License.
 
-**1.2. "Software"** means the source code, object code, scripts, libraries, modules, configuration files, documentation that forms part of the licensed codebase, and other materials expressly distributed under this License.
+1.2. "Code" means the source code and related code files covered by this License.
 
-**1.3. "Original Software"** means the Software as originally published or otherwise made available by the Licensor.
+1.3. "Original Code" means the code as it was originally published by the Licensor.
 
-**1.4. "Modified Software"** means the Software or any portion of it that has been changed, adapted, translated, extended, or incorporated into a derivative work.
+1.4. "Modified Code" means any version of the code that someone has changed.
 
-**1.5. "Redistribution"** means making the Software or any portion of it available to another person, whether through Git repositories, downloads, package registries, websites, physical media, hosted services, or other means.
+1.5. "You" means any person or organization using the Code under this License.
 
-**1.6. "Commercial Use"** means using the Software, directly or indirectly, for commercial advantage, monetary compensation, business operations, or the provision of products or services for commercial purposes.
+1.6. "Commercial Use" means using the Code to make money, earn revenue, gain a commercial benefit, or support a business.
 
-**1.7. "Sale"** means selling, licensing for a fee, sublicensing for consideration, renting, leasing, or otherwise providing the Software or access to it in exchange for money or other consideration.
+1.7. "Distribution" means sharing, publishing, transferring, or making the Code or Modified Code available to other people or organizations.
 
-**1.8. "Written Permission"** means explicit authorization documented in writing by the Licensor or an authorized representative. Public availability, silence, or the existence of a GitHub feature does not constitute Written Permission.
+2. OWNERSHIP
 
-## 2. Limited Permissions
+2.1. The Licensor remains the owner of the Original Code.
 
-Subject to compliance with this License, the Licensor grants each recipient a limited, non-exclusive, worldwide, royalty-free, non-transferable license to:
+2.2. This License does not transfer ownership of the Original Code to You.
 
-a. Read, view, inspect, and study the Software.
+2.3. Contributors keep the copyright to their own original contributions unless they agree otherwise in writing. Their contributions must still follow this License.
 
-b. Run and execute the Software for permitted non-commercial purposes.
+3. WHAT YOU ARE ALLOWED TO DO
 
-c. Analyze, test, debug, and experiment with the Software.
+As long as You follow this License, You may:
 
-d. Modify, adapt, translate, and create Modified Software for private, non-commercial purposes.
+- Read and inspect the Code.
+- Study the Code to understand how it works.
+- Modify the Code for Your own private, non-commercial use.
+- Run and test the Code for Your own private, non-commercial use.
+- Learn from the Code's design and implementation.
 
-e. Use the Software for personal learning, academic study, research, and other lawful non-commercial activities.
+These permissions do not allow You to sell, use commercially, or share the Code or Modified Code without the Licensor's written permission.
 
-These permissions do not grant a general right to publish, redistribute, sell, or commercially exploit the Software.
+4. YOU MAY NOT SELL THE CODE
 
-All rights not expressly granted under this License are reserved by the Licensor.
+4.1. You may not sell the Original Code or any Modified Code.
 
-## 3. Prohibition on Sale
+4.2. You may not charge people for access to, copies of, or distribution of the Code or Modified Code.
 
-The Software is not offered for sale under this License.
+4.3. You may not include the Code or Modified Code in a product that You sell.
 
-Without prior Written Permission from the Licensor, no recipient may:
+4.4. These restrictions apply whether You sell the Code by itself, combine it with other materials, or include it in another product.
 
-a. Sell the Original Software or any copy of it.
+5. COMMERCIAL USE IS NOT ALLOWED
 
-b. Sell, license for a fee, sublicense for consideration, rent, or lease the Modified Software.
+5.1. You may not use the Code or Modified Code for business or other commercial purposes without the Licensor's written permission.
 
-c. Charge a fee for downloading, obtaining, accessing, or receiving the Software or any portion of it.
+5.2. You may not use the Code or Modified Code to provide paid services or run a business without the Licensor's written permission.
 
-d. Include the Software in a paid product, paid package, paid subscription, or other commercial offering.
+5.3. You may not include the Code or Modified Code in a commercial product or service without the Licensor's written permission.
 
-e. Sell access to a repository, distribution channel, hosted copy, or service whose purpose includes providing access to the Software in violation of this License.
+6. YOU MAY NOT SHARE THE CODE WITHOUT PERMISSION
 
-f. Circumvent these restrictions by changing the Software's name, format, packaging, interface, or distribution method.
+6.1. You may not share, publish, sublicense, or distribute the Original Code or Modified Code without the Licensor's written permission.
 
-This prohibition applies to the Original Software, Modified Software, and copies of either.
+6.2. You may not upload the Code or Modified Code to another repository, website, platform, or public archive without the Licensor's written permission.
 
-## 4. Prohibition on Commercial Use
+6.3. You may not give away or redistribute the Code or Modified Code, even for free, without the Licensor's written permission.
 
-Commercial Use of the Software is prohibited without prior Written Permission from the Licensor.
+7. CHANGING THE CODE
 
-Without such permission, no recipient may:
+7.1. You may change the Code for Your own private, non-commercial use, as long as You follow this License.
 
-a. Use the Software to operate or support a commercial business.
+7.2. You may not publish or share Your changes with other people without the Licensor's written permission.
 
-b. Incorporate the Software into a commercial product or service.
+7.3. If the Licensor gives You permission to publish or share Modified Code, You must keep this License and the relevant copyright notices with it.
 
-c. Use the Software in a paid application or other product intended for commercial exploitation.
+7.4. Changing the Code does not make You the owner of the Original Code.
 
-d. Use the Software to perform work for a commercial client where the Software contributes to the commercial deliverable.
+8. GITHUB FORKS AND OTHER REPOSITORIES
 
-e. Use the Software to generate revenue or provide a commercial advantage to a business or organization.
+8.1. You may not create or publish a fork of the repository containing the Code without the Licensor's written permission.
 
-f. Use the Software as part of a commercial research, development, or production workflow.
+8.2. You may not copy the Code into another public or private repository for sharing or collaborative development without the Licensor's written permission.
 
-Whether an activity constitutes Commercial Use depends on its purpose, circumstances, and nature, as well as applicable law.
+8.3. Any permission to create a fork or copy the repository must be given in writing by the Licensor.
 
-## 5. Prohibition on Redistribution
+9. CREDIT AND COPYRIGHT NOTICES
 
-Redistribution of the Original Software or Modified Software is prohibited unless the Licensor grants prior Written Permission.
+9.1. You must keep the existing copyright notices, license notices, and credit statements in any copy of the Code that You are allowed to use.
 
-Without such permission, no recipient may:
+9.2. If You receive permission to publish or distribute Modified Code, You must identify the original copyright holder and state that You changed the Code, if You did.
 
-a. Publish a fork or mirror of the Software on GitHub or another platform.
+9.3. You may not remove or change copyright notices in a way that falsely suggests You own the Original Code.
 
-b. Republish the Software in another public or private repository.
+10. CONTRIBUTIONS
 
-c. Upload the Software to package registries, code-sharing platforms, download websites, or similar services.
+10.1. Unless agreed otherwise in writing, each contributor keeps the copyright to their own original contributions.
 
-d. Distribute the Software to other people through archives, physical media, messaging services, or other channels.
+10.2. Contributions added to the project must follow this License unless a separate written agreement says otherwise.
 
-e. Publish or distribute Modified Software, including free or non-commercial copies.
+10.3. Contributing to the project does not make someone the owner of the Original Code.
 
-f. Redistribute substantial portions of the Software as a standalone product or as part of another project.
+11. LIMITED PATENT PERMISSION
 
-The ability to access, clone, or fork a repository through a platform does not, by itself, grant permission to redistribute the Software under this License.
+11.1. If the Licensor owns patent rights that are necessarily affected by the activities this License allows, the Licensor grants You limited permission to use those patent rights only for activities allowed by this License. This permission is non-exclusive, cannot be transferred to someone else, and does not require royalty payments.
 
-## 6. Private Modifications
+11.2. This permission does not allow You to do anything that this License prohibits.
 
-Recipients may create and maintain private modifications of the Software, provided that their activities comply with this License.
+11.3. The Licensor does not grant patent rights that they do not own or control.
 
-Recipients may keep their modifications private and are not required by this License to publish them merely because they have modified the Software.
+12. THIRD-PARTY SOFTWARE
 
-However, private modification does not authorize recipients to:
+12.1. The Code may include or depend on software, libraries, tools, or other components made by other people or organizations.
 
-a. Sell or commercially exploit the Software or Modified Software.
+12.2. Those third-party components remain subject to their own licenses and terms.
 
-b. Use the Software for prohibited commercial purposes.
+12.3. This License does not replace or override the licenses that apply to third-party components.
 
-c. Redistribute the Software or Modified Software without Written Permission.
+13. NO OTHER PERMISSIONS
 
-d. Circumvent any other restriction in this License.
+13.1. You only have the permissions specifically granted by this License. No other permissions are granted automatically or implied.
 
-## 7. Authorized Publication of Modified Software
+13.2. Without the Licensor's written permission, You may not sell, use commercially, redistribute, sublicense, or publicly publish the Code or Modified Code.
 
-The Licensor may grant Written Permission to publish or redistribute the Software or Modified Software.
+14. ENDING YOUR PERMISSION TO USE THE CODE
 
-Unless the Written Permission expressly states otherwise, anyone receiving such authorization must:
+14.1. If You seriously violate this License, Your permissions under this License end automatically.
 
-a. Publish the complete corresponding source code of the authorized Modified Software, including the modifications being distributed.
+14.2. If Your permissions end, You must stop using the permissions granted by this License.
 
-b. Preserve all applicable copyright notices, license notices, and attribution information.
+14.3. Ending Your permissions does not remove responsibilities or rights that arose before termination, or provisions that are meant to continue afterward.
 
-c. Clearly identify the changes made and distinguish the Modified Software from the Original Software.
+15. NO WARRANTY
 
-d. Include a copy of this License with the published Software.
+THE CODE IS PROVIDED "AS IS". THE LICENSOR DOES NOT MAKE ANY PROMISES OR WARRANTIES ABOUT THE CODE, INCLUDING WHETHER IT WILL WORK PROPERLY, BE SUITABLE FOR YOUR NEEDS, BE SECURE, OR AVOID INFRINGING SOMEONE ELSE'S RIGHTS.
 
-e. Comply with the scope and conditions of the Written Permission.
+16. LIMITATION OF LIABILITY
 
-f. Refrain from selling or commercially exploiting the Software unless the Written Permission expressly authorizes that activity.
+TO THE MAXIMUM EXTENT ALLOWED BY LAW, THE LICENSOR IS NOT RESPONSIBLE FOR CLAIMS, DAMAGES, OR OTHER LIABILITY ARISING FROM THE CODE OR YOUR USE OF IT.
 
-Permission to publish one version or make one distribution does not automatically authorize subsequent distributions, unrelated modifications, or additional recipients to redistribute the Software.
+17. CHANGES TO THIS LICENSE
 
-## 8. Attribution and Copyright Notices
+17.1. The Licensor may publish new versions of this License.
 
-Recipients must preserve existing copyright notices, authorship notices, license notices, and other applicable attribution information included with the Software.
+17.2. Unless a new version specifically says otherwise, each version of the Code remains covered by the license that came with it.
 
-Where publication has been authorized, recipients must:
+18. FINAL TERMS
 
-a. Give appropriate credit to the original Licensor.
-
-b. Retain the applicable copyright and license notices.
-
-c. Clearly identify their own modifications.
-
-d. Avoid implying that the Licensor endorses their modifications or derived projects unless the Licensor has expressly agreed.
-
-Attribution does not grant additional permission to sell, redistribute, or commercially use the Software.
-
-## 9. Ownership and Contributions
-
-The Licensor retains all ownership rights, title, and interest in the Original Software, subject to applicable law.
-
-This License grants limited permissions to use the Software; it does not transfer ownership of the Original Software to any recipient.
-
-Each contributor retains the copyright and other rights they independently hold in their own original contributions, subject to applicable law and the rights of other parties.
-
-A recipient may not use ownership of their contributions to override this License or authorize activities that violate the rights of the Licensor.
-
-Any transfer or assignment of contribution ownership must be established through a separate, legally effective agreement.
-
-## 10. Limited Patent License
-
-To the extent the Licensor owns or controls patent rights that are necessarily infringed by the use of the Original Software as distributed by the Licensor, the Licensor grants recipients a limited, non-exclusive, worldwide, royalty-free patent license to use those patent rights solely for activities expressly permitted under this License.
-
-This patent license does not authorize any sale, Commercial Use, or Redistribution prohibited by this License.
-
-No patent rights are granted beyond those expressly stated in this section.
-
-The patent license terminates when the recipient's rights under this License terminate, subject to applicable law.
-
-## 11. Third-Party Components
-
-The Software may contain or depend on third-party materials governed by separate licenses.
-
-This License does not replace or override those licenses and does not grant rights that the Licensor does not possess.
-
-Recipients are responsible for identifying and complying with applicable third-party license terms.
-
-Where a third-party license grants rights that cannot lawfully be restricted by this License, those rights remain subject to the applicable license and law.
-
-## 12. No Warranty
-
-TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, WHETHER EXPRESS, IMPLIED, OR STATUTORY, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT.
-
-THE LICENSOR DOES NOT WARRANT THAT THE SOFTWARE WILL BE ERROR-FREE, SECURE, AVAILABLE, OR SUITABLE FOR ANY PARTICULAR PURPOSE.
-
-## 13. Limitation of Liability
-
-TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE LICENSOR SHALL NOT BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE, WHETHER IN CONTRACT, TORT, OR OTHERWISE.
-
-NOTHING IN THIS SECTION EXCLUDES OR LIMITS LIABILITY THAT CANNOT LAWFULLY BE EXCLUDED OR LIMITED.
-
-## 14. Termination
-
-The permissions granted under this License automatically terminate if a recipient materially violates its terms.
-
-Upon termination, the recipient must stop all activities that require permission under this License and cease any unauthorized use, sale, or redistribution of the Software.
-
-Termination does not eliminate obligations or liabilities that arose before termination, nor does it extinguish provisions that by their nature are intended to survive termination.
-
-The Licensor may reinstate a terminated license by providing Written Permission.
-
-## 15. Written Exceptions
-
-The Licensor may grant specific exceptions, additional permissions, or alternative licensing terms in writing.
-
-An exception applies only to the materials, activities, recipients, and period expressly identified in that permission.
-
-No exception shall be inferred from silence, public accessibility, prior conduct, or the existence of a public repository.
-
-## 16. Severability
-
-If any provision of this License is held invalid or unenforceable under applicable law, that provision shall be limited or severed to the minimum extent necessary, and the remaining provisions shall continue in effect to the extent permitted by law.
-
-## 17. Revised Versions
-
-The Licensor may publish revised versions of this License.
-
-Unless expressly stated otherwise, a revised version does not automatically replace the terms governing a previously distributed copy of the Software.
-
-## 18. Governing Law
-
-The interpretation and enforcement of this License are subject to applicable law. Any determination of governing law or jurisdiction must comply with applicable legal requirements.
-
----
+This License explains the rules for using the Code. Any exception to these rules must be approved in writing by the Licensor.
