@@ -51,9 +51,9 @@ nanobot/
 
 # 📢 Latest Updates
 <!-- Placed a megaphone emoji [Commented by: Google AI Studio on 21/10/2026 11:20 AM] -->
-<!-- Updated Latest Updates with updated version of SECURITY.md [Commented by: Developer on 24/10/2026 01:23 PM] -->
+<!-- Updated Latest Updates with LICENSE file [Commented by: Developer on 24/10/2026 03:16 PM] -->
 
-- **Updated SECURITY.md file**:
-  - Made the SECURITY.md file and made 'GitHub discussions' into a hyperlink.
+- **Updated LICENSE file**:
+  - Created the SABNFS License.
 
 
