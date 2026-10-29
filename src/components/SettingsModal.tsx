@@ -19,7 +19,7 @@ interface SettingsModalProps {
   onThemeChange?: (theme: AppTheme) => void;
 }
 
-type TabType = 'account' | 'appearance' | 'ai_config' | 'plugins' | 'about';
+type TabType = 'account' | 'ai_config' | 'plugins' | 'about';
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
@@ -103,6 +103,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [authAccount, setAuthAccount] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
   const [expandedToolsPluginId, setExpandedToolsPluginId] = useState<string | null>(null);
+  // GitHub repository permission scope state for Add-ons OAuth flow [Commented by: Google AI Studio on 28/10/2026 04:28 AM]
+  const [githubRepoChoice, setGithubRepoChoice] = useState<'all' | 'specific'>('all');
+  const [githubSpecificRepo, setGithubSpecificRepo] = useState<string>('');
 
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
@@ -352,23 +355,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             Account
           </button>
 
-          {/* Added Appearance tab navigation button with live theme indicator  [Commented by: Google AI Studio on 20/10/2026 11:29 AM] */}
-          <button
-            onClick={() => setActiveTab('appearance')}
-            className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer flex items-center justify-between ${
-              activeTab === 'appearance'
-                ? isLight
-                  ? 'bg-white text-neutral-900 font-semibold shadow-xs border border-neutral-200'
-                  : 'bg-[#1a1a1a] text-white font-semibold'
-                : isLight
-                ? 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
-                : 'text-neutral-400 hover:text-white hover:bg-[#121212]'
-            }`}
-          >
-            <span>Appearance</span>
-            <span className="text-xs">{isLight ? '☀️' : '🌙'}</span>
-          </button>
-
           <button
             onClick={() => setActiveTab('ai_config')}
             className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer ${
@@ -384,7 +370,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             AI Configuration
           </button>
 
-          {/* Configured Plugin Marketplace navigation tab in SettingsModal  [Commented by: Google AI Studio on 19/10/2026 10:50 AM] */}
+          {/* Configured Add-ons navigation tab in SettingsModal [Commented by: Google AI Studio on 28/10/2026 04:26 AM] */}
           <button
             onClick={() => setActiveTab('plugins')}
             className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer ${
@@ -397,7 +383,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 : 'text-neutral-400 hover:text-white hover:bg-[#121212]'
             }`}
           >
-            Plugin Marketplace
+            Add-ons
           </button>
 
           <button
@@ -600,145 +586,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           )}
 
-          {/* TAB: APPEARANCE */}
-          {/* Created dedicated Appearance tab in SettingsModal with preview cards and theme toggling between Neon Black and Minimalist Light  [Commented by: Google AI Studio on 20/10/2026 11:29 AM] */}
-          {activeTab === 'appearance' && (
-            <div className="space-y-6 max-w-xl">
-              <div className={`flex items-center justify-between pb-3 border-b ${
-                isLight ? 'border-neutral-200' : 'border-neutral-800'
-              }`}>
-                <div>
-                  <h2 className="text-xl font-bold font-serif">Appearance & Theme</h2>
-                  <p className={`text-xs mt-1 ${isLight ? 'text-neutral-500' : 'text-neutral-400'}`}>
-                    Switch between the current &apos;Neon Black&apos; theme and &apos;Minimalist Light&apos; theme.
-                  </p>
-                </div>
-                <span className={`text-[11px] font-mono px-2.5 py-1 rounded-full border ${
-                  isLight
-                    ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-medium'
-                    : 'bg-[#111] border-[#39ff14]/40 text-[#39ff14]'
-                }`}>
-                  ● {currentTheme}
-                </span>
-              </div>
-
-              {/* Segmented Control Toggle */}
-              <div>
-                <label className={`block text-xs uppercase tracking-wider font-semibold mb-2 ${
-                  isLight ? 'text-neutral-700' : 'text-neutral-400'
-                }`}>
-                  Select Theme
-                </label>
-                <div className={`grid grid-cols-2 p-1.5 rounded-xl border ${
-                  isLight ? 'bg-neutral-100 border-neutral-200' : 'bg-[#111] border-[#2b2b2b]'
-                }`}>
-                  <button
-                    type="button"
-                    onClick={() => handleSwitchTheme('Neon Black')}
-                    className={`py-2.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                      currentTheme === 'Neon Black'
-                        ? 'bg-black text-white shadow-md border border-[#39ff14]/70'
-                        : isLight
-                        ? 'text-neutral-600 hover:text-neutral-900'
-                        : 'text-neutral-400 hover:text-white'
-                    }`}
-                  >
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#39ff14] shadow-[0_0_8px_#39ff14]"></span>
-                    <span>Neon Black</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleSwitchTheme('Minimalist Light')}
-                    className={`py-2.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                      currentTheme === 'Minimalist Light'
-                        ? 'bg-white text-neutral-900 shadow-md border border-emerald-500'
-                        : isLight
-                        ? 'text-neutral-600 hover:text-neutral-900'
-                        : 'text-neutral-400 hover:text-white'
-                    }`}
-                  >
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
-                    <span>Minimalist Light</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Theme Preview Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                {/* Neon Black Card */}
-                <div
-                  onClick={() => handleSwitchTheme('Neon Black')}
-                  className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
-                    currentTheme === 'Neon Black'
-                      ? 'border-[#39ff14] bg-black/90 shadow-[0_0_20px_rgba(57,255,20,0.15)] ring-1 ring-[#39ff14]/50'
-                      : isLight
-                      ? 'border-neutral-200 bg-neutral-900 text-white hover:border-neutral-400'
-                      : 'border-[#262626] bg-[#121212] hover:border-neutral-600'
-                  }`}
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-[#39ff14] shadow-[0_0_10px_#39ff14]"></span>
-                        <span className="text-sm font-bold text-white">Neon Black</span>
-                      </div>
-                      {currentTheme === 'Neon Black' && (
-                        <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-950 text-[#39ff14] border border-[#39ff14]/40">
-                          Active
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-neutral-400 leading-relaxed">
-                      Original cyberpunk theme with high contrast, deep obsidian background, and signature neon green aura.
-                    </p>
-                  </div>
-                  <div className="mt-4 pt-3 border-t border-neutral-800 flex items-center gap-2">
-                    <span className="w-4 h-4 rounded bg-black border border-neutral-700 inline-block"></span>
-                    <span className="w-4 h-4 rounded bg-[#161616] border border-neutral-700 inline-block"></span>
-                    <span className="w-4 h-4 rounded bg-[#39ff14] inline-block"></span>
-                    <span className="text-[11px] text-neutral-500 ml-auto font-mono">Dark / Neon</span>
-                  </div>
-                </div>
-
-                {/* Minimalist Light Card */}
-                <div
-                  onClick={() => handleSwitchTheme('Minimalist Light')}
-                  className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
-                    currentTheme === 'Minimalist Light'
-                      ? 'border-emerald-600 bg-white text-neutral-900 shadow-lg ring-1 ring-emerald-500/30'
-                      : isLight
-                      ? 'border-neutral-300 bg-white text-neutral-900 hover:border-neutral-400'
-                      : 'border-[#262626] bg-neutral-100 text-neutral-900 hover:border-neutral-500'
-                  }`}
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-emerald-600"></span>
-                        <span className="text-sm font-bold text-neutral-900">Minimalist Light</span>
-                      </div>
-                      {currentTheme === 'Minimalist Light' && (
-                        <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
-                          Active
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-neutral-600 leading-relaxed">
-                      Clean daylight aesthetic with soft neutral tones, sharp typography, and subtle emerald accents for distraction-free readability.
-                    </p>
-                  </div>
-                  <div className="mt-4 pt-3 border-t border-neutral-200 flex items-center gap-2">
-                    <span className="w-4 h-4 rounded bg-white border border-neutral-300 inline-block"></span>
-                    <span className="w-4 h-4 rounded bg-neutral-100 border border-neutral-300 inline-block"></span>
-                    <span className="w-4 h-4 rounded bg-emerald-600 inline-block"></span>
-                    <span className="text-[11px] text-neutral-500 ml-auto font-mono">Daylight / Light</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* TAB 2: AI CONFIGURATION */}
           {activeTab === 'ai_config' && (
             <div className="space-y-6 max-w-xl">
@@ -801,14 +648,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           )}
 
-          {/* TAB 3: PLUGIN MARKETPLACE */}
-          {/* Configured Plugin Marketplace section with toggle switches to authorize MCP permissions and enable tools for chat  [Commented by: Google AI Studio on 19/10/2026 10:50 AM] */}
+          {/* TAB 3: ADD-ONS */}
+          {/* Rebranded to Add-ons and removed toggle switches beside Connect button [Commented by: Google AI Studio on 28/10/2026 11:27 AM] */}
           {activeTab === 'plugins' && (
             <div className="space-y-4 max-w-xl">
               <div>
-                <h2 className="text-xl font-bold font-serif mb-1">Plugin Marketplace</h2>
+                <h2 className="text-xl font-bold font-serif mb-1">Add-ons</h2>
                 <p className="text-xs text-neutral-400">
-                  Explore available Model Context Protocol (MCP) plugins, read their descriptions, and toggle permissions to enable them for the chat.
+                  Explore available Model Context Protocol (MCP) add-ons, configure authorizations, and connect them to empower your noodles.
                 </p>
               </div>
 
@@ -842,11 +689,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               {plugin.name}
                               {isConnected ? (
                                 <span className="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded font-mono">
-                                  ✓ Enabled
+                                  ✓ Connected
                                 </span>
                               ) : (
                                 <span className="text-[10px] bg-neutral-900 text-neutral-400 border border-neutral-800 px-1.5 py-0.5 rounded font-mono">
-                                  Disabled
+                                  Not Connected
                                 </span>
                               )}
                             </div>
@@ -859,28 +706,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           </div>
                         </div>
 
-                        {/* Interactive Permission & Connection Toggle Switch */}
+                        {/* Connection Button (switch toggle erased per instructions) */}
                         <div className="flex items-center gap-2 shrink-0">
                           <button
                             type="button"
-                            role="switch"
-                            aria-checked={isConnected}
                             onClick={() => handlePluginAction(plugin)}
-                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                              isConnected ? 'bg-emerald-500' : 'bg-neutral-700'
-                            }`}
-                            title={isConnected ? 'Disable MCP plugin' : 'Authorize & enable MCP plugin'}
-                          >
-                            <span
-                              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                                isConnected ? 'translate-x-5' : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handlePluginAction(plugin)}
-                            className={`px-2.5 py-1 rounded-lg font-semibold text-xs transition-colors shrink-0 cursor-pointer ${
+                            className={`px-3 py-1.5 rounded-lg font-semibold text-xs transition-colors shrink-0 cursor-pointer ${
                               isConnected
                                 ? 'bg-neutral-800 text-neutral-300 hover:bg-rose-950 hover:text-rose-300 border border-neutral-700'
                                 : 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-sm'
@@ -961,6 +792,49 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         Granting access equips nanobot with all {authorizingPlugin.tools.length} tools provided by {authorizingPlugin.name}.
                       </p>
                     </div>
+
+                    {/* GitHub Repository Scope Selector */}
+                    {/* Added GitHub repository access selector with All vs Only select repositories options [Commented by: Google AI Studio on 28/10/2026 11:30 AM] */}
+                    {authorizingPlugin.id === 'github' && (
+                      <div className="space-y-2 pt-2 border-t border-[#222]">
+                        <label className="block text-xs font-semibold text-neutral-300">
+                          Repository Access Scope:
+                        </label>
+                        <div className="space-y-1.5 text-xs">
+                          <label className="flex items-center gap-2 cursor-pointer text-neutral-200">
+                            <input
+                              type="radio"
+                              name="github_repo_scope"
+                              value="all"
+                              checked={githubRepoChoice === 'all'}
+                              onChange={() => setGithubRepoChoice('all')}
+                              className="accent-emerald-500"
+                            />
+                            <span>All repositories (public and private accessible by account)</span>
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer text-neutral-200">
+                            <input
+                              type="radio"
+                              name="github_repo_scope"
+                              value="specific"
+                              checked={githubRepoChoice === 'specific'}
+                              onChange={() => setGithubRepoChoice('specific')}
+                              className="accent-emerald-500"
+                            />
+                            <span>Only select repositories</span>
+                          </label>
+                        </div>
+                        {githubRepoChoice === 'specific' && (
+                          <input
+                            type="text"
+                            value={githubSpecificRepo}
+                            onChange={(e) => setGithubSpecificRepo(e.target.value)}
+                            placeholder="e.g. username/repo-name"
+                            className="w-full bg-[#181818] border border-[#333] rounded-lg px-3 py-1.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] mt-1"
+                          />
+                        )}
+                      </div>
+                    )}
 
                     {/* Account Sign-In / Credential Prompt */}
                     <div className="space-y-2 pt-1 border-t border-[#222]">
@@ -1085,14 +959,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </a>
                 </p>
 
+                {/* Removed Note: heading and erased second point [Commented by: Google AI Studio on 28/10/2026 11:32 AM] */}
                 <div className="bg-[#141414] border border-[#333] rounded-xl p-4 space-y-2 mt-4 text-xs text-neutral-300">
-                  <div className="font-semibold text-white text-sm">Note:</div>
                   <ol className="list-decimal list-inside space-y-2 leading-relaxed">
                     <li>
-                      nanobot has a 30-days chat deletion policy. Any chat inactive for 30 days will be automatically deleted. This is required for storage purposes. On top of that, we request you to delete any chat that you have no longer use for. Your deleting of one chat will help another user create a new chat.
-                    </li>
-                    <li>
-                      Warning: Though we&#39;ve given our best not to have any data loss, some of your data might get deleted. Though this&#39;ll be extremely rare, we recommend to keep a backup of important chats by saving them using &#39;Ctrl+S&#39; combination.
+                      nanobot stores noodles securely in your browser&#39;s encrypted local storage without auto-deletion. Shared noodles backed up to Cloudflare have a 30-day retention policy and will expire automatically after 30 days of inactivity.
                     </li>
                   </ol>
                 </div>

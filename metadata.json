@@ -1,6 +1,6 @@
 {
   "name": "nanobot",
-  "description": "A privacy first, open source code AI chat bot.",
+  "description": "Privacy first source available AI chat bot.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

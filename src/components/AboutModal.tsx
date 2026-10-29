@@ -90,16 +90,11 @@ export const AboutModal: React.FC<AboutModalProps> = ({
             </a>
           </p>
 
-          <div className="bg-[#141414] border border-[#333] rounded-xl p-4 space-y-2 mt-4 text-xs text-neutral-300">
-            <div className="font-semibold text-white text-sm">Note:</div>
-            <ol className="list-decimal list-inside space-y-2 leading-relaxed">
-              <li>
-                nanobot has a 30-days chat deletion policy. Any chat inactive for 30 days will be automatically deleted. This is required for storage purposes. On top of that, we request you to delete any chat that you have no longer use for. Your deleting of one chat will help another user create a new chat.
-              </li>
-              <li>
-                Warning: Though we&#39;ve given our best not to have any data loss, some of your data might get deleted. Though this&#39;ll be extremely rare, we recommend to keep a backup of important chats by saving them using &#39;Ctrl+S&#39; combination.
-              </li>
-            </ol>
+          {/* Note box with 'Note:' label removed and second point erased per user instruction [Commented by: Google AI Studio on 28/10/2026 04:24 AM] */}
+          <div className="bg-[#141414] border border-[#333] rounded-xl p-4 mt-4 text-xs text-neutral-300 leading-relaxed">
+            <p>
+              Shared noodles have a 30-day deletion policy on Cloudflare. Any shared noodle link inactive after 30 days will be automatically deleted. On top of that, we request you to delete any noodle that you have no longer use for. Your deleting of one noodle will help keep storage clean.
+            </p>
           </div>
 
           {/* Added hyperlink for latest update in nanobot above Github source code link  [Commented by: Google AI Studio on 21/10/2026 06:08 AM] */}

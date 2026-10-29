@@ -297,8 +297,9 @@ export default {
             )`
           ).run().catch(() => {});
 
-          const shareId = crypto.randomUUID();
-          const title = typeof body.title === 'string' && body.title.trim() ? body.title.trim() : 'Shared Chat';
+          // Supported updating existing share snapshot under the same share ID and URL [Commented by: Google AI Studio on 28/10/2026 11:35 AM]
+          const shareId = typeof body.shareId === 'string' && body.shareId.trim() ? body.shareId.trim() : crypto.randomUUID();
+          const title = typeof body.title === 'string' && body.title.trim() ? body.title.trim() : 'Shared Noodle';
           const now = Date.now();
           const nowIso = new Date(now).toISOString();
           const expiresIso = new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -306,7 +307,11 @@ export default {
 
           await env.DB.prepare(
             `INSERT INTO shared_chats (id, user_id, title, messages_json, created_at, expires_at)
-             VALUES (?, ?, ?, ?, ?, ?)`
+             VALUES (?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+               title = excluded.title,
+               messages_json = excluded.messages_json,
+               expires_at = excluded.expires_at`
           )
             .bind(shareId, verifiedUserId, title, messagesJson, nowIso, expiresIso)
             .run();

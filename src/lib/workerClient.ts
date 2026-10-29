@@ -260,14 +260,15 @@ export const workerClient = {
     );
   },
 
-  // Create a public shareable snapshot for a chat session with 30-day retention [Commented by: Google AI Studio on 22/10/2026 04:50 AM]
+  // Create or update a public shareable snapshot for a chat session with 30-day retention [Commented by: Google AI Studio on 28/10/2026 11:36 AM]
   async createShare(
     title: string,
-    messages: WorkerMessage[]
+    messages: WorkerMessage[],
+    shareId?: string
   ): Promise<WorkerApiResponse<{ shareId: string; title: string; expires_at: string }>> {
     return workerFetch<{ shareId: string; title: string; expires_at: string }>('/api/shares', {
       method: 'POST',
-      body: JSON.stringify({ title, messages }),
+      body: JSON.stringify({ title, messages, shareId }),
     });
   },
 

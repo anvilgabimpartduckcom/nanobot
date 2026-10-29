@@ -51,9 +51,23 @@ nanobot/
 
 # 📢 Latest Updates
 <!-- Placed a megaphone emoji [Commented by: Google AI Studio on 21/10/2026 11:20 AM] -->
-<!-- Updated Latest Updates with LICENSE file [Commented by: Developer on 24/10/2026 03:16 PM] -->
+<!-- Updated Latest Updates with encrypted local noodles, three-dot menus, nemotron 3.5 model, and Add-ons [Commented by: Google AI Studio on 28/10/2026 12:20 PM] -->
 
-- **Updated LICENSE file**:
-  - Created the SABNFS License.
+- **Encrypted Local Storage for Noodles**:
+  - Noodles and AI reasoning are stored strictly in browser local storage with zero-knowledge AES-GCM encryption without 30-day auto-purge.
+  - Only shared noodles are backed up to Cloudflare D1 with 30-day retention; re-sharing updates the snapshot under the same URL.
+
+- **Three-Dot Menu Navigation**:
+  - Signed-in new noodles feature a borderless three-dot menu with an Incognito toggle and an Import sub-menu (`Import .txt` and `Provide URL`).
+  - Signed-in running noodles feature a borderless three-dot menu with `Share` and `Export Chat`.
+  - Signed-out visitors have an `Import Shared Chat` button with centered `Enter URL` modal.
+
+- **User Message Hover Actions**:
+  - Hovering over sent messages displays `Copy` and inline `Edit` buttons with Enter to resend and Shift+Enter for newlines.
+
+- **Model & Architecture Upgrades**:
+  - Upgraded OpenRouter model to `nvidia/nemotron-3.5-super-vl:free` with a 1,000,000 token ceiling and an 8-message context window omitting reasoning and raw code outputs.
+  - Add-ons rebrand with sorted MCP integrations and interactive GitHub OAuth repository scope selection.
+  - Rebranded chat terminology to Noodles throughout the application.
 
 

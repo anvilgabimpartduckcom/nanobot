@@ -50,10 +50,12 @@ interface ChatSession {
   messages: ChatMessage[];
   pinned: boolean;
   updated: number;
+  shareId?: string; // Stored Cloudflare D1 share snapshot ID to update snapshot under identical URL [Commented by: Google AI Studio on 28/10/2026 11:38 AM]
 }
 
 const STOP_FRAMES = ['|', '/', '-', '\\'];
 const INPUT_MIN_HEIGHT = 52;
+const TOKEN_CEILING = 1_000_000;
 
 export default function App() {
   // Session & Auth State
@@ -66,6 +68,19 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [isIncognito, setIsIncognito] = useState(false);
+
+  // States for top-right three-dot menus and URL modal [Commented by: Google AI Studio on 28/10/2026 11:38 AM]
+  const [isNewNoodleMenuOpen, setIsNewNoodleMenuOpen] = useState(false);
+  const [isImportSubMenuOpen, setIsImportSubMenuOpen] = useState(false);
+  const [isRunningNoodleMenuOpen, setIsRunningNoodleMenuOpen] = useState(false);
+  const [isProvideUrlModalOpen, setIsProvideUrlModalOpen] = useState(false);
+  const [provideUrlInput, setProvideUrlInput] = useState('');
+  const [isImportingUrl, setIsImportingUrl] = useState(false);
+
+  // User message hover & inline editing state [Commented by: Google AI Studio on 28/10/2026 11:38 AM]
+  const [editingMessageIndex, setEditingMessageIndex] = useState<number | null>(null);
+  const [editText, setEditText] = useState('');
+  const [hoveredUserMessageIndex, setHoveredUserMessageIndex] = useState<number | null>(null);
 
   // Initialized Theme state with persistent storage and DOM synchronization for Neon Black and Minimalist Light [Commented by: Google AI Studio on 20/10/2026 11:30 AM]
   const [theme, setTheme] = useState<AppTheme>(() => {
@@ -177,40 +192,88 @@ export default function App() {
     return () => clearInterval(timer);
   }, [isGenerating]);
 
-  // Derive CryptoKey and load Cloudflare Worker history when user logs in with password
+  // Saved chats and reasoning locally with encryption; no 30-day auto-purge for local storage [Commented by: Google AI Studio on 28/10/2026 11:42 AM]
+  const saveLocalEncryptedChats = async (allChats: ChatSession[], key?: CryptoKey | null, user?: UserProfile | null) => {
+    if (isIncognito) return; // Incognito chats are strictly never persisted to history or storage
+    const targetUser = user !== undefined ? user : currentUser;
+    const targetKey = key !== undefined ? key : cryptoKey;
+    if (targetUser && targetKey) {
+      try {
+        const payload = JSON.stringify(allChats);
+        const encrypted = await encryptText(payload, targetKey, targetUser.salt || 'salt');
+        localStorage.setItem(`nanobot_encrypted_chats_${targetUser.id}`, encrypted);
+      } catch (err) {
+        console.warn('Encrypted local storage write notice:', err);
+      }
+    } else {
+      try {
+        localStorage.setItem('nanobot_chats', JSON.stringify(allChats));
+      } catch (e) {
+        console.error('Local storage write error:', e);
+      }
+    }
+  };
+
+  const loadLocalEncryptedChats = async (key: CryptoKey, user: UserProfile) => {
+    try {
+      const rawEncrypted = localStorage.getItem(`nanobot_encrypted_chats_${user.id}`);
+      if (rawEncrypted) {
+        const decrypted = await decryptText(rawEncrypted, key);
+        const parsed = JSON.parse(decrypted);
+        if (Array.isArray(parsed)) {
+          setChats(parsed);
+          return;
+        }
+      }
+      // Migration from unencrypted local cache if available
+      const legacy = localStorage.getItem('nanobot_chats');
+      if (legacy) {
+        const parsed = JSON.parse(legacy);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setChats(parsed);
+          // Encrypt into user's private encrypted store
+          saveLocalEncryptedChats(parsed, key, user);
+          return;
+        }
+      }
+      setChats([]);
+    } catch (err) {
+      console.warn('Failed to decrypt local encrypted chats:', err);
+      setChats([]);
+    }
+  };
+
+  // Derive CryptoKey and load encrypted local storage when user logs in with password
   useEffect(() => {
-    // Fetch remote chat history from Cloudflare Worker D1 backend upon user login [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
+    // Loaded encrypted local chats; Cloudflare D1 is reserved strictly for shared chats [Commented by: Google AI Studio on 28/10/2026 11:42 AM]
     if (currentUser && passwordSecret) {
       deriveKeyFromPassword(passwordSecret, currentUser.salt || 'default_nanobot_salt')
         .then((key) => {
           setCryptoKey(key);
-          loadWorkerConversations(key);
+          loadLocalEncryptedChats(key, currentUser);
         })
         .catch((err) => {
           console.error('Error deriving encryption key:', err);
-          loadWorkerConversations();
+          try {
+            const stored = JSON.parse(localStorage.getItem('nanobot_chats') || '[]');
+            setChats(Array.isArray(stored) ? stored : []);
+          } catch {
+            setChats([]);
+          }
         });
     } else if (currentUser) {
-      loadWorkerConversations();
-    } else {
-      setCryptoKey(null);
-      // Filter out and purge all files and caches for chats older than 30 days [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
       try {
         const stored = JSON.parse(localStorage.getItem('nanobot_chats') || '[]');
-        const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-        const now = Date.now();
-        const validChats = stored.filter((c: ChatSession) => {
-          const isExpired = now - (c.updated || 0) >= thirtyDaysMs;
-          if (isExpired) {
-            deleteOriginalFilesForChat(c.id).catch(() => {});
-            deleteArchiveFromR2(c.id);
-            localStorage.removeItem('nanobot_files_' + c.id);
-            removeEncryptedChatRecord(c.id);
-          }
-          return !isExpired;
-        });
-        localStorage.setItem('nanobot_chats', JSON.stringify(validChats));
-        setChats(validChats);
+        setChats(Array.isArray(stored) ? stored : []);
+      } catch {
+        setChats([]);
+      }
+    } else {
+      setCryptoKey(null);
+      // Locally stored chats retain permanently without 30-day auto-purge
+      try {
+        const stored = JSON.parse(localStorage.getItem('nanobot_chats') || '[]');
+        setChats(Array.isArray(stored) ? stored : []);
       } catch {
         setChats([]);
       }
@@ -292,17 +355,22 @@ export default function App() {
     setTimeout(() => setToastNotice(null), 3000);
   };
 
-  // Create a public share URL for the active chat session with 30-day retention, available exclusively to signed in users [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
+  // Create a public share URL for the active noodle with 30-day retention, updating snapshot under same URL [Commented by: Google AI Studio on 28/10/2026 11:45 AM]
   const handleShareActiveChat = async () => {
+    if (isIncognito) {
+      setToastNotice('Incognito noodles cannot be shared.');
+      setTimeout(() => setToastNotice(null), 3000);
+      return;
+    }
     if (!currentUser) {
-      setToastNotice('Sign in required to share chat sessions.');
+      setToastNotice('Sign in required to share noodles.');
       setTimeout(() => setToastNotice(null), 3500);
       return;
     }
 
     const targetChat = chats.find((c) => c.id === activeChatId) || (activeChatId ? null : chats[0]);
     if (!targetChat || targetChat.messages.length === 0) {
-      setToastNotice('No active chat messages to share.');
+      setToastNotice('No active noodle messages to share.');
       setTimeout(() => setToastNotice(null), 3000);
       return;
     }
@@ -333,8 +401,11 @@ export default function App() {
         };
       });
 
-      const res = await workerClient.createShare(targetChat.title, cleanMessages as WorkerMessage[]);
+      // Pass existing targetChat.shareId so re-sharing by the same user updates the snapshot under identical URL [Commented by: Google AI Studio on 28/10/2026 11:45 AM]
+      const res = await workerClient.createShare(targetChat.title, cleanMessages as WorkerMessage[], targetChat.shareId);
       if (res.success && res.data?.shareId) {
+        targetChat.shareId = res.data.shareId;
+        persistChat(targetChat);
         const shareUrl = `${window.location.origin}/?share=${res.data.shareId}`;
         await navigator.clipboard.writeText(shareUrl).catch(() => {});
         setToastNotice('✓ Public share link copied to clipboard! (30-day retention)');
@@ -348,6 +419,66 @@ export default function App() {
       setTimeout(() => setToastNotice(null), 4000);
     } finally {
       setIsSharing(false);
+    }
+  };
+
+  // Import shared noodle via URL for signed-in and signed-out users [Commented by: Google AI Studio on 28/10/2026 11:45 AM]
+  const handleImportFromUrl = async (urlStr: string) => {
+    const raw = urlStr.trim();
+    if (!raw) return;
+    setIsImportingUrl(true);
+    try {
+      let shareId = raw;
+      if (raw.includes('share=')) {
+        const match = raw.match(/[?&]share=([^&#]+)/);
+        if (match) shareId = decodeURIComponent(match[1]);
+      } else if (raw.includes('/')) {
+        const parts = raw.split('/');
+        shareId = parts[parts.length - 1];
+      }
+      const res = await workerClient.getPublicShare(shareId);
+      if (res.success && res.share) {
+        if (currentUser) {
+          // Import into current account and save to encrypted local storage
+          const importedNoodle: ChatSession = {
+            id: Date.now().toString(),
+            title: res.share.title || 'Imported Noodle',
+            messages: (res.share.messages || []) as ChatMessage[],
+            pinned: false,
+            updated: Date.now(),
+            shareId: res.share.id,
+          };
+          const nextChats = [importedNoodle, ...chats];
+          setChats(nextChats);
+          setActiveChatId(importedNoodle.id);
+          saveLocalEncryptedChats(nextChats, cryptoKey, currentUser);
+          setSharedChatView(null);
+          setIsProvideUrlModalOpen(false);
+          setProvideUrlInput('');
+          setToastNotice(`✓ Imported "${importedNoodle.title}" (${importedNoodle.messages.length} messages)`);
+          setTimeout(() => setToastNotice(null), 4000);
+        } else {
+          // Signed out: load view-only shared chat
+          setSharedChatView({
+            id: res.share.id,
+            title: res.share.title,
+            messages: res.share.messages as ChatMessage[],
+            created_at: res.share.created_at,
+            expires_at: res.share.expires_at,
+          });
+          setIsProvideUrlModalOpen(false);
+          setProvideUrlInput('');
+          setToastNotice(`✓ Loaded shared noodle: "${res.share.title}" (View only)`);
+          setTimeout(() => setToastNotice(null), 4000);
+        }
+      } else {
+        alert(res.error || 'Failed to load shared noodle. URL may be invalid or expired.');
+      }
+    } catch (err: unknown) {
+      const e = err as Error;
+      alert(`Error loading shared noodle: ${e.message}`);
+    } finally {
+      setIsImportingUrl(false);
     }
   };
 
@@ -738,119 +869,16 @@ export default function App() {
     }
   };
 
-  // User chats are stored and loaded exclusively from Cloudflare Worker D1 and R2 archives; user profiles and code outputs reside in Supabase [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
-
-  // Save active chat (Encrypted to Supabase + R2 if signed in, skipped if Incognito)
-  // Enforced file storage isolation: raw files/images stay local, cloud backups store code output only [Commented by: Google AI Studio on 14/10/2026 10:35 AM]
-  // Persist chat session and messages to Cloudflare Worker D1 backend with Supabase token verification [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
+  // Persist noodle strictly to browser encrypted local storage; Cloudflare D1 is used only for shared noodles [Commented by: Google AI Studio on 28/10/2026 11:47 AM]
   const persistChat = async (chat: ChatSession) => {
-    if (isIncognito) return; // Do not save incognito chats
+    if (isIncognito) return; // Do not save incognito noodles
 
-    // Strip bulky raw image data URLs before cloud persistence; retain text and script analyzer code output
-    const cleanMessagesForCloud = chat.messages.map((m) => {
-      if (Array.isArray(m.content)) {
-        const textParts = m.content
-          .filter((c) => c.type === 'text')
-          .map((c) => c.text || '')
-          .join('\n');
-        return {
-          ...m,
-          content: textParts || '[Multimodal Message]'
-        };
-      }
-      return m;
+    setChats((prev) => {
+      const exists = prev.some((c) => c.id === chat.id);
+      const updatedList = exists ? prev.map((c) => (c.id === chat.id ? chat : c)) : [chat, ...prev];
+      saveLocalEncryptedChats(updatedList, cryptoKey, currentUser);
+      return updatedList;
     });
-
-    // Zero-knowledge client-side encryption: encrypt title and message contents before sending to Cloudflare Worker D1 so developer cannot read them [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
-    if (currentUser) {
-      (async () => {
-        let titleToSync = chat.title;
-        let workerMessagesToSync: WorkerMessage[] = cleanMessagesForCloud.map((m) => ({
-          role: m.role,
-          content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
-          sources: m.sources,
-          reasoning: m.reasoning,
-          displayAttachments: m.displayAttachments,
-        }));
-
-        if (cryptoKey) {
-          try {
-            titleToSync = await encryptText(chat.title, cryptoKey, currentUser.salt || 'salt');
-            workerMessagesToSync = await Promise.all(
-              cleanMessagesForCloud.map(async (m) => {
-                const rawContent = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
-                const encContent = await encryptText(rawContent, cryptoKey, currentUser.salt || 'salt');
-                const encReasoning = m.reasoning
-                  ? await encryptText(m.reasoning, cryptoKey, currentUser.salt || 'salt')
-                  : undefined;
-                return {
-                  role: m.role,
-                  content: encContent,
-                  sources: m.sources,
-                  reasoning: encReasoning,
-                  displayAttachments: m.displayAttachments,
-                };
-              })
-            );
-          } catch (encErr) {
-            console.warn('Worker encryption notice:', encErr);
-          }
-        }
-
-        // 1. Sync conversation metadata to Cloudflare Worker D1 backend asynchronously
-        workerClient
-          .createOrUpdateConversation({
-            id: chat.id,
-            title: titleToSync,
-            pinned: chat.pinned,
-            updated_at: new Date(chat.updated).toISOString(),
-          })
-          .then((res) => {
-            if (!res.success && res.error) {
-              console.warn('Worker sync notice (conversation):', res.error);
-              if (res.isNetworkError) {
-                setHistoryNotice('Cloud history worker syncing locally. Your chat is fully functional.');
-              }
-            } else {
-              setHistoryNotice(null);
-            }
-          })
-          .catch(() => {});
-
-        // 2. Batch save clean messages to Cloudflare Worker D1 backend asynchronously
-        workerClient
-          .saveMessagesBatch(chat.id, workerMessagesToSync, titleToSync)
-          .then((res) => {
-            if (!res.success && res.error) {
-              console.warn('Worker sync notice (messages):', res.error);
-            }
-          })
-          .catch(() => {});
-      })();
-    }
-
-    if (currentUser && cryptoKey) {
-      // Tiered archiving: older messages preserved in Cloudflare R2; active transcripts in Cloudflare Worker D1 [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
-      try {
-        if (cleanMessagesForCloud.length > 10) {
-          const olderMessages = cleanMessagesForCloud.slice(0, cleanMessagesForCloud.length - 10);
-          const olderPayload = JSON.stringify({ messages: olderMessages });
-          const encryptedOlder = await encryptData(olderPayload, cryptoKey, currentUser.salt || 'salt');
-          await uploadArchiveToR2(chat.id, encryptedOlder.ciphertext);
-        }
-      } catch (err) {
-        console.warn('Cloudflare R2 archival notice:', err);
-      }
-    } else {
-      // Local storage fallback for guests
-      try {
-        const updatedChats = chats.map((c) => (c.id === chat.id ? chat : c));
-        if (!updatedChats.some((c) => c.id === chat.id)) updatedChats.push(chat);
-        localStorage.setItem('nanobot_chats', JSON.stringify(updatedChats));
-      } catch (e) {
-        console.error('Failed to save chat locally:', e);
-      }
-    }
   };
 
   // Scroll to bottom
@@ -1007,8 +1035,8 @@ export default function App() {
     setAttachments((prev) => prev.filter((a) => a.id !== id));
   };
 
-  // Send message
-  const handleSend = async () => {
+  // Send message (supports normal composer send as well as resending an edited user message) [Commented by: Google AI Studio on 28/10/2026 11:55 AM]
+  const handleSend = async (editedPromptText?: string, editedMsgIndex?: number) => {
     if (isGenerating) {
       if (abortControllerRef.current) abortControllerRef.current.abort();
       setIsGenerating(false);
@@ -1016,7 +1044,8 @@ export default function App() {
       return;
     }
 
-    const trimmedPrompt = inputText.trim();
+    const isEditMode = editedMsgIndex !== undefined && typeof editedPromptText === 'string';
+    const trimmedPrompt = (isEditMode ? editedPromptText : inputText).trim();
     if (!trimmedPrompt && attachments.length === 0) return;
 
     if (!isOnline) {
@@ -1039,30 +1068,37 @@ export default function App() {
 
     // Inject synthesized reader script template and extracted data preview into file context [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
     let attachedFileContext = '';
-    attachments.forEach((att) => {
-      displayAttachments.push({
-        type: att.isImage ? 'image' : 'file',
-        name: att.name,
-        fileId: att.fileId,
-        isLocalMissing: false
+    if (!isEditMode) {
+      attachments.forEach((att) => {
+        displayAttachments.push({
+          type: att.isImage ? 'image' : 'file',
+          name: att.name,
+          fileId: att.fileId,
+          isLocalMissing: false
+        });
+        if (!att.isImage) {
+          attachedFileContext += `\n\n--- Uploaded File: ${att.name} (${att.type || 'document'}, ${att.size} bytes) ---\n`;
+          if (att.generatedReaderCode) {
+            attachedFileContext += `[Reader Script for ${att.name}]:\n\`\`\`python\n${att.generatedReaderCode}\n\`\`\`\n`;
+          }
+          if (att.contentSnippet) {
+            attachedFileContext += `[Extracted File Contents / Data Preview]:\n${att.contentSnippet}\n`;
+          }
+        }
       });
-      if (!att.isImage) {
-        attachedFileContext += `\n\n--- Uploaded File: ${att.name} (${att.type || 'document'}, ${att.size} bytes) ---\n`;
-        if (att.generatedReaderCode) {
-          attachedFileContext += `[Reader Script for ${att.name}]:\n\`\`\`python\n${att.generatedReaderCode}\n\`\`\`\n`;
-        }
-        if (att.contentSnippet) {
-          attachedFileContext += `[Extracted File Contents / Data Preview]:\n${att.contentSnippet}\n`;
-        }
-      }
-    });
+    }
 
-    const promptSummary = trimmedPrompt || (attachments.length > 0 ? attachments[0].name : 'New Chat');
+    const promptSummary = trimmedPrompt || (attachments.length > 0 ? attachments[0].name : 'New Noodle');
 
-    // Create or locate chat session
+    // Create or locate noodle session
     let chat = activeChat;
-    // Seamlessly fork shared chat session into a separate personal chat when user submits a prompt [Commented by: Google AI Studio on 22/10/2026 04:51 AM]
-    if (!chat && sharedChatView) {
+    if (isEditMode && chat) {
+      // Preserve history prior to edited message
+      chat = {
+        ...chat,
+        messages: chat.messages.slice(0, editedMsgIndex)
+      };
+    } else if (!chat && sharedChatView) {
       chat = {
         id: Date.now().toString(),
         title: sharedChatView.title,
@@ -1190,10 +1226,12 @@ export default function App() {
     chat.updated = Date.now();
     persistChat(chat);
 
-    // Reset composer input
-    setInputText('');
-    setAttachments([]);
-    if (textareaRef.current) textareaRef.current.style.height = `${INPUT_MIN_HEIGHT}px`;
+    // Reset composer input if not in inline edit mode
+    if (!isEditMode) {
+      setInputText('');
+      setAttachments([]);
+      if (textareaRef.current) textareaRef.current.style.height = `${INPUT_MIN_HEIGHT}px`;
+    }
 
     // Initialize Generation
     setIsGenerating(true);
@@ -1285,12 +1323,22 @@ CRITICAL: After all the scraped results return, you will no longer be provided w
 ${toolsContext ? `8. Connected MCP Server Tools: You have direct access to ALL the tools provided by the following connected MCP servers:\n${toolsContext}\nWhen the user explicitly asks you to use a service or tool, execute the tool action and synthesize the results for them.` : ''}
 ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
 
+    // Configured 8-message context window, strictly omitting model reasoning and raw code outputs [Commented by: Google AI Studio on 28/10/2026 11:50 AM]
     const apiMessages: Array<{ role: string; content: unknown }> = [
       { role: 'system', content: systemPrompt }
     ];
 
-    chat.messages.slice(-4).forEach((m) => {
-      apiMessages.push({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.content });
+    chat.messages.slice(-8).forEach((m) => {
+      let cleanContent = m.content;
+      if (typeof cleanContent === 'string') {
+        cleanContent = cleanContent
+          .replace(/\[Python Reader Script\]:[\s\S]*?```/gi, '')
+          .replace(/\[Reader Script for .*?\]:[\s\S]*?```/gi, '')
+          .replace(/\[Extracted File Contents \/ Data Preview\]:[\s\S]*?(?=\n\n|\n\[|$)/gi, '')
+          .trim();
+      }
+      // Explicitly omit m.reasoning and raw code from API context
+      apiMessages.push({ role: m.role === 'ai' ? 'assistant' : 'user', content: cleanContent });
     });
 
     let currentOutput = '';
@@ -1306,10 +1354,12 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
       // Determine model training opt-out parameter (incognito or user toggle OFF)
       const optOutTraining = isIncognito || currentUser?.model_training === false;
 
+      // Updated model to nvidia/nemotron-3.5-super-vl:free with 1M token ceiling [Commented by: Google AI Studio on 28/10/2026 11:50 AM]
       const bodyPayload: Record<string, unknown> = {
-        model: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
+        model: 'nvidia/nemotron-3.5-super-vl:free',
         temperature: 0.0,
         stream: true,
+        max_tokens: TOKEN_CEILING,
         reasoning: { enabled: true, effort: 'medium' },
         messages: messagesArr
       };
@@ -1554,8 +1604,15 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
     }
   };
 
-  // Clear chat history
-  // Synchronized batch chat deletion with Cloudflare Worker D1 backend and local IndexedDB file cleanup [Commented by: Google AI Studio on 15/10/2026 09:22 AM]
+  // User message inline edit resend handler [Commented by: Google AI Studio on 28/10/2026 11:58 AM]
+  const handleResendEditedMessage = async (msgIndex: number, newText: string) => {
+    setEditingMessageIndex(null);
+    setEditText('');
+    await handleSend(newText, msgIndex);
+  };
+
+  // Clear noodle history
+  // Synchronized batch noodle deletion with local encrypted storage and IndexedDB file cleanup [Commented by: Google AI Studio on 28/10/2026 11:58 AM]
   const handleClearChatHistory = () => {
     if (!window.confirm('Clear unpinned chats from history?')) return;
     const remaining = chats.filter((c) => c.pinned);
@@ -1813,28 +1870,29 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         <div className={`flex items-center pb-3 border-b mb-3 ${
           theme === 'Minimalist Light' ? 'border-[#e5e7eb]' : 'border-[#262626]'
         }`}>
+          {/* Rebranded History to Noodle History [Commented by: Google AI Studio on 28/10/2026 12:12 PM] */}
           <h3 className={`font-semibold text-base tracking-wide ${sidebarOpen ? 'max-sm:pr-12' : ''} ${
             theme === 'Minimalist Light' ? 'text-neutral-800' : 'text-neutral-300'
           }`}>
-            History ◴
+            Noodle History ◴
           </h3>
         </div>
 
-        {/* Chat History Search Bar (Available exclusively to signed-in users) */}
-        {/* Restricted chat history search bar visibility and title filtering exclusively to signed-in users  [Commented by: Google AI Studio on 17/10/2026 02:47 AM] */}
+        {/* Noodle History Search Bar (Available exclusively to signed-in users) */}
+        {/* Restricted noodle history search bar visibility and title filtering exclusively to signed-in users [Commented by: Google AI Studio on 28/10/2026 12:12 PM] */}
         {currentUser && (
           <div className="relative mb-3">
             <input
               type="text"
               value={historySearchQuery}
               onChange={(e) => setHistorySearchQuery(e.target.value)}
-              placeholder="Search chats by title..."
+              placeholder="Search noodles by title..."
               className={`w-full rounded-lg pl-8 pr-7 py-1.5 text-xs transition-colors focus:outline-none ${
                 theme === 'Minimalist Light'
                   ? 'bg-neutral-100 border border-neutral-300 text-neutral-900 placeholder-neutral-400 focus:border-emerald-600 focus:bg-white'
                   : 'bg-[#141414] border border-[#262626] text-white placeholder-neutral-500 focus:border-[#39ff14]'
               }`}
-              aria-label="Search chats by title"
+              aria-label="Search noodles by title"
             />
             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-500 text-xs pointer-events-none">
               🔍
@@ -1887,10 +1945,10 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         {/* Increased empty history text font size per focus-mode instruction  [Commented by: Google AI Studio on 18/10/2026 01:07 PM] */}
         <div className="flex-1 overflow-y-auto space-y-1" onScroll={handleChatTitleMouseLeave}>
           {chats.length === 0 ? (
-            <div className="text-sm text-neutral-500 p-2 italic">No chat history yet</div>
+            <div className="text-sm text-neutral-500 p-2 italic">No noodle history yet</div>
           ) : filteredChats.length === 0 ? (
             <div className="text-xs text-neutral-500 p-2 italic text-center space-y-1.5">
-              <div>No chats matching &quot;{historySearchQuery}&quot;</div>
+              <div>No noodles matching &quot;{historySearchQuery}&quot;</div>
               <button
                 onClick={() => setHistorySearchQuery('')}
                 className="text-[11px] text-emerald-400 hover:underline cursor-pointer"
@@ -1946,7 +2004,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
             onClick={handleClearChatHistory}
             className="w-full bg-[#dc2626] hover:bg-red-700 text-white font-bold py-[10px] px-3 rounded-[6px] text-xs transition-colors cursor-pointer"
           >
-            Clear Chat History
+            Clear Noodle History
           </button>
 
           {/* Render Settings button for signed-in users or 'About nanobot' button in exact same position for non-signed-in users  [Commented by: Google AI Studio on 20/10/2026 11:32 AM] */}
@@ -1980,7 +2038,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
       {/* MAIN VIEWPORT */}
       {/* When mobile sidebar is opened, this sidebar button rides on top with z-50 in the top-right, while all other buttons, chat box, and text disappear  [Commented by: Google AI Studio on 21/10/2026 05:45 AM] */}
       <main className="flex-1 relative flex flex-col items-center h-full overflow-hidden">
-        {/* Top Controls (Left: Sidebar Toggle & New Chat; positioned in top-right aligned with History divider line on mobile when sidebar is open) */}
+        {/* Top Controls (Left: Sidebar Toggle & New Noodle; positioned in top-right aligned with History divider line on mobile when sidebar is open) */}
         {/* Moved button a bit upwards on mobile with max-sm:top-[11px] to perfectly align bottom edge with divider line under History text  [Commented by: Google AI Studio on 21/10/2026 06:08 AM] */}
         <div className={`absolute ${
           sidebarOpen ? 'max-sm:top-[11px] max-sm:right-[15px] max-sm:left-auto top-4 left-4' : 'top-4 left-4'
@@ -2006,8 +2064,8 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                 ? 'border-neutral-300 text-neutral-800 hover:border-neutral-500 hover:bg-neutral-100'
                 : 'border-[#333] text-white hover:border-neutral-500'
             }`}
-            title="New Chat"
-            aria-label="New Chat"
+            title="New Noodle"
+            aria-label="New Noodle"
           >
             💬
           </button>
@@ -2023,64 +2081,26 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         )}
 
         {/* Top-Right Controls */}
+        {/* Replaced top-right controls with three-dot borderless menus for new and running noodles, and added Import Shared Chat button for guests [Commented by: Google AI Studio on 28/10/2026 12:00 PM] */}
         <div className={`absolute top-4 right-4 flex items-center gap-2 z-30 ${
           sidebarOpen ? 'max-sm:hidden' : ''
         }`}>
-          {/* Render 'Import previous chat' button strictly for signed-in users before chatting has started  [Commented by: Google AI Studio on 19/10/2026 11:19 AM] */}
-          {currentUser && (!activeChat || activeChat.messages.length === 0) && (
-            <button
-              onClick={() => importFileInputRef.current?.click()}
-              className={`h-10 px-3 rounded-[8px] flex items-center gap-1.5 text-xs font-mono cursor-pointer transition-colors ${
-                theme === 'Minimalist Light'
-                  ? 'bg-white border border-neutral-300 hover:border-emerald-600 text-neutral-700 hover:text-neutral-900 shadow-xs'
-                  : 'bg-[#111] border border-[#333] hover:border-[#39ff14] text-neutral-300 hover:text-white'
-              }`}
-              title="Import previously exported chat (.txt)"
-              aria-label="Import previously exported chat"
-            >
-              <span className="text-emerald-500 font-bold">↑</span>
-              <span className="hidden sm:inline">Import previous chat</span>
-            </button>
-          )}
-
-          {activeChat && (
-            <button
-              onClick={handleExportActiveChat}
-              className={`h-10 px-3 rounded-[8px] flex items-center gap-1.5 text-xs font-mono cursor-pointer transition-colors ${
-                theme === 'Minimalist Light'
-                  ? 'bg-white border border-neutral-300 hover:border-emerald-600 text-neutral-700 hover:text-neutral-900 shadow-xs'
-                  : 'bg-[#111] border border-[#333] hover:border-[#39ff14] text-neutral-300 hover:text-white'
-              }`}
-              title="Export active chat history as plain text (Ctrl+S)"
-              aria-label="Export active chat history as plain text"
-            >
-              <span className="text-emerald-500 font-bold">↓</span>
-              <span className="hidden sm:inline">Export (Ctrl+S)</span>
-            </button>
-          )}
-
-          {/* Share Button (Available exclusively to signed-in users) */}
-          {/* Share button generating a public snapshot URL with 30-day retention and anti-scraping protections  [Commented by: Google AI Studio on 22/10/2026 04:51 AM] */}
-          {currentUser && activeChat && (
-            <button
-              onClick={handleShareActiveChat}
-              disabled={isSharing}
-              className={`h-10 px-3 rounded-[8px] flex items-center gap-1.5 text-xs font-mono cursor-pointer transition-colors ${
-                theme === 'Minimalist Light'
-                  ? 'bg-white border border-neutral-300 hover:border-emerald-600 text-neutral-700 hover:text-neutral-900 shadow-xs'
-                  : 'bg-[#111] border border-[#333] hover:border-[#39ff14] text-neutral-300 hover:text-white'
-              } disabled:opacity-50`}
-              title="Share chat session with public URL (30-day retention)"
-              aria-label="Share chat session"
-            >
-              <span className="text-emerald-500 font-bold">🔗</span>
-              <span className="hidden sm:inline">{isSharing ? 'Sharing...' : 'Share'}</span>
-            </button>
-          )}
-
+          {/* Signed-Out View: 'Import Shared Chat' button placed to the left of Sign In / Sign Up */}
           {!currentUser ? (
-            <>
+            <div className="flex items-center gap-2">
               <button
+                type="button"
+                onClick={() => setIsProvideUrlModalOpen(true)}
+                className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                  theme === 'Minimalist Light'
+                    ? 'bg-white border border-neutral-300 hover:border-neutral-500 text-neutral-900 shadow-xs'
+                    : 'bg-black border border-[#333] hover:border-neutral-500 text-white'
+                }`}
+              >
+                Import Shared Chat
+              </button>
+              <button
+                type="button"
                 onClick={() => setAuthModalMode('signin')}
                 className={`px-4 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
                   theme === 'Minimalist Light'
@@ -2091,6 +2111,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                 Sign In
               </button>
               <button
+                type="button"
                 onClick={() => setAuthModalMode('signup')}
                 className={`px-4 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
                   theme === 'Minimalist Light'
@@ -2100,19 +2121,139 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
               >
                 Sign Up
               </button>
-            </>
+            </div>
+          ) : (!activeChat || activeChat.messages.length === 0) ? (
+            /* Signed-In New Noodle (0 messages): borderless three-dot menu with Incognito Chat and Import Chat */
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsNewNoodleMenuOpen((prev) => !prev);
+                  setIsImportSubMenuOpen(false);
+                }}
+                className="p-1.5 text-neutral-400 hover:text-white border-none outline-none focus:outline-none cursor-pointer text-xl leading-none transition-colors select-none tracking-widest"
+                title="Menu"
+                aria-label="Menu"
+              >
+                ···
+              </button>
+
+              {isNewNoodleMenuOpen && (
+                <div className={`absolute right-0 top-full mt-2 w-52 rounded-xl py-2 px-1 text-xs shadow-2xl z-50 border ${
+                  theme === 'Minimalist Light'
+                    ? 'bg-white border-neutral-200 text-neutral-800'
+                    : 'bg-[#141414] border-[#2b2b2b] text-neutral-200'
+                }`}>
+                  {/* Incognito Chat with green toggle button beside it */}
+                  <div className="flex items-center justify-between px-3 py-2 hover:bg-neutral-800/40 rounded-lg">
+                    <span className="font-medium">Incognito Chat</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={isIncognito}
+                      onClick={() => setIsIncognito((prev) => !prev)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        isIncognito ? 'bg-emerald-500' : 'bg-neutral-600'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition duration-200 ease-in-out ${
+                          isIncognito ? 'translate-x-4' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Import Chat option with pop-up sub-menu beneath it */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsImportSubMenuOpen((prev) => !prev)}
+                      className="w-full text-left px-3 py-2 hover:bg-neutral-800/40 rounded-lg font-medium flex items-center justify-between cursor-pointer transition-colors"
+                    >
+                      <span>Import Chat</span>
+                      <span className="text-[10px] text-neutral-400">▼</span>
+                    </button>
+
+                    {isImportSubMenuOpen && (
+                      <div className={`mt-1 ml-2 mr-2 rounded-lg py-1 px-1 text-xs border shadow-lg ${
+                        theme === 'Minimalist Light'
+                          ? 'bg-neutral-50 border-neutral-200'
+                          : 'bg-[#1c1c1c] border-[#333]'
+                      }`}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsImportSubMenuOpen(false);
+                            setIsNewNoodleMenuOpen(false);
+                            importFileInputRef.current?.click();
+                          }}
+                          className="w-full text-left px-2.5 py-1.5 hover:bg-neutral-800/60 rounded cursor-pointer transition-colors"
+                        >
+                          Import .txt
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsImportSubMenuOpen(false);
+                            setIsNewNoodleMenuOpen(false);
+                            setIsProvideUrlModalOpen(true);
+                          }}
+                          className="w-full text-left px-2.5 py-1.5 hover:bg-neutral-800/60 rounded cursor-pointer transition-colors"
+                        >
+                          Provide URL
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           ) : (
-            <button
-              onClick={() => setIsIncognito((prev) => !prev)}
-              className={`w-10 h-10 rounded-[8px] flex items-center justify-center text-[20px] cursor-pointer transition-colors ${
-                theme === 'Minimalist Light'
-                  ? 'bg-white border border-neutral-300 hover:border-emerald-600'
-                  : 'bg-[#111] border border-[#333] hover:border-[#39ff14]'
-              }`}
-              title={isIncognito ? 'Incognito Mode Active (Click to switch to Normal)' : 'Normal Chat (Click for Incognito Mode)'}
-            >
-              {isIncognito ? '☀️' : '🕶️'}
-            </button>
+            /* Signed-In Running Noodle (>0 messages): borderless three-dot menu with Share and Export Chat (disabled/hidden if Incognito) */
+            !isIncognito ? (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsRunningNoodleMenuOpen((prev) => !prev)}
+                  className="p-1.5 text-neutral-400 hover:text-white border-none outline-none focus:outline-none cursor-pointer text-xl leading-none transition-colors select-none tracking-widest"
+                  title="Menu"
+                  aria-label="Menu"
+                >
+                  ···
+                </button>
+
+                {isRunningNoodleMenuOpen && (
+                  <div className={`absolute right-0 top-full mt-2 w-44 rounded-xl py-2 px-1 text-xs shadow-2xl z-50 border ${
+                    theme === 'Minimalist Light'
+                      ? 'bg-white border-neutral-200 text-neutral-800'
+                      : 'bg-[#141414] border-[#2b2b2b] text-neutral-200'
+                  }`}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRunningNoodleMenuOpen(false);
+                        handleShareActiveChat();
+                      }}
+                      disabled={isSharing}
+                      className="w-full text-left px-3 py-2 hover:bg-neutral-800/40 rounded-lg font-medium cursor-pointer transition-colors"
+                    >
+                      {isSharing ? 'Sharing...' : 'Share'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRunningNoodleMenuOpen(false);
+                        handleExportActiveChat();
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-neutral-800/40 rounded-lg font-medium cursor-pointer transition-colors"
+                    >
+                      Export Chat
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : null
           )}
         </div>
 
@@ -2189,29 +2330,114 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                 className={`flex flex-col ${isUser ? 'items-end' : 'items-start w-full'}`}
               >
                 {isUser ? (
-                  <div className={`px-4 py-3 rounded-2xl max-w-[85%] md:max-w-[75%] text-sm leading-relaxed break-words transition-colors ${
-                    theme === 'Minimalist Light'
-                      ? 'bg-white border border-neutral-200 text-neutral-900 shadow-xs'
-                      : 'bg-[#181818] border border-[#2a2a2a] text-neutral-100'
-                  }`}>
-                    <div>{escapeHtml(textContent)}</div>
-                    {m.displayAttachments && m.displayAttachments.length > 0 && (
-                      <div className="mt-2 text-xs text-neutral-400 space-y-1.5 border-t border-neutral-700/60 pt-1.5">
-                        {m.displayAttachments.map((att, aIdx) => (
-                          <div key={aIdx} className="flex items-center gap-2 flex-wrap">
-                            <span>{att.type === 'image' ? '🖼️ Image' : `📄 ${att.name}`}</span>
-                            {/* Clear UI distinction when raw file bytes reside only in original browser while preserved cloud output is loaded  [Commented by: Google AI Studio on 15/10/2026 09:22 AM] */}
-                            {att.isLocalMissing ? (
-                              <span
-                                className="text-[10px] text-amber-300 bg-amber-950/60 border border-amber-800/60 px-1.5 py-0.5 rounded font-mono"
-                                title="Original file bytes stored in local browser only. Preserved AI output loaded from cloud."
-                              >
-                                (Local file unavailable on this device • Cloud output active)
-                              </span>
-                            ) : null}
+                  <div
+                    className="relative flex flex-col items-end max-w-[85%] md:max-w-[75%]"
+                    onMouseEnter={() => setHoveredUserMessageIndex(idx)}
+                    onMouseLeave={() => setHoveredUserMessageIndex(null)}
+                  >
+                    {editingMessageIndex === idx ? (
+                      /* Inline Focused Textarea for User Message Editing [Commented by: Google AI Studio on 28/10/2026 12:05 PM] */
+                      <div className={`p-3 rounded-2xl w-full border shadow-lg ${
+                        theme === 'Minimalist Light'
+                          ? 'bg-white border-emerald-500'
+                          : 'bg-[#181818] border-emerald-500'
+                      }`}>
+                        <textarea
+                          autoFocus
+                          value={editText}
+                          onChange={(e) => setEditText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              handleResendEditedMessage(idx, editText);
+                            }
+                          }}
+                          rows={Math.max(2, editText.split('\n').length)}
+                          className={`w-full text-sm leading-relaxed p-2.5 rounded-lg resize-none focus:outline-none ${
+                            theme === 'Minimalist Light'
+                              ? 'bg-neutral-50 text-neutral-900 border border-neutral-200'
+                              : 'bg-[#111] text-white border border-[#333]'
+                          }`}
+                        />
+                        <div className="flex items-center justify-between mt-2 text-[11px] text-neutral-400">
+                          <span>Press Enter to resend • Shift+Enter for new line</span>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingMessageIndex(null);
+                                setEditText('');
+                              }}
+                              className="px-2.5 py-1 rounded bg-neutral-800 text-neutral-300 hover:text-white cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleResendEditedMessage(idx, editText)}
+                              className="px-3 py-1 rounded bg-emerald-600 text-white font-semibold hover:bg-emerald-500 cursor-pointer"
+                            >
+                              Send
+                            </button>
                           </div>
-                        ))}
+                        </div>
                       </div>
+                    ) : (
+                      <>
+                        <div className={`px-4 py-3 rounded-2xl w-full text-sm leading-relaxed break-words transition-colors ${
+                          theme === 'Minimalist Light'
+                            ? 'bg-white border border-neutral-200 text-neutral-900 shadow-xs'
+                            : 'bg-[#181818] border border-[#2a2a2a] text-neutral-100'
+                        }`}>
+                          <div>{escapeHtml(textContent)}</div>
+                          {m.displayAttachments && m.displayAttachments.length > 0 && (
+                            <div className="mt-2 text-xs text-neutral-400 space-y-1.5 border-t border-neutral-700/60 pt-1.5">
+                              {m.displayAttachments.map((att, aIdx) => (
+                                <div key={aIdx} className="flex items-center gap-2 flex-wrap">
+                                  <span>{att.type === 'image' ? '🖼️ Image' : `📄 ${att.name}`}</span>
+                                  {att.isLocalMissing ? (
+                                    <span
+                                      className="text-[10px] text-amber-300 bg-amber-950/60 border border-amber-800/60 px-1.5 py-0.5 rounded font-mono"
+                                      title="Original file bytes stored in local browser only. Preserved AI output loaded from cloud."
+                                    >
+                                      (Local file unavailable on this device • Cloud output active)
+                                    </span>
+                                  ) : null}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Hover Action Buttons below user message: Copy and Edit [Commented by: Google AI Studio on 28/10/2026 12:05 PM] */}
+                        <div className={`flex items-center gap-1.5 mt-1 px-1 transition-opacity duration-150 ${
+                          hoveredUserMessageIndex === idx ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                        }`}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(textContent);
+                              setToastNotice('Copied to clipboard!');
+                              setTimeout(() => setToastNotice(null), 2500);
+                            }}
+                            className="text-[11px] px-2.5 py-0.5 rounded bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors cursor-pointer"
+                          >
+                            Copy
+                          </button>
+                          {!sharedChatView && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingMessageIndex(idx);
+                                setEditText(textContent);
+                              }}
+                              className="text-[11px] px-2.5 py-0.5 rounded bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors cursor-pointer"
+                            >
+                              Edit
+                            </button>
+                          )}
+                        </div>
+                      </>
                     )}
                   </div>
                 ) : (
@@ -2472,7 +2698,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={handleSend}
+                  onClick={() => handleSend()}
                   className={`w-[36px] h-[36px] rounded-full flex items-center justify-center font-bold text-[18px] transition-colors cursor-pointer ${
                     isGenerating
                       ? 'bg-red-600 hover:bg-red-700 text-white font-mono text-sm'
@@ -2598,6 +2824,75 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Centered Enter URL Modal Dialog [Commented by: Google AI Studio on 28/10/2026 12:08 PM] */}
+      {isProvideUrlModalOpen && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className={`w-full max-w-md rounded-2xl p-6 shadow-2xl border space-y-4 animate-in fade-in zoom-in-95 duration-150 ${
+            theme === 'Minimalist Light'
+              ? 'bg-white border-neutral-300 text-neutral-900'
+              : 'bg-[#121212] border-[#2b2b2b] text-white'
+          }`}>
+            <div className="flex items-center justify-between pb-1 border-b border-inherit opacity-90">
+              <h3 className="text-base font-bold font-serif">Enter URL</h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsProvideUrlModalOpen(false);
+                  setProvideUrlInput('');
+                }}
+                className="text-neutral-400 hover:text-white cursor-pointer text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-neutral-400">
+              Paste a shared noodle link to import and continue chatting.
+            </p>
+
+            <input
+              type="text"
+              autoFocus
+              value={provideUrlInput}
+              onChange={(e) => setProvideUrlInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleImportFromUrl(provideUrlInput);
+                }
+              }}
+              placeholder="https://.../?share=..."
+              className={`w-full rounded-xl p-3 text-xs focus:outline-none border ${
+                theme === 'Minimalist Light'
+                  ? 'bg-neutral-100 border-neutral-300 text-neutral-900 focus:border-emerald-600'
+                  : 'bg-[#181818] border-[#333] text-white focus:border-[#39ff14]'
+              }`}
+            />
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsProvideUrlModalOpen(false);
+                  setProvideUrlInput('');
+                }}
+                className="px-4 py-2 rounded-lg text-xs font-semibold text-neutral-400 hover:text-white bg-transparent cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!provideUrlInput.trim() || isImportingUrl}
+                onClick={() => handleImportFromUrl(provideUrlInput)}
+                className="px-5 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer transition-colors disabled:opacity-50"
+              >
+                {isImportingUrl ? 'Importing...' : 'Import'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
