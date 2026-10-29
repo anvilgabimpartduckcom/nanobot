@@ -28,12 +28,10 @@ export const AboutModal: React.FC<AboutModalProps> = ({
     'Tavily'
   ];
 
-  const activePluginNames = MCP_PLUGINS
-    .filter((p) => Boolean(connectedPlugins[p.id]))
-    .map((p) => p.name);
-
-  const sortedServices = Array.from(new Set([...baseServices, ...activePluginNames]))
-    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  // Static services acknowledgment list without dynamically inserted plugins [Commented by: Google AI Studio on 29/10/2026 04:00 PM]
+  const sortedServices = [...baseServices].sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: 'base' })
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -49,9 +47,9 @@ export const AboutModal: React.FC<AboutModalProps> = ({
 
         <div className="space-y-4 text-neutral-300">
           <h2 className="text-xl font-bold font-serif text-white">About nanobot</h2>
-          {/* Rewrote description to state 'open source code AI chatbot' and added license hyperlink  [Commented by: Google AI Studio on 21/10/2026 06:08 AM] */}
+          {/* Updated description to state 'source available AI chatbot' [Commented by: Google AI Studio on 29/10/2026 09:00 AM] */}
           <p className="text-sm leading-relaxed">
-            Everyone should get to use AI, and that too without giving away their data. So we created nanobot, an open source code AI chatbot which respects your privacy, and is free to use. Users bring their own API keys, which helps in further keeping nanobot completely free to use.
+            Everyone should get to use AI, and that too without giving away their data. So we created nanobot, a source available AI chatbot which respects your privacy, and is free to use. Users bring their own API keys, which helps in further keeping nanobot completely free to use.
             <br />
             <a
               href="https://github.com/anvilgabimpartduckcom/nanobot/blob/main/LICENSE"
@@ -90,34 +88,29 @@ export const AboutModal: React.FC<AboutModalProps> = ({
             </a>
           </p>
 
-          {/* Note box with 'Note:' label removed and second point erased per user instruction [Commented by: Google AI Studio on 28/10/2026 04:24 AM] */}
-          <div className="bg-[#141414] border border-[#333] rounded-xl p-4 mt-4 text-xs text-neutral-300 leading-relaxed">
-            <p>
-              Shared noodles have a 30-day deletion policy on Cloudflare. Any shared noodle link inactive after 30 days will be automatically deleted. On top of that, we request you to delete any noodle that you have no longer use for. Your deleting of one noodle will help keep storage clean.
+          {/* Brought latest updates and Github source links closer together vertically [Commented by: Google AI Studio on 29/10/2026 04:00 PM] */}
+          <div className="space-y-1 pt-1 leading-snug">
+            <p className="text-sm">
+              <a
+                href="https://github.com/anvilgabimpartduckcom/nanobot#-latest-updates"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-emerald-400 hover:text-emerald-300 underline font-medium"
+              >
+                See the latest updates in nanobot
+              </a>
+            </p>
+            <p className="text-sm">
+              <a
+                href="https://github.com/anvilgabimpartduckcom/nanobot"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-emerald-400 hover:text-emerald-300 underline font-medium"
+              >
+                Visit nanobot&#39;s source code in GitHub
+              </a>
             </p>
           </div>
-
-          {/* Added hyperlink for latest update in nanobot above Github source code link  [Commented by: Google AI Studio on 21/10/2026 06:08 AM] */}
-          <p className="text-sm pt-2 leading-relaxed">
-            <a
-              href="https://github.com/anvilgabimpartduckcom/nanobot#-latest-updates"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-emerald-400 hover:text-emerald-300 underline font-medium"
-            >
-              See the latest update in nanobot
-            </a>
-          </p>
-          <p className="text-sm pt-1 leading-relaxed">
-            <a
-              href="https://github.com/anvilgabimpartduckcom/nanobot"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-emerald-400 hover:text-emerald-300 underline font-medium"
-            >
-              Visit nanobot&#39;s source code in Github
-            </a>
-          </p>
 
           <div className="border-t border-neutral-800 pt-4 mt-2 space-y-2 text-xs text-neutral-400 leading-relaxed">
             <p>

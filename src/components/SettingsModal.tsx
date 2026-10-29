@@ -182,14 +182,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     onClose();
   };
 
-  // Handle Delete Account
+  // Handle Delete Account directly without window.confirm to ensure stability within iframe environments [Commented by: Google AI Studio on 29/10/2026 04:00 PM]
   const handleDeleteAccount = async () => {
-    if (!window.confirm('Are you sure you want to permanently delete your nanobot account and all encrypted chats?')) {
-      return;
-    }
-
     try {
-      // Remove from local profiles
+      // Remove user profile from local profiles
       const profiles = getLocalProfiles().filter((p) => p.id !== user.id);
       saveLocalProfiles(profiles);
 
@@ -201,7 +197,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       onClose();
     } catch (err: unknown) {
       const e = err as Error;
-      alert(`Failed to delete account: ${e.message}`);
+      setStatusMessage(`Failed to delete account: ${e.message}`);
     }
   };
 
@@ -599,13 +595,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   value={customInstructions}
                   onChange={(e) => setCustomInstructions(e.target.value)}
                   onKeyDown={handleInstructionsKeyDown}
-                  placeholder="Type custom instructions for nanobot... (Press Enter to save, Shift+Enter for new line)"
+                  placeholder="Enter custom instructions for nanobot"
                   rows={6}
                   className="w-full bg-[#141414] border border-[#333] rounded-xl p-4 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] text-sm leading-relaxed resize-none"
                 />
-                <p className="text-xs text-neutral-500 mt-1">
-                  Tip: Press <kbd className="px-1.5 py-0.5 bg-neutral-800 rounded text-neutral-300">Enter</kbd> to save instructions immediately, or <kbd className="px-1.5 py-0.5 bg-neutral-800 rounded text-neutral-300">Shift + Enter</kbd> for a new line.
-                </p>
+                {/* Removed Tip text below custom instructions box [Commented by: Google AI Studio on 29/10/2026 04:00 PM] */}
                 {instructionsSavedNotice && (
                   <p className="text-xs text-emerald-400 mt-2 font-medium">
                     ✓ Custom instructions saved successfully!
@@ -894,7 +888,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           )}
 
           {/* TAB 4: ABOUT NANOBOT */}
-          {/* Updated About nanobot documentation with privacy statement, developer contact, Notion 101 link, Ctrl+S backup warning, GitHub source link, and dynamic alphabetical service credits with active plugin insertion  [Commented by: Google AI Studio on 16/10/2026 10:55 PM] */}
+          {/* Updated About nanobot with static service credits, removed 30-day local storage note box, and brought updates and GitHub links closer [Commented by: Google AI Studio on 29/10/2026 04:00 PM] */}
           {activeTab === 'about' && (() => {
             const baseServices = [
               'Cloudflare',
@@ -908,19 +902,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               'Tavily'
             ];
 
-            const activePluginNames = MCP_PLUGINS
-              .filter((p) => Boolean(connectedPlugins[p.id]))
-              .map((p) => p.name);
-
-            const sortedServices = Array.from(new Set([...baseServices, ...activePluginNames]))
-              .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+            const sortedServices = [...baseServices].sort((a, b) =>
+              a.localeCompare(b, undefined, { sensitivity: 'base' })
+            );
 
             return (
               <div className="space-y-4 max-w-xl text-neutral-300">
                 <h2 className="text-xl font-bold font-serif text-white">About nanobot</h2>
-                {/* Rewrote description to state 'open source code AI chatbot' and added license hyperlink  [Commented by: Google AI Studio on 21/10/2026 06:08 AM] */}
+                {/* Updated description to state 'source available AI chatbot' [Commented by: Google AI Studio on 29/10/2026 09:00 AM] */}
                 <p className="text-sm leading-relaxed">
-                  Everyone should get to use AI, and that too without giving away their data. So we created nanobot, an open source code AI chatbot which respects your privacy, and is free to use. Users bring their own API keys, which helps in further keeping nanobot completely free to use.
+                  Everyone should get to use AI, and that too without giving away their data. So we created nanobot, a source available AI chatbot which respects your privacy, and is free to use. Users bring their own API keys, which helps in further keeping nanobot completely free to use.
                   <br />
                   <a
                     href="https://github.com/anvilgabimpartduckcom/nanobot/blob/main/LICENSE"
@@ -959,36 +950,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </a>
                 </p>
 
-                {/* Removed Note: heading and erased second point [Commented by: Google AI Studio on 28/10/2026 11:32 AM] */}
-                <div className="bg-[#141414] border border-[#333] rounded-xl p-4 space-y-2 mt-4 text-xs text-neutral-300">
-                  <ol className="list-decimal list-inside space-y-2 leading-relaxed">
-                    <li>
-                      nanobot stores noodles securely in your browser&#39;s encrypted local storage without auto-deletion. Shared noodles backed up to Cloudflare have a 30-day retention policy and will expire automatically after 30 days of inactivity.
-                    </li>
-                  </ol>
+                {/* Brought latest updates and Github source links closer together vertically [Commented by: Google AI Studio on 29/10/2026 04:00 PM] */}
+                <div className="space-y-1 pt-1 leading-snug">
+                  <p className="text-sm">
+                    <a
+                      href="https://github.com/anvilgabimpartduckcom/nanobot#-latest-updates"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-emerald-400 hover:text-emerald-300 underline font-medium"
+                    >
+                      See the latest updates in nanobot
+                    </a>
+                  </p>
+                  <p className="text-sm">
+                    <a
+                      href="https://github.com/anvilgabimpartduckcom/nanobot"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-emerald-400 hover:text-emerald-300 underline font-medium"
+                    >
+                      Visit nanobot&#39;s source code in GitHub
+                    </a>
+                  </p>
                 </div>
-
-                {/* Added hyperlink for latest update in nanobot above Github source code link  [Commented by: Google AI Studio on 21/10/2026 06:08 AM] */}
-                <p className="text-sm pt-2 leading-relaxed">
-                  <a
-                    href="https://github.com/anvilgabimpartduckcom/nanobot#-latest-updates"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-emerald-400 hover:text-emerald-300 underline font-medium"
-                  >
-                    See the latest update in nanobot
-                  </a>
-                </p>
-                <p className="text-sm pt-1 leading-relaxed">
-                  <a
-                    href="https://github.com/anvilgabimpartduckcom/nanobot"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-emerald-400 hover:text-emerald-300 underline font-medium"
-                  >
-                    Visit nanobot&#39;s source code in Github
-                  </a>
-                </p>
 
                 <div className="border-t border-neutral-800 pt-4 mt-2 space-y-2 text-xs text-neutral-400 leading-relaxed">
                   <p>

@@ -55,7 +55,34 @@ interface ChatSession {
 
 const STOP_FRAMES = ['|', '/', '-', '\\'];
 const INPUT_MIN_HEIGHT = 52;
-const TOKEN_CEILING = 1_000_000;
+// Removed max_tokens output parameter and set input context window ceiling to 1,000,000 tokens [Commented by: Google AI Studio on 29/10/2026 09:20 AM]
+const MAX_INPUT_TOKENS = 1_000_000;
+
+// Visual search query highlighter for sidebar noodle titles [Commented by: Google AI Studio on 29/10/2026 04:00 PM]
+function highlightSearchMatch(title: string, query: string): React.ReactNode {
+  const trimmed = query.trim();
+  if (!trimmed) return title;
+  const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`(${escaped})`, 'gi');
+  const parts = title.split(regex);
+  if (parts.length <= 1) return title;
+  return (
+    <>
+      {parts.map((part, i) =>
+        regex.test(part) ? (
+          <mark
+            key={i}
+            className="bg-emerald-500/40 text-emerald-300 font-bold rounded-xs px-0.5"
+          >
+            {part}
+          </mark>
+        ) : (
+          part
+        )
+      )}
+    </>
+  );
+}
 
 export default function App() {
   // Session & Auth State
@@ -110,6 +137,9 @@ export default function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentStatus, setCurrentStatus] = useState<string | null>(null);
   const [currentReasoning, setCurrentReasoning] = useState<string>('');
+  // Added isReasoningModalOpen state to display reasoning in a dedicated modal that auto-closes when text output starts [Commented by: Google AI Studio on 29/10/2026 09:42 AM]
+  const [isReasoningModalOpen, setIsReasoningModalOpen] = useState<boolean>(false);
+  const reasoningEndRef = useRef<HTMLDivElement>(null);
   const [reasoningExpanded, setReasoningExpanded] = useState<false | boolean>(false);
   const [activeSources, setActiveSources] = useState<Array<{ title: string; url: string }>>([]);
   const [showSourcesPopup, setShowSourcesPopup] = useState<number | null>(null);
@@ -191,6 +221,13 @@ export default function App() {
     }, 120);
     return () => clearInterval(timer);
   }, [isGenerating]);
+
+  // Synchronized reasoning modal scroll position with streaming thoughts [Commented by: Google AI Studio on 29/10/2026 09:42 AM]
+  useEffect(() => {
+    if (isReasoningModalOpen && reasoningEndRef.current) {
+      reasoningEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [currentReasoning, isReasoningModalOpen]);
 
   // Saved chats and reasoning locally with encryption; no 30-day auto-purge for local storage [Commented by: Google AI Studio on 28/10/2026 11:42 AM]
   const saveLocalEncryptedChats = async (allChats: ChatSession[], key?: CryptoKey | null, user?: UserProfile | null) => {
@@ -518,7 +555,7 @@ export default function App() {
     if (!sharedChatView) return;
 
     if (!currentUser) {
-      setToastNotice('Please sign in or create an account to continue and save this shared chat.');
+      setToastNotice('Please sign in or create an account to continue and save this shared noodle.');
       setAuthModalMode('signin');
       return;
     }
@@ -546,7 +583,7 @@ export default function App() {
       robotsMeta.setAttribute('content', 'index, follow');
     }
 
-    setToastNotice('✓ Shared chat added to your history as a separate chat!');
+    setToastNotice('✓ Shared noodle added to your history as a separate noodle!');
     setTimeout(() => setToastNotice(null), 4000);
   };
 
@@ -557,7 +594,7 @@ export default function App() {
     }
 
     const titleMatch = text.match(/Title:\s*(.+)/i);
-    const title = titleMatch ? titleMatch[1].trim() : 'Imported Chat';
+    const title = titleMatch ? titleMatch[1].trim() : 'Imported Noodle';
 
     const messages: ChatMessage[] = [];
     const messageBlocks = text.split(/-{30,}/g);
@@ -632,12 +669,12 @@ export default function App() {
       const content = event.target?.result as string;
       const parsed = parseExportedChatText(content);
       if (!parsed || parsed.messages.length === 0) {
-        setToastNotice('Could not recognize nanobot chat format in file.');
+        setToastNotice('Could not recognize nanobot noodle format in file.');
         setTimeout(() => setToastNotice(null), 3500);
         return;
       }
 
-      // Instantiate imported chat session with unique timestamp ID conforming to ChatSession schema [Commented by: Google AI Studio on 19/10/2026 10:50 AM]
+      // Instantiate imported noodle session with unique timestamp ID conforming to ChatSession schema [Commented by: Google AI Studio on 29/10/2026 04:00 PM]
       const importedChat: ChatSession = {
         id: (Date.now() + Math.floor(Math.random() * 1000)).toString(),
         title: parsed.title,
@@ -649,7 +686,7 @@ export default function App() {
       setChats((prev) => [importedChat, ...prev]);
       setActiveChatId(importedChat.id);
       persistChat(importedChat);
-      setToastNotice(`✓ Imported chat: "${importedChat.title}" (${importedChat.messages.length} messages)`);
+      setToastNotice(`✓ Imported noodle: "${importedChat.title}" (${importedChat.messages.length} messages)`);
       setTimeout(() => setToastNotice(null), 4000);
 
       if (importFileInputRef.current) {
@@ -1000,6 +1037,8 @@ export default function App() {
     setAttachments([]);
     setCurrentStatus(null);
     setCurrentReasoning('');
+    // Closed reasoning modal when starting new noodle [Commented by: Google AI Studio on 29/10/2026 09:43 AM]
+    setIsReasoningModalOpen(false);
     setReasoningExpanded(false);
     setActiveSources([]);
     if (textareaRef.current) textareaRef.current.style.height = `${INPUT_MIN_HEIGHT}px`;
@@ -1040,6 +1079,8 @@ export default function App() {
     if (isGenerating) {
       if (abortControllerRef.current) abortControllerRef.current.abort();
       setIsGenerating(false);
+      // Closed reasoning modal when user stops generation [Commented by: Google AI Studio on 29/10/2026 09:44 AM]
+      setIsReasoningModalOpen(false);
       stopStreamSmoothing();
       return;
     }
@@ -1239,6 +1280,7 @@ export default function App() {
     setIsUserScrolledUp(false);
     setIsAutoScrollActive(false);
     setCurrentReasoning('');
+    setIsReasoningModalOpen(false);
     setReasoningExpanded(false);
     setActiveSources([]);
     startStreamSmoothing();
@@ -1308,8 +1350,8 @@ export default function App() {
       )
       .join('\n\n');
 
-    // Updated search, scrap, and universal file reading code execution protocol guidelines [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
-    const systemPrompt = `You are 'nanobot', a privacy first, open source code AI chat bot. You can process text, images, and files seamlessly. Current Date/Time: ${getCurrentDateTime()}.
+    // Updated system identity to source available AI chat bot [Commented by: Google AI Studio on 29/10/2026 09:00 AM]
+    const systemPrompt = `You are 'nanobot', a privacy first, source available AI chat bot. You can process text, images, and files seamlessly. Current Date/Time: ${getCurrentDateTime()}.
 Follow these guidelines strictly:
 1. Always use emojis for visual cues to make the conversation engaging.
 2. Web Search Tool: Whenever you need latest info or facts you lack, output a search query exactly in this format: <Search> (Search Query) </Search>. The code will then use tavily to perform web search for that search query. If you need info from more than one search, or have multiple search queries, output all of them at once in this format: <Search1> (Search Query 1) </Search1> <Search2> (Search Query 2) </Search2> ... and so on. The code will then use tavily to perform web searches for those search queries. Keep queries concise.
@@ -1323,12 +1365,27 @@ CRITICAL: After all the scraped results return, you will no longer be provided w
 ${toolsContext ? `8. Connected MCP Server Tools: You have direct access to ALL the tools provided by the following connected MCP servers:\n${toolsContext}\nWhen the user explicitly asks you to use a service or tool, execute the tool action and synthesize the results for them.` : ''}
 ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
 
-    // Configured 8-message context window, strictly omitting model reasoning and raw code outputs [Commented by: Google AI Studio on 28/10/2026 11:50 AM]
+    // Configured 1,000,000 input token context window for nvidia/nemotron-3.5-super-vl:free, strictly omitting model reasoning and raw code outputs [Commented by: Google AI Studio on 29/10/2026 09:20 AM]
     const apiMessages: Array<{ role: string; content: unknown }> = [
       { role: 'system', content: systemPrompt }
     ];
 
-    chat.messages.slice(-8).forEach((m) => {
+    // Include full conversation history within the 1,000,000 token input context budget (~4,000,000 characters)
+    const MAX_INPUT_CHARS = MAX_INPUT_TOKENS * 4;
+    let accumulatedChars = systemPrompt.length;
+    const historyToInclude: ChatMessage[] = [];
+
+    for (let i = chat.messages.length - 1; i >= 0; i--) {
+      const msg = chat.messages[i];
+      const charLength = typeof msg.content === 'string'
+        ? msg.content.length
+        : JSON.stringify(msg.content).length;
+      if (accumulatedChars + charLength > MAX_INPUT_CHARS) break;
+      accumulatedChars += charLength;
+      historyToInclude.unshift(msg);
+    }
+
+    historyToInclude.forEach((m) => {
       let cleanContent = m.content;
       if (typeof cleanContent === 'string') {
         cleanContent = cleanContent
@@ -1354,12 +1411,11 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
       // Determine model training opt-out parameter (incognito or user toggle OFF)
       const optOutTraining = isIncognito || currentUser?.model_training === false;
 
-      // Updated model to nvidia/nemotron-3.5-super-vl:free with 1M token ceiling [Commented by: Google AI Studio on 28/10/2026 11:50 AM]
+      // Reverted reasoning schema and data_collection opt-out parameter back to original structure [Commented by: Google AI Studio on 29/10/2026 09:26 AM]
       const bodyPayload: Record<string, unknown> = {
         model: 'nvidia/nemotron-3.5-super-vl:free',
         temperature: 0.0,
         stream: true,
-        max_tokens: TOKEN_CEILING,
         reasoning: { enabled: true, effort: 'medium' },
         messages: messagesArr
       };
@@ -1424,11 +1480,15 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
               if (chunk) {
                 reasoningText += chunk;
                 setCurrentReasoning(reasoningText);
+                // Open reasoning modal to display thinking process while the model reasons [Commented by: Google AI Studio on 29/10/2026 09:44 AM]
+                setIsReasoningModalOpen(true);
               }
             }
 
             const token = delta.content || '';
             if (token) {
+              // Automatically close reasoning modal when reasoning finishes and text output begins [Commented by: Google AI Studio on 29/10/2026 09:44 AM]
+              setIsReasoningModalOpen(false);
               currentOutput += token;
               targetContentRef.current = currentOutput;
             }
@@ -1447,6 +1507,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
           .filter(Boolean);
 
         if (scrapMatches.length > 0) {
+          setIsReasoningModalOpen(false);
           scrapPerformed = true;
           setCurrentStatus(`Scraping ${scrapMatches.length} Web Page${scrapMatches.length > 1 ? 's' : ''}...`);
           try {
@@ -1484,6 +1545,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
           .filter(Boolean);
 
         if (queries.length > 0) {
+          setIsReasoningModalOpen(false);
           searchPerformed = true;
           searchTriggered = true;
           setCurrentStatus(`Searching Online for ${queries.length} quer${queries.length > 1 ? 'ies' : 'y'}...`);
@@ -1601,6 +1663,8 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
     } finally {
       setIsGenerating(false);
       setCurrentStatus(null);
+      // Closed reasoning modal when generation finishes or terminates [Commented by: Google AI Studio on 29/10/2026 09:44 AM]
+      setIsReasoningModalOpen(false);
     }
   };
 
@@ -1611,14 +1675,13 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
     await handleSend(newText, msgIndex);
   };
 
-  // Clear noodle history
-  // Synchronized batch noodle deletion with local encrypted storage and IndexedDB file cleanup [Commented by: Google AI Studio on 28/10/2026 11:58 AM]
+  // Clear noodle history directly without iframe-blocked window.confirm and persist to local encrypted storage [Commented by: Google AI Studio on 29/10/2026 04:00 PM]
   const handleClearChatHistory = () => {
-    if (!window.confirm('Clear unpinned chats from history?')) return;
     const remaining = chats.filter((c) => c.pinned);
     setChats(remaining);
+    saveLocalEncryptedChats(remaining, cryptoKey, currentUser);
 
-    // Synchronized chat deletions to remote Supabase, Cloudflare Worker, and local IndexedDB file storage, purging code outputs, files, and transcripts [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
+    // Synchronized noodle deletions to remote Supabase, Cloudflare Worker, and local IndexedDB file storage [Commented by: Google AI Studio on 29/10/2026 04:00 PM]
     chats.forEach((c) => {
       if (!c.pinned) {
         removeEncryptedChatRecord(c.id);
@@ -1636,26 +1699,30 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
       localStorage.setItem('nanobot_chats', JSON.stringify(remaining));
     } catch {}
 
-    handleStartNewChat();
+    const wasActiveCleared = chats.some((c) => !c.pinned && c.id === activeChatId);
+    if (wasActiveCleared || !activeChatId) {
+      handleStartNewChat();
+    }
+    setToastNotice('✓ Cleared unpinned noodles from history');
+    setTimeout(() => setToastNotice(null), 3000);
   };
 
-  // Toggle chat pin
-  // Synchronized conversation pin state with Cloudflare Worker D1 backend [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
+  // Toggle noodle pin with stable synchronous state update, pin sorting, and local encrypted persistence [Commented by: Google AI Studio on 29/10/2026 04:00 PM]
   const handleTogglePin = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setChats((prev) =>
-      prev.map((c) => {
-        if (c.id === id) {
-          const next = { ...c, pinned: !c.pinned };
-          persistChat(next);
-          if (currentUser) {
-            workerClient.updateConversation(id, { pinned: next.pinned }).catch(() => {});
-          }
-          return next;
-        }
-        return c;
-      })
-    );
+    e.preventDefault();
+    setChats((prev) => {
+      const updated = prev.map((c) => (c.id === id ? { ...c, pinned: !c.pinned } : c));
+      const sorted = [...updated].sort(
+        (a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (b.updated || 0) - (a.updated || 0)
+      );
+      saveLocalEncryptedChats(sorted, cryptoKey, currentUser);
+      const target = sorted.find((c) => c.id === id);
+      if (currentUser && target) {
+        workerClient.updateConversation(id, { pinned: target.pinned }).catch(() => {});
+      }
+      return sorted;
+    });
   };
 
   // Delete chat
@@ -1674,12 +1741,12 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
     if (activeChatId === id) handleStartNewChat();
   };
 
-  // Rename chat
-  // Synchronized conversation rename with Cloudflare Worker D1 backend [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
+  // Rename noodle
+  // Synchronized conversation rename with Cloudflare Worker D1 backend [Commented by: Google AI Studio on 29/10/2026 04:00 PM]
   const handleRenameChat = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const chat = chats.find((c) => c.id === id);
-    const nextTitle = prompt('Rename chat:', chat?.title)?.trim();
+    const nextTitle = prompt('Rename noodle:', chat?.title)?.trim();
     if (nextTitle) {
       setChats((prev) =>
         prev.map((c) => {
@@ -1971,14 +2038,14 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                     : 'text-neutral-400 hover:bg-[#151515] hover:text-white'
                 }`}
               >
-                {/* Chat title with quick preview on hover without selecting [Commented by: Google AI Studio on 23/10/2026 12:40 AM] */}
+                {/* Noodle title with search highlighting and quick preview on hover without selecting [Commented by: Google AI Studio on 29/10/2026 04:00 PM] */}
                 <span
                   onMouseEnter={(e) => handleChatTitleMouseEnter(c, e)}
                   onMouseLeave={handleChatTitleMouseLeave}
                   className="truncate max-w-[170px] hover:text-emerald-400 transition-colors"
                   title="Hover for quick preview"
                 >
-                  {c.title || 'Untitled Chat'}
+                  {highlightSearchMatch(c.title || 'Untitled Noodle', historySearchQuery)}
                 </span>
                 <div className="flex items-center gap-1.5 opacity-60 hover:opacity-100">
                   <span onClick={(e) => handleRenameChat(c.id, e)} title="Rename">
@@ -2081,49 +2148,51 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         )}
 
         {/* Top-Right Controls */}
-        {/* Replaced top-right controls with three-dot borderless menus for new and running noodles, and added Import Shared Chat button for guests [Commented by: Google AI Studio on 28/10/2026 12:00 PM] */}
+        {/* Responsive layout placing 'Import Shared Noodle' below 'Sign In' and 'Sign Up' on mobile to prevent button overlap, and rebranded all Chat labels to Noodle [Commented by: Google AI Studio on 29/10/2026 04:00 PM] */}
         <div className={`absolute top-4 right-4 flex items-center gap-2 z-30 ${
           sidebarOpen ? 'max-sm:hidden' : ''
         }`}>
-          {/* Signed-Out View: 'Import Shared Chat' button placed to the left of Sign In / Sign Up */}
+          {/* Signed-Out View: 'Import Shared Noodle' placed below 'Sign In' and 'Sign Up' on mobile screens to prevent overlapping */}
           {!currentUser ? (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col items-end gap-1.5 sm:flex-row sm:items-center sm:gap-2">
+              <div className="flex items-center gap-2 order-1 sm:order-2">
+                <button
+                  type="button"
+                  onClick={() => setAuthModalMode('signin')}
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                    theme === 'Minimalist Light'
+                      ? 'bg-white border border-neutral-300 hover:border-neutral-500 text-neutral-900 shadow-xs'
+                      : 'bg-black border border-[#333] hover:border-neutral-500 text-white'
+                  }`}
+                >
+                  Sign In
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAuthModalMode('signup')}
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                    theme === 'Minimalist Light'
+                      ? 'bg-neutral-900 border border-neutral-900 hover:bg-neutral-800 text-white shadow-xs'
+                      : 'bg-black border border-[#333] hover:border-neutral-500 text-white'
+                  }`}
+                >
+                  Sign Up
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={() => setIsProvideUrlModalOpen(true)}
-                className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                className={`order-2 sm:order-1 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                   theme === 'Minimalist Light'
                     ? 'bg-white border border-neutral-300 hover:border-neutral-500 text-neutral-900 shadow-xs'
                     : 'bg-black border border-[#333] hover:border-neutral-500 text-white'
                 }`}
               >
-                Import Shared Chat
-              </button>
-              <button
-                type="button"
-                onClick={() => setAuthModalMode('signin')}
-                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
-                  theme === 'Minimalist Light'
-                    ? 'bg-white border border-neutral-300 hover:border-neutral-500 text-neutral-900 shadow-xs'
-                    : 'bg-black border border-[#333] hover:border-neutral-500 text-white'
-                }`}
-              >
-                Sign In
-              </button>
-              <button
-                type="button"
-                onClick={() => setAuthModalMode('signup')}
-                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
-                  theme === 'Minimalist Light'
-                    ? 'bg-neutral-900 border border-neutral-900 hover:bg-neutral-800 text-white shadow-xs'
-                    : 'bg-black border border-[#333] hover:border-neutral-500 text-white'
-                }`}
-              >
-                Sign Up
+                Import Shared Noodle
               </button>
             </div>
           ) : (!activeChat || activeChat.messages.length === 0) ? (
-            /* Signed-In New Noodle (0 messages): borderless three-dot menu with Incognito Chat and Import Chat */
+            /* Signed-In New Noodle (0 messages): borderless three-dot menu with Incognito Noodle and Import Noodle */
             <div className="relative">
               <button
                 type="button"
@@ -2144,9 +2213,9 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                     ? 'bg-white border-neutral-200 text-neutral-800'
                     : 'bg-[#141414] border-[#2b2b2b] text-neutral-200'
                 }`}>
-                  {/* Incognito Chat with green toggle button beside it */}
+                  {/* Incognito Noodle with green toggle button beside it */}
                   <div className="flex items-center justify-between px-3 py-2 hover:bg-neutral-800/40 rounded-lg">
-                    <span className="font-medium">Incognito Chat</span>
+                    <span className="font-medium">Incognito Noodle</span>
                     <button
                       type="button"
                       role="switch"
@@ -2164,14 +2233,14 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                     </button>
                   </div>
 
-                  {/* Import Chat option with pop-up sub-menu beneath it */}
+                  {/* Import Noodle option with pop-up sub-menu beneath it */}
                   <div className="relative">
                     <button
                       type="button"
                       onClick={() => setIsImportSubMenuOpen((prev) => !prev)}
                       className="w-full text-left px-3 py-2 hover:bg-neutral-800/40 rounded-lg font-medium flex items-center justify-between cursor-pointer transition-colors"
                     >
-                      <span>Import Chat</span>
+                      <span>Import Noodle</span>
                       <span className="text-[10px] text-neutral-400">▼</span>
                     </button>
 
@@ -2210,7 +2279,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
               )}
             </div>
           ) : (
-            /* Signed-In Running Noodle (>0 messages): borderless three-dot menu with Share and Export Chat (disabled/hidden if Incognito) */
+            /* Signed-In Running Noodle (>0 messages): borderless three-dot menu with Share and Export Noodle (disabled/hidden if Incognito) */
             !isIncognito ? (
               <div className="relative">
                 <button
@@ -2248,7 +2317,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                       }}
                       className="w-full text-left px-3 py-2 hover:bg-neutral-800/40 rounded-lg font-medium cursor-pointer transition-colors"
                     >
-                      Export Chat
+                      Export Noodle
                     </button>
                   </div>
                 )}
@@ -2527,7 +2596,8 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                 </div>
               )}
 
-              {currentReasoning && (
+              {/* Render inline reasoning only after reasoning modal closes or when minimized [Commented by: Google AI Studio on 29/10/2026 09:44 AM] */}
+              {currentReasoning && !isReasoningModalOpen && (
                 <div className="mb-3 border-l-2 border-[#333] pl-3 py-1">
                   <button
                     type="button"
@@ -2748,9 +2818,18 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
             if (updated.theme) setTheme(updated.theme);
           }}
           onDeleteAccount={() => {
+            // Thoroughly wipe all account sessions, encrypted noodles, and local files upon account deletion [Commented by: Google AI Studio on 29/10/2026 04:00 PM]
             setCurrentUser(null);
             setPasswordSecret('');
+            setCryptoKey(null);
+            setChats([]);
+            localStorage.removeItem('nanobot_chats');
+            localStorage.removeItem('nanobot_encrypted_chats');
+            localStorage.removeItem('nanobot_active_user');
+            clearAllOriginalFiles().catch(() => {});
             handleStartNewChat();
+            setToastNotice('✓ Account and noodle history deleted successfully');
+            setTimeout(() => setToastNotice(null), 3500);
           }}
           theme={theme}
           onThemeChange={(newTheme) => setTheme(newTheme)}
@@ -2890,6 +2969,91 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                 className="px-5 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer transition-colors disabled:opacity-50"
               >
                 {isImportingUrl ? 'Importing...' : 'Import'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dedicated Model Reasoning Streaming Modal [Commented by: Google AI Studio on 29/10/2026 09:44 AM] */}
+      {isReasoningModalOpen && !!currentReasoning && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <div
+            className={`w-full max-w-2xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col max-h-[80vh] transition-all ${
+              theme === 'Minimalist Light'
+                ? 'bg-white border-neutral-300 text-neutral-900 shadow-neutral-400/30'
+                : 'bg-[#0f0f10] border-[#262626] text-neutral-100 shadow-emerald-950/20'
+            }`}
+          >
+            {/* Modal Header */}
+            <div
+              className={`flex items-center justify-between px-5 py-3.5 border-b select-none ${
+                theme === 'Minimalist Light'
+                  ? 'border-neutral-200 bg-neutral-50/90'
+                  : 'border-[#222] bg-[#141416]'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </span>
+                <h3 className="text-sm font-semibold tracking-wide font-sans">
+                  Thinking Process
+                </h3>
+                <span
+                  className={`text-[11px] px-2 py-0.5 rounded-full font-mono ${
+                    theme === 'Minimalist Light'
+                      ? 'bg-neutral-200 text-neutral-700'
+                      : 'bg-[#222] text-neutral-400'
+                  }`}
+                >
+                  Reasoning...
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsReasoningModalOpen(false)}
+                className={`text-xs px-2 py-1 rounded-md transition-colors cursor-pointer ${
+                  theme === 'Minimalist Light'
+                    ? 'hover:bg-neutral-200 text-neutral-500 hover:text-neutral-900'
+                    : 'hover:bg-[#252528] text-neutral-400 hover:text-neutral-100'
+                }`}
+                title="Minimize reasoning view"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body: Live Streaming Reasoning Thoughts */}
+            <div
+              className={`p-5 overflow-y-auto font-mono text-xs leading-relaxed whitespace-pre-wrap flex-1 select-text ${
+                theme === 'Minimalist Light'
+                  ? 'text-neutral-800 bg-neutral-50/50'
+                  : 'text-neutral-300 bg-black/30'
+              }`}
+            >
+              {currentReasoning}
+              <div ref={reasoningEndRef} />
+            </div>
+
+            {/* Modal Footer */}
+            <div
+              className={`px-5 py-2.5 border-t text-[11px] flex items-center justify-between select-none ${
+                theme === 'Minimalist Light'
+                  ? 'border-neutral-200 bg-neutral-50 text-neutral-500'
+                  : 'border-[#222] bg-[#121214] text-neutral-400'
+              }`}
+            >
+              <span className="italic">
+                Closes automatically once reasoning completes and answer streams...
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsReasoningModalOpen(false)}
+                className="underline hover:opacity-85 cursor-pointer ml-3 shrink-0"
+              >
+                Minimize
               </button>
             </div>
           </div>
