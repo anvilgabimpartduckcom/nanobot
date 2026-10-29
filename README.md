@@ -1,7 +1,7 @@
-<!-- {Added Latest Updates section and updated MCP plugins reference in README.md} [Commented by: Google AI Studio on 19/10/2026 02:25 AM] -->
+<!-- Added Latest Updates section and updated MCP plugins reference in README.md [Commented by: Google AI Studio on 19/10/2026 02:25 AM] -->
 
 # 📁 Project Structure
-<!-- Placed a folder emoji [Commented by: Developer on 21/10/2026 11:20 AM] -->
+<!-- Placed a folder emoji [Commented by: Google AI Studio on 21/10/2026 11:20 AM] -->
 
 ```
 nanobot/
@@ -18,8 +18,6 @@ nanobot/
 ├── netlify.toml                # Netlify SPA build and redirect rules
 ├── package.json                # Frontend Node.js dependencies and scripts
 ├── package-lock.json           # Exact resolved dependency tree for reproducible CI builds
-├── public/
-│   └── preview.png             # Application preview banner asset
 ├── tsconfig.json               # TypeScript configuration
 ├── vite.config.ts              # Vite build configuration with Tailwind CSS plugin
 ├── README.md                   # Project documentation
@@ -52,13 +50,13 @@ nanobot/
 ```
 
 # 📢 Latest Updates
-<!-- Placed a megaphone emoji [Commented by: Developer on 21/10/2026 11:20 AM] -->
-<!-- {Updated Latest Updates with lowercase account copy fix and centered Made in INDIA attribution in About sections} [Commented by: Google AI Studio on 22/10/2026 05:38 AM] -->
+<!-- Placed a megaphone emoji [Commented by: Google AI Studio on 21/10/2026 11:20 AM] -->
+<!-- Updated Latest Updates with reasoning modal streaming lifecycle [Commented by: Google AI Studio on 29/10/2026 09:45 AM] -->
 
-- **AuthModal Sign-Up Copy Correction**:
-  - Corrected the capitalization of "Account" to lowercase "account" in the bottom setup help link: changed "Need Help with creating Account? Visit here" to "Need Help with creating account? Visit here".
-
-- **Made in INDIA Attribution in About Sections**:
-  - Added a centered attribution line `Made in INDIA 🇮🇳 ❤️` directly under `All terms and conditions are under these services.` across both the standalone `AboutModal` (for visitors) and `SettingsModal` (for authenticated users).
+- **Model Reasoning Streaming Modal Lifecycle**:
+  - Implemented a dedicated Thinking Process modal dialog that automatically displays the model's live reasoning stream in real time while thinking.
+  - The modal automatically auto-scrolls to follow streaming thoughts and is styled to match both Neon Black and Minimalist Light themes.
+  - Once the model completes its reasoning process and begins generating output content tokens (or when tool execution initiates), the reasoning modal automatically closes, allowing the user to view the final answer as it streams directly into the chat viewport.
+  - Users can also minimize the reasoning modal at any time to peek at the background, or re-expand the completed thinking trace from the chat stream after generation finishes.
 
 

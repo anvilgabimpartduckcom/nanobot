@@ -1,4 +1,4 @@
-// {Engineered robust client-side multi-format file extraction and AI reader code synthesizer for real-world document, tabular, and code processing} [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
+// Engineered robust client-side multi-format file extraction and AI reader code synthesizer for real-world document, tabular, and code processing [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
 
 export interface ProcessedFile {
   id: number;
@@ -225,7 +225,7 @@ function extractTextFromPdfBuffer(buffer: ArrayBuffer): string {
   return '';
 }
 
-// {Iterative tag sanitization loop and angle bracket removal resolving CodeQL js/incomplete-multi-character-sanitization} [Commented by: Google AI Studio on 22/10/2026 04:47 AM]
+// Iterative tag sanitization loop and angle bracket removal resolving CodeQL js/incomplete-multi-character-sanitization [Commented by: Google AI Studio on 22/10/2026 04:47 AM]
 function sanitizeXmlTagContent(input: string): string {
   let previous: string;
   let text = input;

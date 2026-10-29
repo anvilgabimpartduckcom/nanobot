@@ -1,4 +1,4 @@
-// {IndexedDB manager for local-only original user file storage with quota and error handling} [Commented by: Google AI Studio on 15/10/2026 9:22 AM]
+// IndexedDB manager for local-only original user file storage with quota and error handling [Commented by: Google AI Studio on 15/10/2026 09:22 AM]
 
 export interface LocalStoredFile {
   fileId: string;

@@ -1,4 +1,4 @@
-// {Created Tavily Search and Deep Research engine supporting mini and pro research models} [Commented by: Google AI Studio on 10/12/2026 10:51 AM]
+// Created Tavily Search and Deep Research engine supporting mini and pro research models [Commented by: Google AI Studio on 10/12/2026 10:51 AM]
 
 export interface TavilySource {
   title: string;
@@ -164,7 +164,7 @@ export async function runDeepResearch(
   }
 }
 
-// {Created extractUrlsWithTavily to retrieve raw webpage markdown via Tavily Extract API} [Commented by: Google AI Studio on 10/14/2026 10:35 AM]
+// Created extractUrlsWithTavily to retrieve raw webpage markdown via Tavily Extract API [Commented by: Google AI Studio on 14/10/2026 10:35 AM]
 export interface ExtractedUrlResult {
   url: string;
   rawContent: string;

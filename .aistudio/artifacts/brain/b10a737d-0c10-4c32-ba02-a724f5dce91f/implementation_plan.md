@@ -1,95 +1,129 @@
-# Repository Cleanup: Remove Single-Use & Obsolete Files
+# Implementation Plan: Nanobot Major Feature Updates & Architecture Overhaul
 
-A plan to identify, delete, and document all single-use and irrelevant files and folders across the Nanobot repository, prune unused dependencies, and keep the README project structure synchronized.
-
-### User Review & Critical Decisions
-
-> [!IMPORTANT]
-> The following files and folders have been identified as single-use or irrelevant to Nanobot's runtime functionality:
-> - **`scripts/generate-preview.js` & `scripts/`**: A one-time generation script created solely to generate `public/preview.png`. The preview PNG is already saved in `public/preview.png`. The script and its folder are no longer needed.
-> - **`bun.lock`**: A leftover Bun lockfile. Nanobot runs on Node.js 20 and uses `npm` exclusively with `package-lock.json` across Netlify and GitHub Actions. `bun.lock` is completely unused.
-> - **`dist/`**: An ephemeral local build artifact directory ignored by `.gitignore`.
-> - **`sharp`**: A heavy native dependency in `package.json` installed only for `generate-preview.js`. It is not used in `src/` or `worker/` and will be cleanly pruned from `package.json`.
-
-- **Confirmed Decision 1**: Delete `scripts/generate-preview.js` and delete the `scripts/` directory.
-- **Confirmed Decision 2**: Delete the obsolete `bun.lock` file.
-- **Confirmed Decision 3**: Delete the local generated `dist/` directory.
-- **Confirmed Decision 4**: Remove the unused `sharp` dependency from `package.json` and sync `package-lock.json`.
-- **Confirmed Decision 5**: Update the "Project Structure" tree in `README.md` to reflect the removed paths, accompanied by the mandatory comment format.
+This plan details the implementation of the 15 requested updates, shifting chat persistence to encrypted client-side storage, introducing contextual three-dot menus, supporting shared noodle URL importing, upgrading the AI model to `nvidia/nemotron-3.5-super-vl:free` with a 1M token ceiling, refining settings, expanding Add-ons with OAuth modal simulation, and rebranding to "Noodles".
 
 ---
 
-### 1. Overview & Core Concept
-
-- **What It Does**: Purges all once-used, dead, and redundant files, directories, and package dependencies from the Nanobot repository, leaving only essential production source files, configurations, CI workflows, and documentation.
-- **Target Audience / Purpose**: Clean repository maintenance for open-source deployment, fast CI installation, and clarity for contributors and automated build runners.
-- **Key Value**: Eliminates developer confusion, reduces repository bloat, prevents CI lockfile conflicts, and keeps `README.md` in 100% parity with the filesystem.
-
----
-
-### 2. File Removal & Modification Inventory
-
-```
-┌─────────────────────────────────┬──────────┬────────────────────────────────────────────────────────┐
-│ Path                            │ Action   │ Rationale                                              │
-├─────────────────────────────────┼──────────┼────────────────────────────────────────────────────────┤
-│ scripts/generate-preview.js     │ Delete   │ One-time script; preview.png is already in public/    │
-│ scripts/                        │ Delete   │ Empty folder once generate-preview.js is deleted       │
-│ bun.lock                        │ Delete   │ Irrelevant lockfile; repo strictly uses npm            │
-│ dist/                           │ Delete   │ Ephemeral build folder; regenerated during build       │
-│ package.json                    │ Edit     │ Remove unused "sharp": "^0.35.5" dependency            │
-│ package-lock.json               │ Regenerate │ Synchronize lockfile after removing sharp            │
-│ README.md                       │ Edit     │ Remove scripts/ entry from Project Structure tree      │
-└─────────────────────────────────┴──────────┴────────────────────────────────────────────────────────┘
-```
+## 1. Architecture & Storage Migration
+- **Local Encrypted Storage**:
+  - Store all user conversations, messages, and AI reasoning strictly in browser `localStorage` under `nanobot_encrypted_chats`, encrypted using Web Crypto PBKDF2/AES-GCM (`cryptoKey`).
+  - Remove the 30-day auto-purge filter on locally stored noodles so user conversations remain permanently stored on their device until manually cleared.
+  - Discontinue uploading routine unshared chat sessions and messages to Cloudflare D1.
+- **Cloudflare D1 Public Shares**:
+  - Cloudflare D1 backend is strictly reserved for shared noodles (`/api/share`).
+  - When a user shares a noodle, an encrypted snapshot containing messages, reasoning, and code outputs (no raw file bytes) is sent to Cloudflare with 30-day retention.
+  - If the same user updates the noodle and clicks "Share" again, the existing Cloudflare snapshot is replaced under the exact same share URL.
 
 ---
 
-### 3. Key Decisions & Rationale
-
-- **Decision 1: Delete `scripts/` entirely**
-  - *Chosen Approach*: Remove `scripts/generate-preview.js` and delete the `scripts/` directory.
-  - *Why*: The script's sole purpose was to rasterize SVG into `public/preview.png`. That output asset is already committed to `public/preview.png` and embedded in the web app. Keeping the script adds 25MB of native dependency bloat (`sharp`) with zero runtime value.
-- **Decision 2: Delete `bun.lock`**
-  - *Chosen Approach*: Delete the 49KB `bun.lock` file from the repository root.
-  - *Why*: Nanobot is configured for `npm` (Node.js 20). Netlify runs `npm run build`, and GitHub Actions runs `verify-frontend.yml` with `npm install` and `package-lock.json`. The Bun lockfile is unused and previously triggered CI setup errors.
-- **Decision 3: Prune `sharp` from `package.json`**
-  - *Chosen Approach*: Remove `sharp` from `dependencies` and run `npm install` to update `package-lock.json`.
-  - *Why*: Eliminates unnecessary compilation time and dependencies during CI/CD.
-- **Decision 4: Update `README.md` Project Structure**
-  - *Chosen Approach*: Remove the `scripts/` entry from the ASCII tree in `README.md`, keeping all other production paths intact. Include the required Google AI Studio comment with timestamp in DD/MM/YYYY HH:MM AM/PM format.
+## 2. Contextual Three-Dot Menus & Header UI
+- **Signed-in New Noodle View (0 messages)**:
+  - Replace the existing top-right `Import Chat` and sunglasses/sun buttons with a borderless three-dots button (`...`).
+  - Clicking `...` toggles a dropdown menu beneath it with:
+    - **Incognito Noodle**: Accompanied by a green toggle switch (default: OFF).
+    - **Import Noodle**: Hovering or clicking reveals sub-options: `Import .txt` and `Provide URL`.
+  - No emojis in menu items.
+- **Signed-in Running Noodle View (> 0 messages)**:
+  - Replace the top-right header buttons with a borderless three-dots button (`...`).
+  - Clicking `...` toggles a dropdown menu beneath it with:
+    - **Share**
+    - **Export Noodle**
+  - No emojis in menu items.
+  - Bypassed entirely when Incognito mode is active.
+- **Incognito Mode Behavior**:
+  - When the green toggle switch is ON:
+    - Active noodle is not saved to history (`persistChat` is bypassed).
+    - Running noodle menu (`Share`, `Export Noodle`) is completely hidden.
+    - Model data collection / training is forced OFF (`data_collection: 'deny'`).
 
 ---
 
-### 4. Technical Architecture & Execution Strategy
+## 3. Share & Import URL Flows
+- **Sharing Noodle**:
+  - Clicking `Share` copies the shareable URL directly to the user's clipboard and displays a subtle confirmation toast.
+  - Backs up the snapshot to Cloudflare D1 with a 30-day expiration.
+- **Signed-In Import via URL**:
+  - Flow: `...` -> `Import Noodle` -> `Provide URL`.
+  - Opens a modal centered on the screen with heading `Enter URL` and an input field.
+  - On Enter: Fetches the shared noodle from Cloudflare (`/api/share/:id`), creates an active editable noodle session in the current account, and saves it to local storage. Users can immediately continue the conversation.
+- **Signed-Out Import Shared Noodle**:
+  - In signed-out mode, place an `Import Shared Noodle` button to the left of `Sign In` / `Sign Up`.
+  - Clicking it opens the centered `Enter URL` modal.
+  - On Enter: Loads the shared noodle in read-only view mode without history persistence or editable composer.
 
-```
-┌────────────────────────────────────────────────────────┐
-│              Nanobot Repository Root                   │
-├────────────────────────────────────────────────────────┤
-│  KEEP (Essential):                                     │
-│  ├── .env.example / .gitignore / metadata.json         │
-│  ├── .github/workflows/ (deploy-worker, verify-front)  │
-│  ├── index.html / vite.config.ts / tsconfig.json       │
-│  ├── netlify.toml                                      │
-│  ├── package.json & package-lock.json (pruned)         │
-│  ├── public/ (preview.png)                             │
-│  ├── src/ (App, components, lib, index.css)            │
-│  ├── supabase/ (schema.sql)                            │
-│  └── worker/ (src, schema.sql, wrangler.toml)          │
-│                                                        │
-│  REMOVE (Obsolete / Single-Use):                       │
-│  ├── ❌ scripts/generate-preview.js & scripts/         │
-│  ├── ❌ bun.lock                                       │
-│  └── ❌ dist/                                          │
-└────────────────────────────────────────────────────────┘
-```
+---
 
-#### Step-by-Step Execution Sequence
-1. Delete `scripts/generate-preview.js` using `delete_file`.
-2. Delete `scripts/` directory using `delete_dir`.
-3. Delete `bun.lock` using `delete_file`.
-4. Delete `dist/` directory using `delete_dir`.
-5. Remove `"sharp": "^0.35.5"` from `package.json`.
-6. Update `README.md` to remove `scripts/` from the Project Structure ASCII tree, including the timestamped comment.
-7. Run `npm install` and verify `npm run lint` and `npm run build` pass without errors.
+## 4. User Message Hover Actions (Copy & Inline Edit)
+- **Hover Trigger**:
+  - Hovering over any user-sent message bubble reveals `Copy` and `Edit` buttons below it.
+- **Copy Action**:
+  - Copies the exact user prompt text to the clipboard with visual confirmation.
+- **Edit Action**:
+  - Expands the message into an inline editable `<textarea>` with autofocus and blinking cursor.
+  - Pressing `Enter` resends the updated message: updates the noodle from that message index forward, re-executes AI generation, and saves the updated history.
+  - Pressing `Shift+Enter` inserts a new line.
+  - Includes a cancel option (Esc or Cancel button) to discard changes.
+
+---
+
+## 5. Model Upgrade, Token Ceiling & Context Window
+- **Model Upgrade**:
+  - Update OpenRouter model ID to `nvidia/nemotron-3.5-super-vl:free`.
+- **Token Ceiling**:
+  - Increase context ceiling to **1,000,000 tokens** (1M tokens).
+- **Context Message Depth**:
+  - Increase conversation history sent to the model to the last **8 messages** (`chat.messages.slice(-8)`).
+  - Explicitly sanitize context messages: exclude model reasoning and raw file code outputs from the conversation history array sent to OpenRouter.
+
+---
+
+## 6. Settings Modal & About Sections Refinements
+- **Settings Modal**:
+  - Completely erase the `Appearance` tab navigation button and its panel.
+  - Retain the theme selector (Neon Black vs. Minimalist Light) inside the `Account Settings` tab.
+- **About nanobot Sections**:
+  - In both `AboutModal.tsx` and `SettingsModal.tsx` (About tab):
+    - Remove the `Note:` label from the boxed note section.
+    - Erase the second bullet point (Ctrl+S backup warning), retaining only the primary note text.
+
+---
+
+## 7. Add-ons (Plugin Marketplace Rebranding & MCP OAuth Flow)
+- **Rebranding & Cleanup**:
+  - Rebrand `Plugin Marketplace` to `Add-ons`.
+  - Remove the toggle switches next to the `Connect` buttons.
+- **Alphabetical Arrangement**:
+  - Sort all MCP services alphabetically: Cloudflare, Firecrawl, GitHub, Gmail, Google Docs, Google Drive, Netlify, Notion, Slack, Supabase, Tavily.
+- **New MCP Add-ons**:
+  - Add `GitHub`, `Slack`, `Cloudflare`, `Supabase`, and `Netlify` to `MCP_PLUGINS`.
+- **Interactive OAuth Connection Modal**:
+  - Clicking `Connect` opens an interactive OAuth authorization modal simulating a real SaaS connection flow:
+    - **GitHub**: Includes repository scope choice: `All repositories` vs. `Only select repositories` (with repository name input).
+    - **Slack**: Scope selection (channels, messages, workspace permissions).
+    - **Cloudflare / Supabase / Netlify**: Project and API authorization scopes.
+  - Authorizing marks the Add-on as connected.
+
+---
+
+## 8. "Noodle" Terminology Rebranding
+- Replace terminology across the application:
+  - `New Chat` -> `New Noodle`
+  - `Chat` -> `Noodle`
+  - `Chats` -> `Noodles`
+  - `Chat History` -> `Noodle History`
+  - `Share Chat` -> `Share Noodle`
+  - `Export Chat` -> `Export Noodle`
+
+---
+
+## Verification & Validation Plan
+1. **TypeScript Linting**: Run `npm run lint` (`tsc --noEmit`) to verify zero syntax or typing errors.
+2. **Production Build**: Run `npm run build` (`vite build`) to verify bundle compilation.
+3. **Applet Compilation**: Run `compile_applet` and `lint_applet`.
+4. **Functional Testing**:
+   - Verify signed-in new noodle three-dot menu (Incognito toggle and Import Noodle sub-menu).
+   - Verify signed-in running noodle three-dot menu (Share and Export Noodle).
+   - Verify hover on user messages reveals Copy and Edit; verify inline edit with Enter and Shift+Enter.
+   - Verify 'Import Shared Noodle' modal in signed-out state and 'Provide URL' modal in signed-in state.
+   - Verify OpenRouter payload has model `nvidia/nemotron-3.5-super-vl:free` with 8 messages and reasoning omitted.
+   - Verify Settings modal has no Appearance tab, theme toggle is in Account tab, and Add-ons are alphabetical with OAuth connect modal.

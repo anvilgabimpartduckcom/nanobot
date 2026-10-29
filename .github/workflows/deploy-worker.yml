@@ -1,4 +1,4 @@
-# {GitHub Actions workflow deploying nanobot-api Cloudflare Worker using Wrangler with secure credentials} [Commented by: Google AI Studio on 15/10/2026 10:16 AM]
+# GitHub Actions workflow deploying nanobot-api Cloudflare Worker using Wrangler with secure credentials [Commented by: Google AI Studio on 15/10/2026 10:16 AM]
 
 name: Deploy Cloudflare Worker Backend
 
@@ -15,7 +15,7 @@ concurrency:
   group: deploy-worker-${{ github.ref }}
   cancel-in-progress: true
 
-# {Explicit read-only permissions block resolving CodeQL actions/missing-workflow-permissions vulnerability} [Commented by: Google AI Studio on 22/10/2026 04:47 AM]
+# Explicit read-only permissions block resolving CodeQL actions/missing-workflow-permissions vulnerability [Commented by: Google AI Studio on 22/10/2026 04:47 AM]
 permissions:
   contents: read
 
@@ -27,10 +27,11 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      # Configured Node.js 24 LTS setup for Cloudflare Worker deployment [Commented by: Google AI Studio on 22/10/2026 06:25 AM]
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: 'npm'
           cache-dependency-path: 'worker/package.json'
 
@@ -41,7 +42,7 @@ jobs:
             npm ci || npm install
           fi
 
-      # {Direct Cloudflare Worker deployment with verified D1 database_id from wrangler.toml} [Commented by: Google AI Studio on 17/10/2026 02:43 AM]
+      # Direct Cloudflare Worker deployment with verified D1 database_id from wrangler.toml [Commented by: Google AI Studio on 17/10/2026 02:43 AM]
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
         with:
