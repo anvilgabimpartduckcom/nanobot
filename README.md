@@ -8,6 +8,7 @@ or by downloading a zip file by using this link in any browser
 ```URL
 https://github.com/anvilgabimpartduckcom/nanobot/archive/refs/heads/main.zip
 ```
+But always make sure to follow the LICENSE.
 
 # 📁 Project Structure
 <!-- Placed a folder emoji [Commented by: Google AI Studio on 21/10/2026 11:20 AM] -->
