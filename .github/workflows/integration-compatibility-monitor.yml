@@ -1,0 +1,48 @@
+name: Integration Compatibility Monitor
+
+on:
+  schedule:
+    - cron: "15 8 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: integration-compatibility-monitor
+  cancel-in-progress: false
+
+jobs:
+  check-provider-updates:
+    name: Check official provider updates
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check feeds and report new updates
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python scripts/integration_compatibility_monitor.py
+
+      - name: Save monitor state
+        run: |
+          if git diff --quiet -- docs/integration-monitor-state.json; then
+            echo "Monitor state unchanged."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/integration-monitor-state.json
+          git commit -m "chore: update integration monitor state"
+          git push origin HEAD:main
