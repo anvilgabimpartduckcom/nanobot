@@ -1,4 +1,13 @@
-<!-- Added Latest Updates section and updated MCP plugins reference in README.md [Commented by: Google AI Studio on 19/10/2026 02:25 AM] -->
+<!-- Created a section which makes it easy for visitors to download the code [Commented by: Developer on 30/10/2026 11:04 PM] -->
+
+You can download nanobot's source code by using Git
+```bash
+git clone https://github.com/anvilgabimpartduckcom/nanobot.git
+```
+or by downloading a zip file by using this link in any browser
+```URL
+https://github.com/anvilgabimpartduckcom/nanobot/archive/refs/heads/main.zip
+```
 
 # 📁 Project Structure
 <!-- Placed a folder emoji [Commented by: Google AI Studio on 21/10/2026 11:20 AM] -->
@@ -50,7 +59,6 @@ nanobot/
 ```
 
 # 📢 Latest Updates
-<!-- Placed a megaphone emoji [Commented by: Google AI Studio on 21/10/2026 11:20 AM] -->
 <!-- Updated Latest Updates with reasoning modal streaming lifecycle [Commented by: Google AI Studio on 29/10/2026 09:45 AM] -->
 
 - **Model Reasoning Streaming Modal Lifecycle**:
