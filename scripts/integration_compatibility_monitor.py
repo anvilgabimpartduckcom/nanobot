@@ -11,6 +11,7 @@ import json
 import os
 import re
 import sys
+import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
@@ -21,12 +22,19 @@ STATE_PATH = Path("docs/integration-monitor-state.json")
 REGISTRY_PATH = Path("src/lib/plugins.ts")
 TOKEN = os.environ.get("GITHUB_TOKEN", "")
 REPOSITORY = os.environ.get("GITHUB_REPOSITORY", "")
-HEADERS = {
+BASE_HEADERS = {
     "User-Agent": "Nanobot-Integration-Compatibility-Monitor/2.0",
-    "Accept": "application/vnd.github+json",
 }
-if TOKEN:
-    HEADERS["Authorization"] = f"Bearer {TOKEN}"
+
+
+def request_headers(url: str) -> dict[str, str]:
+    """Send the repository token only to the GitHub API, never to provider feeds."""
+    headers = dict(BASE_HEADERS)
+    if urllib.parse.urlparse(url).hostname == "api.github.com":
+        headers["Accept"] = "application/vnd.github+json"
+        if TOKEN:
+            headers["Authorization"] = f"Bearer {TOKEN}"
+    return headers
 
 # These IDs are the integration IDs in src/lib/plugins.ts. Each must have at
 # least one automated source below. A shared source can cover several IDs.
@@ -112,9 +120,9 @@ SOURCES = [
         "integrations": ["netlify"],
     },
     {
-        "name": "Notion MCP server releases",
+        "name": "Notion JavaScript API client releases",
         "kind": "releases",
-        "url": f"{API}/repos/makenotion/notion-mcp-server/releases?per_page=30",
+        "url": f"{API}/repos/makenotion/notion-sdk-js/releases?per_page=30",
         "integrations": ["notion"],
     },
     {
@@ -137,9 +145,9 @@ SOURCES = [
         "integrations": ["supabase"],
     },
     {
-        "name": "Tavily MCP server releases",
-        "kind": "releases",
-        "url": f"{API}/repos/tavily-ai/tavily-mcp/releases?per_page=30",
+        "name": "Tavily MCP server repository updates",
+        "kind": "commits",
+        "url": f"{API}/repos/tavily-ai/tavily-mcp/commits?per_page=30",
         "integrations": ["tavily"],
     },
     {
@@ -169,7 +177,7 @@ MANUAL_REVIEW_URLS = {
 
 
 def fetch(url: str) -> bytes:
-    request = urllib.request.Request(url, headers=HEADERS)
+    request = urllib.request.Request(url, headers=request_headers(url))
     with urllib.request.urlopen(request, timeout=30) as response:
         return response.read()
 
@@ -236,6 +244,24 @@ def read_releases(source):
             "url": html_url,
             "published": release.get("published_at") or "Date not supplied",
             "summary": " ".join((release.get("body") or "").split())[:900],
+        })
+    return results
+
+
+def read_commits(source):
+    data = json.loads(fetch(source["url"]))
+    results = []
+    for commit in data:
+        details = commit.get("commit", {})
+        message = details.get("message", "")
+        results.append({
+            "id": source["name"] + ":" + str(commit.get("sha", message)),
+            "source": source["name"],
+            "integrations": source["integrations"],
+            "title": message.splitlines()[0] if message else "Repository update",
+            "url": commit.get("html_url", source["url"]),
+            "published": details.get("author", {}).get("date") or "Date not supplied",
+            "summary": " ".join(message.split())[:900],
         })
     return results
 
@@ -318,7 +344,7 @@ def create_issue(items):
     request = urllib.request.Request(
         f"{API}/repos/{REPOSITORY}/issues",
         data=payload,
-        headers={**HEADERS, "Content-Type": "application/json"},
+        headers={**request_headers(f"{API}/repos/{REPOSITORY}/issues"), "Content-Type": "application/json"},
         method="POST",
     )
     with urllib.request.urlopen(request, timeout=30) as response:
@@ -337,7 +363,12 @@ def main():
 
     for source in SOURCES:
         try:
-            items = read_rss(source) if source["kind"] == "rss" else read_releases(source)
+            if source["kind"] == "rss":
+                items = read_rss(source)
+            elif source["kind"] == "commits":
+                items = read_commits(source)
+            else:
+                items = read_releases(source)
             all_items.extend(items)
             print(f"OK: {source['name']} ({len(items)} entries)")
         except Exception as exc:
