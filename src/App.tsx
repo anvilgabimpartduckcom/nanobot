@@ -1211,10 +1211,43 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
     const accumulatedSources: Array<{ title: string; url: string }> = [];
     let searchPerformed = false;
     let scrapPerformed = false;
+    let searchTriggered = false; // [Commented by: Google AI Studio on 31/10/2026 10:44 AM]
 
+    // Retrieve active MCP tools from connected providers for this user [Commented by: Google AI Studio on 31/10/2026 10:31 AM]
+    const openRouterMcpTools: Array<{
+      type: 'function';
+      function: { name: string; description: string; parameters: Record<string, unknown> };
+    }> = [];
+
+    if (currentUser) {
+      try {
+        const mcpResponse = await workerClient.getMcpTools();
+        if (mcpResponse.success && mcpResponse.data?.connections) {
+          for (const conn of mcpResponse.data.connections) {
+            if (conn.status === 'connected' && Array.isArray(conn.tools)) {
+              for (const tool of conn.tools) {
+                const namespacedName = `${conn.providerId}__${tool.name}`.replace(/[^a-zA-Z0-9_]/g, '_');
+                openRouterMcpTools.push({
+                  type: 'function',
+                  function: {
+                    name: namespacedName,
+                    description: `[${conn.providerId.toUpperCase()} MCP] ${tool.description}`,
+                    parameters: (tool.inputSchema as Record<string, unknown>) || { type: 'object', properties: {} },
+                  },
+                });
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Notice loading active MCP tools for session:', e);
+      }
+    }
+
+    // Genuine tool-calling loop compatible with OpenRouter and Cloudflare Worker backend execution [Commented by: Google AI Studio on 31/10/2026 10:31 AM]
     async function runGeneration(messagesArr: typeof apiMessages, depth = 0) {
-      if (depth > 2) return;
-      setCurrentStatus('Generating Answer...');
+      if (depth > 5) return; // Prevent infinite tool execution loops
+      setCurrentStatus(depth > 0 ? 'Analyzing Tool Results...' : 'Generating Answer...');
 
       // Determine model training opt-out parameter (incognito or user toggle OFF)
       const optOutTraining = isIncognito || currentUser?.model_training === false;
@@ -1225,11 +1258,17 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         temperature: 0.0,
         stream: true,
         reasoning: { effort: 'medium' },
-        messages: messagesArr
+        messages: messagesArr,
       };
 
       if (optOutTraining) {
         bodyPayload.provider = { data_collection: 'deny' };
+      }
+
+      // Supply dynamically discovered MCP tools to the model if providers are connected
+      if (openRouterMcpTools.length > 0) {
+        bodyPayload.tools = openRouterMcpTools;
+        bodyPayload.tool_choice = 'auto';
       }
 
       let res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -1238,26 +1277,43 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
           'Content-Type': 'application/json',
           Authorization: `Bearer ${orKey}`,
           'HTTP-Referer': window.location.origin,
-          'X-Title': 'nanobot'
+          'X-Title': 'nanobot',
         },
         body: JSON.stringify(bodyPayload),
-        signal
+        signal,
       });
 
-      // If the provider restriction caused an HTTP 400, retry once cleanly without the provider block
-      if (!res.ok && res.status === 400 && bodyPayload.provider) {
-        delete bodyPayload.provider;
+      // If the provider restriction or tools caused an HTTP 400, retry once cleanly without the restricted block
+      if (!res.ok && res.status === 400 && (bodyPayload.provider || bodyPayload.tools)) {
+        if (bodyPayload.provider) delete bodyPayload.provider;
         res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${orKey}`,
             'HTTP-Referer': window.location.origin,
-            'X-Title': 'nanobot'
+            'X-Title': 'nanobot',
           },
           body: JSON.stringify(bodyPayload),
-          signal
+          signal,
         });
+
+        // If tools specifically caused a model incompatibility error, retry without tools
+        if (!res.ok && res.status === 400 && bodyPayload.tools) {
+          delete bodyPayload.tools;
+          delete bodyPayload.tool_choice;
+          res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${orKey}`,
+              'HTTP-Referer': window.location.origin,
+              'X-Title': 'nanobot',
+            },
+            body: JSON.stringify(bodyPayload),
+            signal,
+          });
+        }
       }
 
       if (!res.ok) {
@@ -1269,7 +1325,11 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
       const decoder = new TextDecoder();
       if (!reader) throw new Error('Response stream unavailable.');
 
-      let searchTriggered = false;
+      const accumulatedToolCalls: Array<{
+        id: string;
+        type: 'function';
+        function: { name: string; arguments: string };
+      }> = [];
 
       while (true) {
         const { done, value } = await reader.read();
@@ -1288,6 +1348,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
             const parsed = JSON.parse(dataStr);
             const delta = parsed.choices?.[0]?.delta || {};
 
+            // Accumulate streamed reasoning
             const reasoningDelta = Array.isArray(delta.reasoning_details)
               ? delta.reasoning_details
               : Array.isArray(delta.reasoning_content)
@@ -1306,15 +1367,31 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
               if (chunk) {
                 reasoningText += chunk;
                 setCurrentReasoning(reasoningText);
-                // When model is thinking, display Thinking ▼ with reasoning unfolded beneath [Commented by: Google AI Studio on 30/10/2026 11:00 AM]
                 setIsThinking(true);
                 setReasoningAccordionOpen(true);
               }
             }
 
+            // Accumulate streamed tool calls
+            if (Array.isArray(delta.tool_calls)) {
+              for (const tc of delta.tool_calls) {
+                const idx = tc.index ?? 0;
+                if (!accumulatedToolCalls[idx]) {
+                  accumulatedToolCalls[idx] = {
+                    id: tc.id || `call_${Date.now()}_${idx}`,
+                    type: 'function',
+                    function: { name: '', arguments: '' },
+                  };
+                }
+                if (tc.id) accumulatedToolCalls[idx].id = tc.id;
+                if (tc.function?.name) accumulatedToolCalls[idx].function.name += tc.function.name;
+                if (tc.function?.arguments) accumulatedToolCalls[idx].function.arguments += tc.function.arguments;
+              }
+            }
+
+            // Accumulate content tokens
             const token = delta.content || '';
             if (token) {
-              // When reasoning is completed and answer tokens arrive, auto-close accordion and revert to Thinking ▲ [Commented by: Google AI Studio on 30/10/2026 11:00 AM]
               setIsThinking(false);
               setReasoningAccordionOpen(false);
               currentOutput += token;
@@ -1325,6 +1402,65 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
           }
         }
       }
+
+      // Execute genuine MCP tools if the model emitted structured tool calls [Commented by: Google AI Studio on 31/10/2026 10:31 AM]
+      if (accumulatedToolCalls.length > 0) {
+        setCurrentStatus(`Executing ${accumulatedToolCalls.length} MCP tool${accumulatedToolCalls.length > 1 ? 's' : ''}...`);
+        const toolMessages: Array<{ role: string; tool_call_id: string; name: string; content: string }> = [];
+
+        for (const toolCall of accumulatedToolCalls) {
+          const rawName = toolCall.function.name;
+          const sepIdx = rawName.indexOf('__');
+          const providerId = sepIdx !== -1 ? rawName.substring(0, sepIdx) : rawName;
+          const toolName = sepIdx !== -1 ? rawName.substring(sepIdx + 2) : rawName;
+
+          let parsedArgs: Record<string, unknown> = {};
+          try {
+            parsedArgs = toolCall.function.arguments ? JSON.parse(toolCall.function.arguments) : {};
+          } catch {
+            parsedArgs = {};
+          }
+
+          setCurrentStatus(`Executing ${providerId} tool: ${toolName}...`);
+          let toolResultText = '';
+
+          try {
+            const callRes = await workerClient.callMcpTool(providerId, toolName, parsedArgs);
+            if (callRes.success && callRes.data?.result) {
+              const contentParts = callRes.data.result.content || [];
+              toolResultText = contentParts.map((p) => p.text).join('\n') || JSON.stringify(callRes.data.result);
+            } else {
+              toolResultText = `Tool execution failed: ${callRes.error || 'Unknown error'}`;
+            }
+          } catch (execErr: unknown) {
+            const err = execErr as Error;
+            toolResultText = `Tool call exception: ${err.message}`;
+          }
+
+          toolMessages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            name: rawName,
+            content: toolResultText,
+          });
+        }
+
+        const nextApiMessages: typeof apiMessages = [
+          ...messagesArr,
+          {
+            role: 'assistant',
+            content: currentOutput || null,
+            ...(accumulatedToolCalls.length > 0 ? { tool_calls: accumulatedToolCalls } : {}),
+          } as any,
+          ...toolMessages as any,
+        ];
+
+        currentOutput = '';
+        targetContentRef.current = '';
+        await runGeneration(nextApiMessages, depth + 1);
+        return;
+      }
+
 
       // Processed Scraping and Search tags with exact regex and single-use tool lifecycle [Commented by: Google AI Studio on 19/10/2026 02:25 AM]
       // 1. Check for Scraping queries (<Scrap>URL</Scrap>, <Scrap1>URL1</Scrap1>, <Scrap2>URL2</Scrap2>...) if scraping has NOT been performed yet

@@ -18,3 +18,4 @@ SUPABASE_URL = "https://kyluvwlbdtovuwpmakep.supabase.co"
 
 # In Cloudflare Worker, configure secrets securely via dashboard or CLI:
 # npx wrangler secret put SUPABASE_ANON_KEY
+# npx wrangler secret put MCP_ENCRYPTION_SECRET # [Commented by: Google AI Studio on 31/10/2026 11:05 AM]

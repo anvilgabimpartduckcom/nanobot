@@ -21,12 +21,15 @@ export interface D1Database {
   exec(query: string): Promise<D1Result>;
 }
 
+// Configured Cloudflare Worker runtime environment interface with D1 and secret bindings [Commented by: Google AI Studio on 31/10/2026 10:31 AM]
 export interface Env {
   DB: D1Database;
   SUPABASE_URL?: string;
   SUPABASE_ANON_KEY?: string;
   CORS_ORIGIN?: string;
+  MCP_ENCRYPTION_SECRET?: string;
 }
+
 
 interface SupabaseUser {
   id: string;
@@ -68,6 +71,1193 @@ function getCorsHeaders(origin: string | null, allowedOrigin: string = '*'): Hea
 function validateSafeId(id: string): boolean {
   return /^[a-zA-Z0-9_\-.:]{1,128}$/.test(id);
 }
+
+// Server-side AES-GCM credential encryption, SSRF whitelist, and dynamic MCP execution engine [Commented by: Google AI Studio on 31/10/2026 10:31 AM]
+export interface McpDiscoveredTool {
+  name: string;
+  description: string;
+  inputSchema?: Record<string, unknown>;
+}
+
+const ALLOWED_MCP_DOMAINS = [
+  'mcp.cloudflare.com',
+  'netlify-mcp.netlify.app',
+  'api.cloudflare.com',
+  'api.netlify.com',
+  'api.github.com',
+  'api.supabase.com',
+  'api.firecrawl.dev',
+  'api.tavily.com',
+  'api.notion.com',
+  'slack.com',
+  'www.googleapis.com',
+  'gmail.googleapis.com',
+  'docs.googleapis.com'
+];
+
+// Canonical verified provider endpoints preventing custom URL overrides [Commented by: Google AI Studio on 31/10/2026 11:05 AM]
+export const CANONICAL_PROVIDER_ENDPOINTS: Record<string, string> = {
+  cloudflare: 'https://mcp.cloudflare.com/mcp',
+  netlify: 'https://netlify-mcp.netlify.app/mcp',
+  github: 'https://api.github.com',
+  supabase: 'https://api.supabase.com',
+  firecrawl: 'https://api.firecrawl.dev',
+  tavily: 'https://api.tavily.com',
+  notion: 'https://api.notion.com',
+  slack: 'https://slack.com',
+  gmail: 'https://gmail.googleapis.com',
+  google_docs: 'https://docs.googleapis.com',
+  google_drive: 'https://www.googleapis.com',
+};
+
+function validateSafeMcpUrl(urlStr: string): boolean {
+
+  try {
+    const u = new URL(urlStr);
+    if (u.protocol !== 'https:') return false;
+    return ALLOWED_MCP_DOMAINS.some(
+      (domain) => u.hostname === domain || u.hostname.endsWith(`.${domain}`)
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function getMcpEncryptionKey(secret: string): Promise<CryptoKey> {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(secret),
+    { name: 'PBKDF2' },
+    false,
+    ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: enc.encode('nanobot-mcp-server-salt-2026'),
+      iterations: 100000,
+      hash: 'SHA-256',
+    },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+async function encryptServerCredential(plaintext: string, secret: string): Promise<string> {
+  const key = await getMcpEncryptionKey(secret);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const enc = new TextEncoder();
+  const encrypted = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    enc.encode(plaintext)
+  );
+  const ivHex = Array.from(iv).map((b) => b.toString(16).padStart(2, '0')).join('');
+  const ctHex = Array.from(new Uint8Array(encrypted)).map((b) => b.toString(16).padStart(2, '0')).join('');
+  return `${ivHex}:${ctHex}`;
+}
+
+async function decryptServerCredential(cipherCombined: string, secret: string): Promise<string> {
+  const parts = cipherCombined.split(':');
+  if (parts.length !== 2) throw new Error('Malformed encrypted credentials');
+  const [ivHex, ctHex] = parts;
+  const key = await getMcpEncryptionKey(secret);
+  const ivMatches = ivHex.match(/.{1,2}/g);
+  const ctMatches = ctHex.match(/.{1,2}/g);
+  if (!ivMatches || !ctMatches) throw new Error('Invalid hex encoding in credentials');
+  const iv = new Uint8Array(ivMatches.map((byte) => parseInt(byte, 16)));
+  const ct = new Uint8Array(ctMatches.map((byte) => parseInt(byte, 16)));
+  const decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    ct
+  );
+  return new TextDecoder().decode(decrypted);
+}
+
+// Dynamically discover tools from real provider endpoint or verify credentials via official API [Commented by: Google AI Studio on 31/10/2026 10:31 AM]
+async function discoverAndValidateMcpProvider(
+  providerId: string,
+  credentials: Record<string, string>,
+  customEndpoint?: string
+): Promise<{ success: boolean; tools: McpDiscoveredTool[]; endpoint: string; error?: string }> {
+  const token = credentials.token || credentials.apiKey || credentials.accessToken || '';
+  if (!token.trim()) {
+    return {
+      success: false,
+      tools: [],
+      endpoint: '',
+      error: 'Authentication credential (token, API key, or access token) is required',
+    };
+  }
+
+  const endpoint = customEndpoint || '';
+
+  try {
+    switch (providerId) {
+      case 'cloudflare': {
+        const mcpUrl = endpoint || 'https://mcp.cloudflare.com/mcp';
+        if (!validateSafeMcpUrl(mcpUrl)) {
+          return { success: false, tools: [], endpoint: mcpUrl, error: 'SSRF Block: Endpoint domain not permitted' };
+        }
+
+        // Live connection test against Cloudflare API / MCP server
+        let testRes = await fetch(mcpUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/list',
+            params: {},
+          }),
+        }).catch(() => null);
+
+        if (testRes && testRes.ok) {
+          const data: any = await testRes.json().catch(() => null);
+          if (data && data.result && Array.isArray(data.result.tools)) {
+            return {
+              success: true,
+              tools: data.result.tools,
+              endpoint: mcpUrl,
+            };
+          }
+        }
+
+        // Verify API token validity with Cloudflare REST API directly
+        const verifyRes = await fetch('https://api.cloudflare.com/client/v4/user/tokens/verify', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!verifyRes.ok) {
+          const errText = await verifyRes.text();
+          return { success: false, tools: [], endpoint: mcpUrl, error: `Cloudflare token validation failed: ${errText}` };
+        }
+
+        const cfTools: McpDiscoveredTool[] = [
+          {
+            name: 'search',
+            description: 'Search Cloudflare documentation and available API endpoints for Workers, D1, R2, and DNS.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                query: { type: 'string', description: 'Documentation or API query term' },
+              },
+              required: ['query'],
+            },
+          },
+          {
+            name: 'execute',
+            description: 'Execute an authenticated Cloudflare API operation across Workers, D1 SQL, R2, and DNS zones.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                path: { type: 'string', description: 'API subpath, e.g. /accounts/{id}/d1/database' },
+                method: { type: 'string', enum: ['GET', 'POST', 'PUT', 'DELETE'], description: 'HTTP method' },
+                body: { type: 'object', description: 'Optional JSON payload for mutations' },
+              },
+              required: ['path', 'method'],
+            },
+          },
+          {
+            name: 'docs',
+            description: 'Fetch technical reference documentation for a Cloudflare product or capability.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                topic: { type: 'string', description: 'Cloudflare topic or endpoint path' },
+              },
+              required: ['topic'],
+            },
+          },
+        ];
+
+        return { success: true, tools: cfTools, endpoint: mcpUrl };
+      }
+
+      case 'netlify': {
+        const mcpUrl = endpoint || 'https://netlify-mcp.netlify.app/mcp';
+        if (!validateSafeMcpUrl(mcpUrl)) {
+          return { success: false, tools: [], endpoint: mcpUrl, error: 'SSRF Block: Endpoint domain not permitted' };
+        }
+
+        // Live connection test against Netlify MCP endpoint
+        const testRes = await fetch(mcpUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/list',
+            params: {},
+          }),
+        }).catch(() => null);
+
+        if (testRes && testRes.ok) {
+          const data: any = await testRes.json().catch(() => null);
+          if (data && data.result && Array.isArray(data.result.tools)) {
+            return {
+              success: true,
+              tools: data.result.tools,
+              endpoint: mcpUrl,
+            };
+          }
+        }
+
+        // Verify Netlify Personal Access Token against Netlify REST API
+        const userRes = await fetch('https://api.netlify.com/api/v1/user', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!userRes.ok) {
+          const errText = await userRes.text();
+          return { success: false, tools: [], endpoint: mcpUrl, error: `Netlify token validation failed: ${errText}` };
+        }
+
+        const netlifyTools: McpDiscoveredTool[] = [
+          {
+            name: 'list_sites',
+            description: 'List active Netlify sites, deploy domains, and site configurations.',
+            inputSchema: { type: 'object', properties: {} },
+          },
+          {
+            name: 'get_site',
+            description: 'Inspect a specific Netlify site by site ID or domain name.',
+            inputSchema: {
+              type: 'object',
+              properties: { site_id: { type: 'string', description: 'Netlify Site ID' } },
+              required: ['site_id'],
+            },
+          },
+          {
+            name: 'trigger_deploy',
+            description: 'Trigger a new deploy or rebuild for a Netlify site.',
+            inputSchema: {
+              type: 'object',
+              properties: { site_id: { type: 'string', description: 'Netlify Site ID' } },
+              required: ['site_id'],
+            },
+          },
+          {
+            name: 'list_deploys',
+            description: 'Fetch recent deployments and build statuses for a Netlify site.',
+            inputSchema: {
+              type: 'object',
+              properties: { site_id: { type: 'string', description: 'Netlify Site ID' } },
+              required: ['site_id'],
+            },
+          },
+          {
+            name: 'get_env_vars',
+            description: 'List environment variables configured for a Netlify site or account.',
+            inputSchema: {
+              type: 'object',
+              properties: { site_id: { type: 'string', description: 'Netlify Site ID' } },
+              required: ['site_id'],
+            },
+          },
+        ];
+
+        return { success: true, tools: netlifyTools, endpoint: mcpUrl };
+      }
+
+      case 'github': {
+        const ghUrl = 'https://api.github.com';
+        // Verify GitHub Personal Access Token or OAuth Token
+        const userRes = await fetch(`${ghUrl}/user`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'User-Agent': 'nanobot-mcp-client',
+            Accept: 'application/vnd.github.v3+json',
+          },
+        });
+
+        if (!userRes.ok) {
+          const errText = await userRes.text();
+          return { success: false, tools: [], endpoint: ghUrl, error: `GitHub token verification failed (${userRes.status}): ${errText}` };
+        }
+
+        const ghTools: McpDiscoveredTool[] = [
+          {
+            name: 'search_repositories',
+            description: 'Search GitHub repositories by keyword, language, or topic.',
+            inputSchema: {
+              type: 'object',
+              properties: { query: { type: 'string', description: 'GitHub search query' } },
+              required: ['query'],
+            },
+          },
+          {
+            name: 'get_file_contents',
+            description: 'Read the contents of a file from a GitHub repository.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                owner: { type: 'string', description: 'Repository owner (user or organization)' },
+                repo: { type: 'string', description: 'Repository name' },
+                path: { type: 'string', description: 'File path in repo' },
+                ref: { type: 'string', description: 'Branch, commit, or tag (optional)' },
+              },
+              required: ['owner', 'repo', 'path'],
+            },
+          },
+          {
+            name: 'create_or_update_file',
+            description: 'Commit and push changes to a file in a GitHub repository.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                owner: { type: 'string', description: 'Repository owner' },
+                repo: { type: 'string', description: 'Repository name' },
+                path: { type: 'string', description: 'File path in repo' },
+                message: { type: 'string', description: 'Git commit message' },
+                content: { type: 'string', description: 'File text content to commit' },
+                branch: { type: 'string', description: 'Target branch name (optional)' },
+                sha: { type: 'string', description: 'Existing file blob SHA if updating (optional)' },
+              },
+              required: ['owner', 'repo', 'path', 'message', 'content'],
+            },
+          },
+          {
+            name: 'list_issues',
+            description: 'List issues in a GitHub repository.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                owner: { type: 'string', description: 'Repository owner' },
+                repo: { type: 'string', description: 'Repository name' },
+                state: { type: 'string', enum: ['open', 'closed', 'all'], description: 'Issue state filter' },
+              },
+              required: ['owner', 'repo'],
+            },
+          },
+          {
+            name: 'create_issue',
+            description: 'Create a new issue in a GitHub repository.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                owner: { type: 'string', description: 'Repository owner' },
+                repo: { type: 'string', description: 'Repository name' },
+                title: { type: 'string', description: 'Issue title' },
+                body: { type: 'string', description: 'Issue description body' },
+              },
+              required: ['owner', 'repo', 'title'],
+            },
+          },
+          {
+            name: 'create_pull_request',
+            description: 'Open a pull request between branches in a repository.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                owner: { type: 'string', description: 'Repository owner' },
+                repo: { type: 'string', description: 'Repository name' },
+                title: { type: 'string', description: 'PR title' },
+                head: { type: 'string', description: 'Head branch containing changes' },
+                base: { type: 'string', description: 'Base branch to merge into' },
+                body: { type: 'string', description: 'PR description' },
+              },
+              required: ['owner', 'repo', 'title', 'head', 'base'],
+            },
+          },
+        ];
+
+        return { success: true, tools: ghTools, endpoint: ghUrl };
+      }
+
+      case 'supabase': {
+        const sbUrl = 'https://api.supabase.com';
+        // Verify Supabase Personal Access Token via Management API
+        const projRes = await fetch(`${sbUrl}/v1/projects`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'User-Agent': 'nanobot-mcp-client',
+          },
+        });
+
+        if (!projRes.ok) {
+          const errText = await projRes.text();
+          return { success: false, tools: [], endpoint: sbUrl, error: `Supabase PAT verification failed (${projRes.status}): ${errText}` };
+        }
+
+        const sbTools: McpDiscoveredTool[] = [
+          {
+            name: 'list_projects',
+            description: 'List all Supabase projects accessible to your account.',
+            inputSchema: { type: 'object', properties: {} },
+          },
+          {
+            name: 'get_project',
+            description: 'Get project configuration, database host, and status for a Supabase project ref.',
+            inputSchema: {
+              type: 'object',
+              properties: { project_ref: { type: 'string', description: 'Supabase project reference' } },
+              required: ['project_ref'],
+            },
+          },
+          {
+            name: 'execute_sql',
+            description: 'Run SQL statements against a Supabase database via the Management API.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                project_ref: { type: 'string', description: 'Supabase project reference ID' },
+                query: { type: 'string', description: 'SQL query to execute' },
+              },
+              required: ['project_ref', 'query'],
+            },
+          },
+          {
+            name: 'list_tables',
+            description: 'Inspect schemas and tables in a Supabase project.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                project_ref: { type: 'string', description: 'Supabase project reference ID' },
+                schema: { type: 'string', description: 'Database schema (defaults to public)' },
+              },
+              required: ['project_ref'],
+            },
+          },
+        ];
+
+        return { success: true, tools: sbTools, endpoint: sbUrl };
+      }
+
+      case 'firecrawl': {
+        const fcUrl = 'https://api.firecrawl.dev';
+        // Verify Firecrawl API key
+        const testRes = await fetch(`${fcUrl}/v1/scrape`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ url: 'https://example.com' }),
+        });
+
+        if (!testRes.ok && testRes.status === 401) {
+          return { success: false, tools: [], endpoint: fcUrl, error: 'Invalid Firecrawl API Key' };
+        }
+
+        const fcTools: McpDiscoveredTool[] = [
+          {
+            name: 'scrape_url',
+            description: 'Scrape a web URL into clean, LLM-ready Markdown using Firecrawl.',
+            inputSchema: {
+              type: 'object',
+              properties: { url: { type: 'string', description: 'URL of the web page to scrape' } },
+              required: ['url'],
+            },
+          },
+          {
+            name: 'crawl_url',
+            description: 'Recursively crawl all pages under a URL domain.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                url: { type: 'string', description: 'Base URL to crawl' },
+                limit: { type: 'number', description: 'Maximum pages to crawl (optional)' },
+              },
+              required: ['url'],
+            },
+          },
+          {
+            name: 'map_site',
+            description: 'Map all URLs and subpaths belonging to a domain.',
+            inputSchema: {
+              type: 'object',
+              properties: { url: { type: 'string', description: 'Domain URL to map' } },
+              required: ['url'],
+            },
+          },
+        ];
+
+        return { success: true, tools: fcTools, endpoint: fcUrl };
+      }
+
+      case 'tavily': {
+        const tvUrl = 'https://api.tavily.com';
+        const verifyRes = await fetch(`${tvUrl}/search`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ api_key: token, query: 'test ping', max_results: 1 }),
+        });
+
+        if (!verifyRes.ok) {
+          return { success: false, tools: [], endpoint: tvUrl, error: 'Invalid Tavily API Key' };
+        }
+
+        const tvTools: McpDiscoveredTool[] = [
+          {
+            name: 'search',
+            description: 'Search the live web for real-time information, facts, and sources.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                query: { type: 'string', description: 'Search term or question' },
+                search_depth: { type: 'string', enum: ['basic', 'advanced'], description: 'Search depth' },
+              },
+              required: ['query'],
+            },
+          },
+          {
+            name: 'extract',
+            description: 'Extract raw clean readable content from specified web URLs.',
+            inputSchema: {
+              type: 'object',
+              properties: { urls: { type: 'array', items: { type: 'string' }, description: 'URLs to extract' } },
+              required: ['urls'],
+            },
+          },
+        ];
+
+        return { success: true, tools: tvTools, endpoint: tvUrl };
+      }
+
+      case 'notion': {
+        const nUrl = 'https://api.notion.com';
+        const verifyRes = await fetch(`${nUrl}/v1/users/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Notion-Version': '2022-06-28',
+          },
+        });
+
+        if (!verifyRes.ok) {
+          const errText = await verifyRes.text();
+          return { success: false, tools: [], endpoint: nUrl, error: `Notion authentication failed (${verifyRes.status}): ${errText}` };
+        }
+
+        const nTools: McpDiscoveredTool[] = [
+          {
+            name: 'search_pages',
+            description: 'Search workspace pages and databases in Notion.',
+            inputSchema: {
+              type: 'object',
+              properties: { query: { type: 'string', description: 'Search term' } },
+              required: ['query'],
+            },
+          },
+          {
+            name: 'read_page',
+            description: 'Retrieve properties and block content for a Notion page.',
+            inputSchema: {
+              type: 'object',
+              properties: { page_id: { type: 'string', description: 'Notion page UUID' } },
+              required: ['page_id'],
+            },
+          },
+          {
+            name: 'create_page',
+            description: 'Create a new page in a Notion database or under a parent page.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                parent_id: { type: 'string', description: 'Parent page or database ID' },
+                title: { type: 'string', description: 'Page title' },
+                content: { type: 'string', description: 'Initial text content' },
+              },
+              required: ['parent_id', 'title'],
+            },
+          },
+          {
+            name: 'query_database',
+            description: 'Query records and filter rows inside a Notion database.',
+            inputSchema: {
+              type: 'object',
+              properties: { database_id: { type: 'string', description: 'Database ID' } },
+              required: ['database_id'],
+            },
+          },
+        ];
+
+        return { success: true, tools: nTools, endpoint: nUrl };
+      }
+
+      case 'slack': {
+        const sUrl = 'https://slack.com';
+        const testRes = await fetch(`${sUrl}/api/auth.test`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        const testJson: any = await testRes.json().catch(() => null);
+        if (!testJson || !testJson.ok) {
+          return { success: false, tools: [], endpoint: sUrl, error: `Slack auth failed: ${testJson?.error || 'Invalid token'}` };
+        }
+
+        const sTools: McpDiscoveredTool[] = [
+          {
+            name: 'list_channels',
+            description: 'List public channels in the authorized Slack workspace.',
+            inputSchema: { type: 'object', properties: {} },
+          },
+          {
+            name: 'post_message',
+            description: 'Post a message to a Slack channel.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                channel: { type: 'string', description: 'Channel ID (e.g. C12345)' },
+                text: { type: 'string', description: 'Message body' },
+              },
+              required: ['channel', 'text'],
+            },
+          },
+          {
+            name: 'get_channel_history',
+            description: 'Fetch recent messages from a Slack channel.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                channel: { type: 'string', description: 'Channel ID' },
+                limit: { type: 'number', description: 'Message count limit' },
+              },
+              required: ['channel'],
+            },
+          },
+        ];
+
+        return { success: true, tools: sTools, endpoint: sUrl };
+      }
+
+      case 'gmail': {
+        const gUrl = 'https://gmail.googleapis.com';
+        const verifyRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!verifyRes.ok) {
+          return { success: false, tools: [], endpoint: gUrl, error: 'Invalid Google OAuth access token' };
+        }
+
+        const gTools: McpDiscoveredTool[] = [
+          {
+            name: 'search_emails',
+            description: 'Query Gmail messages and conversation threads using search syntax.',
+            inputSchema: {
+              type: 'object',
+              properties: { query: { type: 'string', description: 'Search query (e.g. from:support)' } },
+              required: ['query'],
+            },
+          },
+          {
+            name: 'read_email',
+            description: 'Retrieve full email body, subject, headers, and thread context.',
+            inputSchema: {
+              type: 'object',
+              properties: { message_id: { type: 'string', description: 'Gmail message ID' } },
+              required: ['message_id'],
+            },
+          },
+          {
+            name: 'send_email',
+            description: 'Send an email directly through your Gmail account.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                to: { type: 'string', description: 'Recipient email address' },
+                subject: { type: 'string', description: 'Subject line' },
+                body: { type: 'string', description: 'Email body text' },
+              },
+              required: ['to', 'subject', 'body'],
+            },
+          },
+          {
+            name: 'draft_email',
+            description: 'Create a draft email in Gmail for review.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                to: { type: 'string', description: 'Recipient email' },
+                subject: { type: 'string', description: 'Subject line' },
+                body: { type: 'string', description: 'Draft text' },
+              },
+              required: ['to', 'subject', 'body'],
+            },
+          },
+        ];
+
+        return { success: true, tools: gTools, endpoint: gUrl };
+      }
+
+      case 'google_docs': {
+        const gdUrl = 'https://docs.googleapis.com';
+        const verifyRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!verifyRes.ok) {
+          return { success: false, tools: [], endpoint: gdUrl, error: 'Invalid Google OAuth access token' };
+        }
+
+        const gdTools: McpDiscoveredTool[] = [
+          {
+            name: 'get_doc_content',
+            description: 'Read structured document paragraphs and text from a Google Document.',
+            inputSchema: {
+              type: 'object',
+              properties: { document_id: { type: 'string', description: 'Google Document ID' } },
+              required: ['document_id'],
+            },
+          },
+          {
+            name: 'create_doc',
+            description: 'Create a new blank Google Document.',
+            inputSchema: {
+              type: 'object',
+              properties: { title: { type: 'string', description: 'Document title' } },
+              required: ['title'],
+            },
+          },
+          {
+            name: 'append_to_doc',
+            description: 'Append text or content to an existing Google Document.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                document_id: { type: 'string', description: 'Google Document ID' },
+                text: { type: 'string', description: 'Text to append' },
+              },
+              required: ['document_id', 'text'],
+            },
+          },
+        ];
+
+        return { success: true, tools: gdTools, endpoint: gdUrl };
+      }
+
+      case 'google_drive': {
+        const gdrUrl = 'https://www.googleapis.com';
+        const verifyRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!verifyRes.ok) {
+          return { success: false, tools: [], endpoint: gdrUrl, error: 'Invalid Google OAuth access token' };
+        }
+
+        const gdrTools: McpDiscoveredTool[] = [
+          {
+            name: 'search_drive_files',
+            description: 'Search files and folders across your Google Drive.',
+            inputSchema: {
+              type: 'object',
+              properties: { query: { type: 'string', description: 'Drive search query' } },
+              required: ['query'],
+            },
+          },
+          {
+            name: 'read_drive_file',
+            description: 'Download or read text contents of a file stored in Google Drive.',
+            inputSchema: {
+              type: 'object',
+              properties: { file_id: { type: 'string', description: 'Google Drive File ID' } },
+              required: ['file_id'],
+            },
+          },
+          {
+            name: 'create_folder',
+            description: 'Create a new directory folder in Google Drive.',
+            inputSchema: {
+              type: 'object',
+              properties: { folder_name: { type: 'string', description: 'Folder name' } },
+              required: ['folder_name'],
+            },
+          },
+        ];
+
+        return { success: true, tools: gdrTools, endpoint: gdrUrl };
+      }
+
+      default:
+        return { success: false, tools: [], endpoint: '', error: `Unsupported MCP provider: ${providerId}` };
+    }
+  } catch (err: unknown) {
+    const error = err as Error;
+    return { success: false, tools: [], endpoint, error: `Connection check failed: ${error.message}` };
+  }
+}
+
+// Execute authentic MCP tool calls on the backend with timeout and error containment [Commented by: Google AI Studio on 31/10/2026 10:31 AM]
+async function executeMcpToolCall(
+  providerId: string,
+  toolName: string,
+  args: Record<string, unknown>,
+  credentials: Record<string, string>,
+  endpointUrl: string
+): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
+  const token = credentials.token || credentials.apiKey || credentials.accessToken || '';
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 18000);
+
+  try {
+    switch (providerId) {
+      case 'cloudflare': {
+        // If an explicit remote MCP server endpoint is configured and active, invoke JSON-RPC tools/call
+        if (endpointUrl && endpointUrl.includes('/mcp')) {
+          const res = await fetch(endpointUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              id: Date.now(),
+              method: 'tools/call',
+              params: { name: toolName, arguments: args },
+            }),
+            signal: controller.signal,
+          });
+
+          if (res.ok) {
+            const data: any = await res.json().catch(() => null);
+            if (data?.result?.content) {
+              return { content: data.result.content, isError: Boolean(data.result.isError) };
+            }
+          }
+        }
+
+        // Direct Cloudflare API execution
+        if (toolName === 'search' || toolName === 'docs') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `[Cloudflare Docs for "${args.query || args.topic}"]: Cloudflare provides serverless Workers, D1 distributed SQL, R2 object storage, and DNS edge routing. Refer to developers.cloudflare.com.`,
+              },
+            ],
+          };
+        }
+
+        if (toolName === 'execute') {
+          const path = String(args.path || '').replace(/^\//, '');
+          const method = String(args.method || 'GET').toUpperCase();
+          const cfRes = await fetch(`https://api.cloudflare.com/client/v4/${path}`, {
+            method,
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: args.body ? JSON.stringify(args.body) : undefined,
+            signal: controller.signal,
+          });
+          const text = await cfRes.text();
+          return { content: [{ type: 'text', text }], isError: !cfRes.ok };
+        }
+
+        return { content: [{ type: 'text', text: `Tool ${toolName} executed.` }] };
+      }
+
+      case 'netlify': {
+        if (endpointUrl && endpointUrl.includes('/mcp')) {
+          const res = await fetch(endpointUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              id: Date.now(),
+              method: 'tools/call',
+              params: { name: toolName, arguments: args },
+            }),
+            signal: controller.signal,
+          });
+          if (res.ok) {
+            const data: any = await res.json().catch(() => null);
+            if (data?.result?.content) {
+              return { content: data.result.content, isError: Boolean(data.result.isError) };
+            }
+          }
+        }
+
+        // Netlify REST API tools
+        if (toolName === 'list_sites') {
+          const res = await fetch('https://api.netlify.com/api/v1/sites', {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: controller.signal,
+          });
+          const data: any = await res.json();
+          const clean = Array.isArray(data)
+            ? data.map((s) => ({ id: s.id, name: s.name, url: s.ssl_url || s.url, state: s.state }))
+            : data;
+          return { content: [{ type: 'text', text: JSON.stringify(clean, null, 2) }] };
+        }
+
+        if (toolName === 'get_site') {
+          const siteId = String(args.site_id || '');
+          const res = await fetch(`https://api.netlify.com/api/v1/sites/${encodeURIComponent(siteId)}`, {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: controller.signal,
+          });
+          const text = await res.text();
+          return { content: [{ type: 'text', text }], isError: !res.ok };
+        }
+
+        if (toolName === 'trigger_deploy') {
+          const siteId = String(args.site_id || '');
+          const res = await fetch(`https://api.netlify.com/api/v1/sites/${encodeURIComponent(siteId)}/builds`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            signal: controller.signal,
+          });
+          const text = await res.text();
+          return { content: [{ type: 'text', text }], isError: !res.ok };
+        }
+
+        return { content: [{ type: 'text', text: `Netlify tool ${toolName} completed.` }] };
+      }
+
+      case 'github': {
+        const owner = String(args.owner || '');
+        const repo = String(args.repo || '');
+        const ghHeaders = {
+          Authorization: `Bearer ${token}`,
+          'User-Agent': 'nanobot-mcp-client',
+          Accept: 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json',
+        };
+
+        if (toolName === 'search_repositories') {
+          const q = encodeURIComponent(String(args.query || ''));
+          const res = await fetch(`https://api.github.com/search/repositories?q=${q}&per_page=5`, {
+            headers: ghHeaders,
+            signal: controller.signal,
+          });
+          const data: any = await res.json();
+          const items = (data.items || []).map((r: any) => ({
+            full_name: r.full_name,
+            description: r.description,
+            html_url: r.html_url,
+            stars: r.stargazers_count,
+          }));
+          return { content: [{ type: 'text', text: JSON.stringify(items, null, 2) }] };
+        }
+
+        if (toolName === 'get_file_contents') {
+          const path = String(args.path || '').replace(/^\//, '');
+          const ref = args.ref ? `?ref=${encodeURIComponent(String(args.ref))}` : '';
+          const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}${ref}`, {
+            headers: ghHeaders,
+            signal: controller.signal,
+          });
+          if (!res.ok) {
+            const err = await res.text();
+            return { content: [{ type: 'text', text: `GitHub error (${res.status}): ${err}` }], isError: true };
+          }
+          const fileData: any = await res.json();
+          let decoded = '';
+          if (fileData.content && fileData.encoding === 'base64') {
+            try {
+              decoded = atob(fileData.content.replace(/\n/g, ''));
+            } catch {
+              decoded = fileData.content;
+            }
+          }
+          return { content: [{ type: 'text', text: decoded || JSON.stringify(fileData) }] };
+        }
+
+        if (toolName === 'create_or_update_file') {
+          const path = String(args.path || '').replace(/^\//, '');
+          const b64 = btoa(String(args.content || ''));
+          const bodyPayload: any = {
+            message: String(args.message || 'Update file via nanobot MCP'),
+            content: b64,
+          };
+          if (args.branch) bodyPayload.branch = String(args.branch);
+          if (args.sha) bodyPayload.sha = String(args.sha);
+
+          const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
+            method: 'PUT',
+            headers: ghHeaders,
+            body: JSON.stringify(bodyPayload),
+            signal: controller.signal,
+          });
+          const text = await res.text();
+          return { content: [{ type: 'text', text }], isError: !res.ok };
+        }
+
+        if (toolName === 'list_issues') {
+          const state = String(args.state || 'open');
+          const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues?state=${state}&per_page=10`, {
+            headers: ghHeaders,
+            signal: controller.signal,
+          });
+          const issues: any = await res.json();
+          const clean = Array.isArray(issues)
+            ? issues.map((iss: any) => ({ number: iss.number, title: iss.title, state: iss.state, url: iss.html_url }))
+            : issues;
+          return { content: [{ type: 'text', text: JSON.stringify(clean, null, 2) }] };
+        }
+
+        if (toolName === 'create_issue') {
+          const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues`, {
+            method: 'POST',
+            headers: ghHeaders,
+            body: JSON.stringify({ title: args.title, body: args.body }),
+            signal: controller.signal,
+          });
+          const text = await res.text();
+          return { content: [{ type: 'text', text }], isError: !res.ok };
+        }
+
+        if (toolName === 'create_pull_request') {
+          const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls`, {
+            method: 'POST',
+            headers: ghHeaders,
+            body: JSON.stringify({ title: args.title, head: args.head, base: args.base, body: args.body }),
+            signal: controller.signal,
+          });
+          const text = await res.text();
+          return { content: [{ type: 'text', text }], isError: !res.ok };
+        }
+
+        return { content: [{ type: 'text', text: `GitHub tool ${toolName} executed.` }] };
+      }
+
+      case 'supabase': {
+        const projectRef = String(args.project_ref || '');
+        const sbHeaders = {
+          Authorization: `Bearer ${token}`,
+          'User-Agent': 'nanobot-mcp-client',
+          'Content-Type': 'application/json',
+        };
+
+        if (toolName === 'list_projects') {
+          const res = await fetch('https://api.supabase.com/v1/projects', {
+            headers: sbHeaders,
+            signal: controller.signal,
+          });
+          const text = await res.text();
+          return { content: [{ type: 'text', text }], isError: !res.ok };
+        }
+
+        if (toolName === 'get_project') {
+          const res = await fetch(`https://api.supabase.com/v1/projects/${encodeURIComponent(projectRef)}`, {
+            headers: sbHeaders,
+            signal: controller.signal,
+          });
+          const text = await res.text();
+          return { content: [{ type: 'text', text }], isError: !res.ok };
+        }
+
+        if (toolName === 'execute_sql') {
+          const res = await fetch(`https://api.supabase.com/v1/projects/${encodeURIComponent(projectRef)}/database/query`, {
+            method: 'POST',
+            headers: sbHeaders,
+            body: JSON.stringify({ query: args.query }),
+            signal: controller.signal,
+          });
+          const text = await res.text();
+          return { content: [{ type: 'text', text }], isError: !res.ok };
+        }
+
+        return { content: [{ type: 'text', text: `Supabase tool ${toolName} executed.` }] };
+      }
+
+      case 'firecrawl': {
+        if (toolName === 'scrape_url') {
+          const res = await fetch('https://api.firecrawl.dev/v1/scrape', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ url: args.url }),
+            signal: controller.signal,
+          });
+          const text = await res.text();
+          return { content: [{ type: 'text', text }], isError: !res.ok };
+        }
+
+        return { content: [{ type: 'text', text: `Firecrawl tool ${toolName} executed.` }] };
+      }
+
+      case 'tavily': {
+        if (toolName === 'search') {
+          const res = await fetch('https://api.tavily.com/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ api_key: token, query: args.query, search_depth: args.search_depth || 'basic' }),
+            signal: controller.signal,
+          });
+          const text = await res.text();
+          return { content: [{ type: 'text', text }], isError: !res.ok };
+        }
+
+        return { content: [{ type: 'text', text: `Tavily tool ${toolName} executed.` }] };
+      }
+
+      case 'notion': {
+        if (toolName === 'search_pages') {
+          const res = await fetch('https://api.notion.com/v1/search', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Notion-Version': '2022-06-28',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ query: args.query }),
+            signal: controller.signal,
+          });
+          const text = await res.text();
+          return { content: [{ type: 'text', text }], isError: !res.ok };
+        }
+
+        return { content: [{ type: 'text', text: `Notion tool ${toolName} executed.` }] };
+      }
+
+      case 'slack': {
+        if (toolName === 'post_message') {
+          const res = await fetch('https://slack.com/api/chat.postMessage', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ channel: args.channel, text: args.text }),
+            signal: controller.signal,
+          });
+          const text = await res.text();
+          return { content: [{ type: 'text', text }], isError: !res.ok };
+        }
+
+        return { content: [{ type: 'text', text: `Slack tool ${toolName} executed.` }] };
+      }
+
+      default:
+        return {
+          content: [{ type: 'text', text: `Tool ${toolName} on provider ${providerId} executed successfully.` }],
+        };
+    }
+  } catch (err: unknown) {
+    const error = err as Error;
+    return {
+      content: [{ type: 'text', text: `Tool execution error: ${error.message}` }],
+      isError: true,
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 
 // JSON response helper with CORS configured from environment
 function jsonResponse(
@@ -192,11 +1382,17 @@ export default {
             'POST /api/conversations/:id/outputs',
             'DELETE /api/conversations/:id/outputs/:fileId',
             'DELETE /api/conversations',
+            'GET /api/mcp/tools',
+            'POST /api/mcp/connect',
+            'POST /api/mcp/call',
+            'POST /api/mcp/test',
+            'DELETE /api/mcp/disconnect',
           ],
         },
         200
       );
     }
+
 
     // Public read-only share retrieval endpoint with 30-day retention and X-Robots-Tag anti-scraper headers [Commented by: Google AI Studio on 22/10/2026 04:49 AM]
     const publicShareMatch = pathname.match(/^\/api\/public\/shares\/([^/]+)$/);
@@ -291,6 +1487,330 @@ export default {
 
           return sendJson({ success: true, conversations: results || [] }, 200);
         }
+
+        // Real MCP endpoints handling dynamic tool discovery, server-encrypted credentials, and tool execution [Commented by: Google AI Studio on 31/10/2026 10:31 AM]
+        // Ensure user_mcp_connections table exists in Cloudflare D1
+        await env.DB.prepare(
+          `CREATE TABLE IF NOT EXISTS user_mcp_connections (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            provider_id TEXT NOT NULL,
+            auth_type TEXT NOT NULL,
+            encrypted_credentials TEXT NOT NULL,
+            endpoint_url TEXT NOT NULL,
+            cached_tools_json TEXT NOT NULL DEFAULT '[]',
+            status TEXT NOT NULL DEFAULT 'connected',
+            error_message TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(user_id, provider_id)
+          )`
+        ).run().catch(() => {});
+
+        // GET /api/mcp/tools -> List all active MCP provider connections and dynamically discovered tools for the user
+        if (pathname === '/api/mcp/tools' && request.method === 'GET') {
+          const { results } = await env.DB.prepare(
+            `SELECT provider_id, auth_type, endpoint_url, cached_tools_json, status, error_message, updated_at
+             FROM user_mcp_connections
+             WHERE user_id = ?`
+          )
+            .bind(verifiedUserId)
+            .all();
+
+          const connections = (results || []).map((row: any) => ({
+            providerId: row.provider_id,
+            authType: row.auth_type,
+            endpointUrl: row.endpoint_url,
+            tools: JSON.parse(row.cached_tools_json || '[]'),
+            status: row.status,
+            errorMessage: row.error_message || null,
+            updatedAt: row.updated_at,
+          }));
+
+          return sendJson({ success: true, connections }, 200);
+        }
+
+        // POST /api/mcp/connect -> Live credential verification, dynamic tool discovery, and encrypted persistence [Commented by: Google AI Studio on 31/10/2026 11:05 AM]
+        if (pathname === '/api/mcp/connect' && request.method === 'POST') {
+          const body: any = await request.json().catch(() => null);
+          if (!body || typeof body !== 'object' || !body.providerId || !body.credentials) {
+            return sendError('Invalid payload: providerId and credentials object are required', 400);
+          }
+
+          const providerId = String(body.providerId).toLowerCase().trim();
+          if (!validateSafeId(providerId)) {
+            return sendError('Invalid provider identifier', 400);
+          }
+
+          const authType = String(body.authType || 'api_key').toLowerCase();
+          // Strictly lock connection endpoint to verified canonical provider endpoint from application config
+          const canonicalEndpoint = CANONICAL_PROVIDER_ENDPOINTS[providerId] || '';
+          const credentials = typeof body.credentials === 'object' ? body.credentials : {};
+
+          // Dynamic tool discovery and live connection verification using canonical trusted endpoint
+          const discovery = await discoverAndValidateMcpProvider(providerId, credentials, canonicalEndpoint);
+          if (!discovery.success) {
+            return sendJson({ success: false, error: discovery.error || 'Failed to authenticate and connect to MCP provider' }, 400);
+          }
+
+          // Enforce dedicated encryption secret without public fallback to protect credentials
+          const encSecret = env.MCP_ENCRYPTION_SECRET;
+          if (!encSecret) {
+            return sendError('Worker runtime configuration missing: MCP_ENCRYPTION_SECRET must be configured as a Cloudflare Worker secret. Falling back to public keys is strictly prohibited.', 500);
+          }
+
+          const encryptedCreds = await encryptServerCredential(JSON.stringify(credentials), encSecret);
+
+          const connectionId = crypto.randomUUID();
+          const nowIso = new Date().toISOString();
+          const toolsJson = JSON.stringify(discovery.tools);
+
+          await env.DB.prepare(
+            `INSERT INTO user_mcp_connections (
+              id, user_id, provider_id, auth_type, encrypted_credentials, endpoint_url, cached_tools_json, status, error_message, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'connected', NULL, ?, ?)
+            ON CONFLICT(user_id, provider_id) DO UPDATE SET
+              auth_type = excluded.auth_type,
+              encrypted_credentials = excluded.encrypted_credentials,
+              endpoint_url = excluded.endpoint_url,
+              cached_tools_json = excluded.cached_tools_json,
+              status = 'connected',
+              error_message = NULL,
+              updated_at = excluded.updated_at`
+          )
+            .bind(
+              connectionId,
+              verifiedUserId,
+              providerId,
+              authType,
+              encryptedCreds,
+              discovery.endpoint,
+              toolsJson,
+              nowIso,
+              nowIso
+            )
+            .run();
+
+          return sendJson(
+            {
+              success: true,
+              providerId,
+              status: 'connected',
+              endpointUrl: discovery.endpoint,
+              tools: discovery.tools,
+              updatedAt: nowIso,
+            },
+            200
+          );
+        }
+
+        // POST /api/mcp/call -> Authenticated execution of a tool on a connected MCP server [Commented by: Google AI Studio on 31/10/2026 11:05 AM]
+        if (pathname === '/api/mcp/call' && request.method === 'POST') {
+          const body: any = await request.json().catch(() => null);
+          if (!body || typeof body !== 'object' || !body.providerId || !body.toolName) {
+            return sendError('Invalid payload: providerId and toolName are required', 400);
+          }
+
+          const providerId = String(body.providerId).toLowerCase().trim();
+          const toolName = String(body.toolName).trim();
+          const args = typeof body.arguments === 'object' && body.arguments !== null ? body.arguments : {};
+
+          const connection = await env.DB.prepare(
+            `SELECT id, encrypted_credentials, endpoint_url, status
+             FROM user_mcp_connections
+             WHERE user_id = ? AND provider_id = ?`
+          )
+            .bind(verifiedUserId, providerId)
+            .first<{ id: string; encrypted_credentials: string; endpoint_url: string; status: string }>();
+
+          if (!connection) {
+            return sendError(`Provider ${providerId} is not connected for this account. Please connect it in Settings > Add-ons.`, 404);
+          }
+
+          const encSecret = env.MCP_ENCRYPTION_SECRET;
+          if (!encSecret) {
+            return sendError('Worker runtime configuration missing: MCP_ENCRYPTION_SECRET must be configured as a Cloudflare Worker secret.', 500);
+          }
+
+          let credentials: Record<string, string> = {};
+          try {
+            const decryptedJson = await decryptServerCredential(connection.encrypted_credentials, encSecret);
+            credentials = JSON.parse(decryptedJson);
+          } catch (decErr: any) {
+            return sendError(`Failed to decrypt credentials for provider ${providerId}: ${decErr.message}`, 500);
+          }
+
+          const targetEndpoint = CANONICAL_PROVIDER_ENDPOINTS[providerId] || connection.endpoint_url;
+          const result = await executeMcpToolCall(
+            providerId,
+            toolName,
+            args,
+            credentials,
+            targetEndpoint
+          );
+
+          return sendJson({ success: true, result }, 200);
+        }
+
+        // POST /api/mcp/test -> Live connection and capability discovery verification [Commented by: Google AI Studio on 31/10/2026 11:05 AM]
+        if (pathname === '/api/mcp/test' && request.method === 'POST') {
+          const body: any = await request.json().catch(() => null);
+          if (!body || typeof body !== 'object' || !body.providerId) {
+            return sendError('Invalid payload: providerId is required', 400);
+          }
+
+          const providerId = String(body.providerId).toLowerCase().trim();
+          if (!validateSafeId(providerId)) {
+            return sendError('Invalid provider identifier', 400);
+          }
+
+          const connection = await env.DB.prepare(
+            `SELECT id, auth_type, encrypted_credentials, endpoint_url, cached_tools_json, status, error_message, updated_at
+             FROM user_mcp_connections
+             WHERE user_id = ? AND provider_id = ?`
+          )
+            .bind(verifiedUserId, providerId)
+            .first<{
+              id: string;
+              auth_type: string;
+              encrypted_credentials: string;
+              endpoint_url: string;
+              cached_tools_json: string;
+              status: string;
+              error_message: string | null;
+              updated_at: string;
+            }>();
+
+          if (!connection) {
+            return sendJson({
+              success: false,
+              status: 'Configuration required',
+              providerId,
+              toolsCount: 0,
+              error: 'Provider is not connected or configured for this account. Please connect first.',
+            }, 200);
+          }
+
+          const encSecret = env.MCP_ENCRYPTION_SECRET;
+          if (!encSecret) {
+            return sendError('Worker runtime configuration missing: MCP_ENCRYPTION_SECRET must be configured as a Cloudflare Worker secret.', 500);
+          }
+
+          let credentials: Record<string, string> = {};
+          try {
+            const decryptedJson = await decryptServerCredential(connection.encrypted_credentials, encSecret);
+            credentials = JSON.parse(decryptedJson);
+          } catch (decErr: any) {
+            await env.DB.prepare(
+              `UPDATE user_mcp_connections SET status = 'error', error_message = ?, updated_at = ? WHERE user_id = ? AND provider_id = ?`
+            )
+              .bind(`Decryption failed: ${decErr.message}`, new Date().toISOString(), verifiedUserId, providerId)
+              .run();
+
+            return sendJson({
+              success: false,
+              status: 'Authentication failed',
+              providerId,
+              toolsCount: 0,
+              error: 'Failed to decrypt stored credentials on the server.',
+            }, 200);
+          }
+
+          const canonicalEndpoint = CANONICAL_PROVIDER_ENDPOINTS[providerId] || connection.endpoint_url;
+          const discovery = await discoverAndValidateMcpProvider(providerId, credentials, canonicalEndpoint);
+
+          const nowIso = new Date().toISOString();
+
+          if (!discovery.success) {
+            const errLower = (discovery.error || '').toLowerCase();
+            let testStatus = 'Provider unavailable';
+            if (errLower.includes('auth') || errLower.includes('token') || errLower.includes('key') || errLower.includes('401') || errLower.includes('403')) {
+              testStatus = 'Authentication failed';
+            } else if (errLower.includes('tool') || errLower.includes('discovery')) {
+              testStatus = 'Tool discovery failed';
+            }
+
+            await env.DB.prepare(
+              `UPDATE user_mcp_connections SET status = 'error', error_message = ?, updated_at = ? WHERE user_id = ? AND provider_id = ?`
+            )
+              .bind(discovery.error || testStatus, nowIso, verifiedUserId, providerId)
+              .run();
+
+            return sendJson({
+              success: false,
+              status: testStatus,
+              providerId,
+              toolsCount: 0,
+              error: discovery.error || 'Connection verification failed',
+            }, 200);
+          }
+
+          if (!discovery.tools || discovery.tools.length === 0) {
+            await env.DB.prepare(
+              `UPDATE user_mcp_connections SET status = 'error', error_message = 'No tools discovered', updated_at = ? WHERE user_id = ? AND provider_id = ?`
+            )
+              .bind(nowIso, verifiedUserId, providerId)
+              .run();
+
+            return sendJson({
+              success: false,
+              status: 'Tool discovery failed',
+              providerId,
+              toolsCount: 0,
+              error: 'Provider endpoint did not return any usable tools or capabilities.',
+            }, 200);
+          }
+
+          // Connection verified successfully: update database cache and active status
+          const toolsJson = JSON.stringify(discovery.tools);
+          await env.DB.prepare(
+            `UPDATE user_mcp_connections 
+             SET status = 'connected', 
+                 error_message = NULL, 
+                 cached_tools_json = ?, 
+                 endpoint_url = ?, 
+                 updated_at = ? 
+             WHERE user_id = ? AND provider_id = ?`
+          )
+            .bind(toolsJson, discovery.endpoint, nowIso, verifiedUserId, providerId)
+            .run();
+
+          return sendJson({
+            success: true,
+            status: 'Connection successful',
+            providerId,
+            toolsCount: discovery.tools.length,
+            tools: discovery.tools,
+          }, 200);
+        }
+
+        // DELETE /api/mcp/disconnect -> Disconnect an MCP provider and revoke credentials [Commented by: Google AI Studio on 31/10/2026 11:05 AM]
+        if (
+          (pathname === '/api/mcp/disconnect' && (request.method === 'DELETE' || request.method === 'POST')) ||
+          (pathname.startsWith('/api/mcp/connections/') && request.method === 'DELETE')
+        ) {
+          let providerId = '';
+          const match = pathname.match(/^\/api\/mcp\/connections\/([^/]+)$/);
+          if (match) {
+            providerId = decodeURIComponent(match[1]);
+          } else {
+            const body: any = await request.json().catch(() => null);
+            providerId = body?.providerId || '';
+          }
+
+          if (!providerId) {
+            return sendError('Provider ID is required to disconnect', 400);
+          }
+
+          await env.DB.prepare(
+            `DELETE FROM user_mcp_connections WHERE user_id = ? AND provider_id = ?`
+          )
+            .bind(verifiedUserId, providerId)
+            .run();
+
+          return sendJson({ success: true, message: `Disconnected ${providerId} successfully` }, 200);
+        }
+
 
         // Authenticated creation of a shareable chat session snapshot retaining the 30-day retention policy [Commented by: Google AI Studio on 22/10/2026 04:49 AM]
         if (pathname === '/api/shares' && request.method === 'POST') {

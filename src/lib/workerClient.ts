@@ -42,6 +42,29 @@ export interface WorkerFileOutput {
   updated_at?: string;
 }
 
+// Model Context Protocol (MCP) tool and connection models [Commented by: Google AI Studio on 31/10/2026 10:31 AM]
+export interface McpTool {
+  name: string;
+  description: string;
+  inputSchema?: Record<string, unknown>;
+}
+
+export interface McpConnection {
+  providerId: string;
+  authType: string;
+  endpointUrl: string;
+  tools: McpTool[];
+  status: 'connected' | 'error' | 'disconnected';
+  errorMessage?: string | null;
+  updatedAt: string;
+}
+
+export interface McpToolCallResult {
+  content: Array<{ type: string; text: string }>;
+  isError?: boolean;
+}
+
+
 // Configured Cloudflare Worker base URL with fallback to production deployment [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
 const WORKER_BASE_URL = (
   (import.meta.env.VITE_CLOUDFLARE_WORKER_URL as string) ||
@@ -293,4 +316,72 @@ export const workerClient = {
       return { success: false, error: err.message };
     }
   },
+
+  // Retrieve all connected MCP providers and their dynamically discovered tools [Commented by: Google AI Studio on 31/10/2026 10:31 AM]
+  async getMcpTools(): Promise<WorkerApiResponse<{ connections: McpConnection[] }>> {
+    return workerFetch<{ connections: McpConnection[] }>('/api/mcp/tools', {
+      method: 'GET',
+    });
+  },
+
+  // Authorize and verify an MCP provider with dynamic tool discovery and backend credential encryption [Commented by: Google AI Studio on 31/10/2026 10:31 AM]
+  async connectMcpProvider(
+    providerId: string,
+    credentials: Record<string, string>,
+    authType: string = 'api_key',
+    endpointUrl?: string
+  ): Promise<WorkerApiResponse<{ providerId: string; status: string; endpointUrl: string; tools: McpTool[]; updatedAt: string }>> {
+    return workerFetch<{ providerId: string; status: string; endpointUrl: string; tools: McpTool[]; updatedAt: string }>('/api/mcp/connect', {
+      method: 'POST',
+      body: JSON.stringify({ providerId, credentials, authType, endpointUrl }),
+    });
+  },
+
+  // Perform genuine live backend connection and discovery verification for an MCP provider [Commented by: Google AI Studio on 31/10/2026 11:05 AM]
+  async testMcpConnection(
+    providerId: string
+  ): Promise<WorkerApiResponse<{
+    providerId: string;
+    status: 'Connection successful' | 'Authentication failed' | 'Tool discovery failed' | 'Provider unavailable' | 'Configuration required';
+    toolsCount?: number;
+    tools?: McpTool[];
+    error?: string;
+  }>> {
+    return workerFetch<{
+      providerId: string;
+      status: 'Connection successful' | 'Authentication failed' | 'Tool discovery failed' | 'Provider unavailable' | 'Configuration required';
+      toolsCount?: number;
+      tools?: McpTool[];
+      error?: string;
+    }>('/api/mcp/test', {
+      method: 'POST',
+      body: JSON.stringify({ providerId }),
+    });
+  },
+
+  // Execute an authentic tool call on a connected MCP server via the Cloudflare Worker backend [Commented by: Google AI Studio on 31/10/2026 10:31 AM]
+  async callMcpTool(
+    providerId: string,
+    toolName: string,
+    toolArguments: Record<string, unknown>
+  ): Promise<WorkerApiResponse<{ result: McpToolCallResult }>> {
+    return workerFetch<{ result: McpToolCallResult }>('/api/mcp/call', {
+      method: 'POST',
+      body: JSON.stringify({
+        providerId,
+        toolName,
+        arguments: toolArguments,
+      }),
+    });
+  },
+
+  // Disconnect a provider and securely purge credentials and discovered tools [Commented by: Google AI Studio on 31/10/2026 10:31 AM]
+  async disconnectMcpProvider(providerId: string): Promise<WorkerApiResponse<{ message: string }>> {
+    return workerFetch<{ message: string }>('/api/mcp/disconnect', {
+      method: 'POST',
+      body: JSON.stringify({ providerId }),
+    });
+  },
 };
+
+

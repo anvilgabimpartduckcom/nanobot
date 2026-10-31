@@ -75,3 +75,27 @@ CREATE TABLE IF NOT EXISTS shared_chats (
 
 CREATE INDEX IF NOT EXISTS idx_shared_chats_expires 
   ON shared_chats (expires_at);
+
+-- 5. User MCP Connections Table (Storing verified provider connections, AES-GCM encrypted tokens, and dynamically discovered tools)
+-- Added user_mcp_connections table for authenticated MCP tool persistence and server-side encrypted credentials [Commented by: Google AI Studio on 31/10/2026 10:31 AM]
+CREATE TABLE IF NOT EXISTS user_mcp_connections (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  provider_id TEXT NOT NULL,
+  auth_type TEXT NOT NULL,
+  encrypted_credentials TEXT NOT NULL,
+  endpoint_url TEXT NOT NULL,
+  cached_tools_json TEXT NOT NULL DEFAULT '[]',
+  status TEXT NOT NULL DEFAULT 'connected',
+  error_message TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(user_id, provider_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mcp_connections_user 
+  ON user_mcp_connections (user_id);
+
+CREATE INDEX IF NOT EXISTS idx_mcp_connections_provider 
+  ON user_mcp_connections (provider_id);
+
