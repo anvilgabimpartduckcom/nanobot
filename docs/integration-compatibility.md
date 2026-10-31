@@ -82,6 +82,20 @@ Automated coverage is not the same as complete provider API coverage. Some sourc
 - Supabase: https://supabase.com/changelog
 - Tavily: https://docs.tavily.com/
 
+### Runtime connection status: important limitation
+
+A source inspection on 31 October 2026 found that the current plugin connection UI is not a real MCP connection flow:
+
+- In `src/components/SettingsModal.tsx`, `handleGrantAuthorization` waits for a fixed delay, sets the selected `plugins_connected` boolean to `true`, and displays a success message. It does not perform an OAuth authorization-code exchange, validate the submitted API key with the provider, or establish an MCP session.
+- In `src/App.tsx`, the selected plugin names and declared tool names are assembled into text and added to the model's system instructions. This text does not itself execute an external tool.
+- The repository search and inspected connection path did not reveal an MCP client/transport or a tool-call executor for these 11 catalog entries.
+
+Therefore, the 11 entries must currently be treated as a plugin catalogue / UI prototype, not as 11 verified working MCP connections. A saved `plugins_connected` flag is not proof of authorization, provider connectivity, or tool execution. Do not show users a real "connected" status until a provider authorization flow and a server-side MCP tool execution path have been implemented and tested.
+
+Some providers also have separate app code in Nanobot (for example, the Supabase and Tavily libraries). Those separate code paths should be audited independently; they do not make the catalogue's simulated connection handler a working MCP implementation.
+
+Before enabling these integrations for real users, perform a separate implementation review covering server-side credential handling, OAuth callback/state validation, token storage/refresh, MCP transport/session management, tool schemas, per-user authorization, audit logging, and execution-error handling. Do not place provider secrets in browser code or system prompts.
+
 ### Registry package identity requires a separate audit
 
 This monitor intentionally does not rewrite `mcpServerName` values or upgrade packages. The package strings in `src/lib/plugins.ts` have not been proven by this monitor to be the current provider-recommended package or server implementation.
