@@ -260,7 +260,7 @@ def read_commits(source):
             "integrations": source["integrations"],
             "title": message.splitlines()[0] if message else "Repository update",
             "url": commit.get("html_url", source["url"]),
-            "published": details.get("author", {}).get("date") or "Date not supplied",
+            "published": (details.get("author") or {}).get("date") or "Date not supplied",
             "summary": " ".join(message.split())[:900],
         })
     return results
