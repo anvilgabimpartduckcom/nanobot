@@ -10,7 +10,7 @@ https://github.com/anvilgabimpartduckcom/nanobot/archive/refs/heads/main.zip
 ```
 But always make sure to follow the LICENSE.
 
-# 📁 Project Structure
+## 📁 Project Structure
 <!-- Updated Project Structure with pdfExport.ts and cleaned workspace files [Commented by: Google AI Studio on 30/10/2026 11:04 AM] -->
 
 ```
@@ -60,7 +60,7 @@ nanobot/
         └── workerClient.ts     # Cloudflare Worker REST API client with Bearer token authentication
 ```
 
-# 📢 Latest Updates
+## 📢 Latest Updates
 <!-- Updated Latest Updates with PDF export, CI lockfile fix, inline reasoning accordion, credential eye toggles, and security headers [Commented by: Google AI Studio on 30/10/2026 11:04 AM] -->
 
 - **Formatted PDF Chat Export (`jsPDF`)**:
