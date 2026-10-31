@@ -53,7 +53,7 @@ nanobot/
         ├── indexedDb.ts        # Browser IndexedDB local-only original user file storage & orphaned file cleanup
         ├── markdown.ts         # Markdown, KaTeX math parsing, and Highlight.js styling
         ├── pdfExport.ts        # Formatted PDF export engine generating structured A4 PDFs with jsPDF
-        ├── plugins.ts          # MCP plugins registry with full read/write action tools (11 services)
+        ├── plugins.ts          # Catalogue of 11 planned MCP integrations (not currently connected)
         ├── r2.ts               # Cloudflare R2 archive integration utilities
         ├── supabase.ts         # Supabase client with multi-prefix Netlify env var resolution
         ├── tavily.ts           # Tavily search, URL scraping, and # / ## Deep Research runners
@@ -92,9 +92,9 @@ nanobot/
   - Removed top momentary green status notification banners (`toastNotice`).
   - Cleaned up Sign In modal header copy to `Enter your username and password`.
 
-- **Comprehensive MCP Plugin Actions & Backend Security**:
-  - Overhauled `src/lib/plugins.ts` to equip all 11 MCP plugins with full suites of both read and write/action tools.
-  - Added strict HTTP security headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, CSP, `Permissions-Policy`) and safe ID format validation in `worker/src/index.ts`.
-  - Removed obsolete temporary files and orphaned asset folders.
+- **MCP Add-on catalogue status**:
+  - The 11 entries in `src/lib/plugins.ts` are a catalogue of planned integrations; provider authorization, MCP transport, and tool execution are not currently implemented for those cards.
+  - The Add-ons screen labels them unavailable and does not pass their planned tool lists to the AI model.
+  - The Cloudflare Worker includes HTTP security headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, CSP, `Permissions-Policy`) and safe ID format validation.
 
 
