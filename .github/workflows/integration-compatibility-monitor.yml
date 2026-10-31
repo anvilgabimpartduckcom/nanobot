@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   issues: write
 
 concurrency:
@@ -29,6 +29,14 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Restore monitor state
+        uses: actions/cache/restore@v4
+        with:
+          path: docs/integration-monitor-state.json
+          key: integration-monitor-state-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            integration-monitor-state-
+
       - name: Validate monitor syntax
         run: python -m py_compile scripts/integration_compatibility_monitor.py
 
@@ -39,13 +47,7 @@ jobs:
         run: python scripts/integration_compatibility_monitor.py
 
       - name: Save monitor state
-        run: |
-          if git diff --quiet -- docs/integration-monitor-state.json; then
-            echo "Monitor state unchanged."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/integration-monitor-state.json
-          git commit -m "chore: update integration monitor state"
-          git push origin HEAD:main
+        uses: actions/cache/save@v4
+        with:
+          path: docs/integration-monitor-state.json
+          key: integration-monitor-state-${{ github.run_id }}-${{ github.run_attempt }}
