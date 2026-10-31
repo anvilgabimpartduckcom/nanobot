@@ -55,7 +55,18 @@ function getCorsHeaders(origin: string | null, allowedOrigin: string = '*'): Hea
   headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   headers.set('Access-Control-Max-Age', '86400');
+  // Hardened security headers protecting user data and preventing clickjacking/MIME-sniffing [Commented by: Google AI Studio on 30/10/2026 10:48 AM]
+  headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('X-Frame-Options', 'DENY');
+  headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  headers.set('Permissions-Policy', 'geolocation=(), camera=(), microphone=()');
+  headers.set('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none';");
   return headers;
+}
+
+// Sanitization & injection guard rejecting prototype pollution, SQL injection artifacts, and payload abuse [Commented by: Google AI Studio on 30/10/2026 10:48 AM]
+function validateSafeId(id: string): boolean {
+  return /^[a-zA-Z0-9_\-.:]{1,128}$/.test(id);
 }
 
 // JSON response helper with CORS configured from environment
@@ -194,6 +205,9 @@ export default {
         return sendError('D1 database binding "DB" is not available on Cloudflare Worker', 500);
       }
       const shareId = decodeURIComponent(publicShareMatch[1]);
+      if (!validateSafeId(shareId)) {
+        return sendError('Invalid share identifier provided', 400);
+      }
       const nowIso = new Date().toISOString();
 
       try {

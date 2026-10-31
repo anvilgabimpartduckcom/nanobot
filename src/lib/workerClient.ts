@@ -1,4 +1,4 @@
-// Cloudflare Worker REST API client for Nanobot chat persistence with Supabase Bearer authentication [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
+// Cloudflare Worker REST API client for nanobot chat persistence with Supabase Bearer authentication [Commented by: Google AI Studio on 30/10/2026 10:48 AM]
 
 import { supabase } from './supabase';
 

@@ -27,12 +27,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [openrouterKey, setOpenrouterKey] = useState('');
   const [tavilyKey, setTavilyKey] = useState('');
 
-  // Feedback State
+  // Visibility toggles for masked fields [Commented by: Google AI Studio on 30/10/2026 10:49 AM]
+  const [showPassword, setShowPassword] = useState(false);
+  const [showOpenRouterKey, setShowOpenRouterKey] = useState(false);
+  const [showTavilyKey, setShowTavilyKey] = useState(false);
+  const [showSignInPassword, setShowSignInPassword] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  // Added separate error flags for username and password uniqueness displayed in red beside their labels [Commented by: Google AI Studio on 22/10/2026 04:48 AM]
   const [usernameTakenError, setUsernameTakenError] = useState(false);
   const [passwordTakenError, setPasswordTakenError] = useState(false);
+
+  // Enabled copying from masked and credential inputs on Ctrl+C [Commented by: Google AI Studio on 30/10/2026 10:49 AM]
+  const handleCredentialKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
+      const target = e.currentTarget;
+      const start = target.selectionStart ?? 0;
+      const end = target.selectionEnd ?? 0;
+      const textToCopy = start !== end ? target.value.substring(start, end) : target.value;
+      if (textToCopy) {
+        navigator.clipboard.writeText(textToCopy).catch(() => {});
+      }
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -306,18 +323,39 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     </span>
                   )}
                 </div>
-                {/* Updated password placeholder to 'Enter password'  [Commented by: Google AI Studio on 22/10/2026 04:48 AM] */}
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    if (passwordTakenError) setPasswordTakenError(false);
-                  }}
-                  placeholder="Enter password"
-                  className={`w-full bg-[#141414] border ${passwordTakenError ? 'border-red-500 focus:border-red-500' : 'border-[#333] focus:border-[#39ff14]'} rounded-xl px-4 py-2.5 text-white placeholder-neutral-500 focus:outline-none transition-colors`}
-                />
+                {/* Masked by default with eye visibility toggle and copy support [Commented by: Google AI Studio on 30/10/2026 10:49 AM] */}
+                <div className="relative flex items-center">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (passwordTakenError) setPasswordTakenError(false);
+                    }}
+                    onKeyDown={handleCredentialKeyDown}
+                    placeholder="Enter password"
+                    className={`w-full bg-[#141414] border ${passwordTakenError ? 'border-red-500 focus:border-red-500' : 'border-[#333] focus:border-[#39ff14]'} rounded-xl pl-4 pr-10 py-2.5 text-white placeholder-neutral-500 focus:outline-none transition-colors select-text`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    className="absolute right-3 text-neutral-400 hover:text-white transition-colors cursor-pointer p-1"
+                    title={showPassword ? 'Hide password' : 'Show password'}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </div>
 
               <div>
@@ -332,14 +370,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     Openrouter API Key
                   </a>
                 </label>
-                <input
-                  type="password"
-                  required
-                  value={openrouterKey}
-                  onChange={(e) => setOpenrouterKey(e.target.value)}
-                  placeholder="sk-or-v1-..."
-                  className="w-full bg-[#141414] border border-[#333] rounded-xl px-4 py-2.5 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] transition-colors"
-                />
+                <div className="relative flex items-center">
+                  <input
+                    type={showOpenRouterKey ? 'text' : 'password'}
+                    required
+                    value={openrouterKey}
+                    onChange={(e) => setOpenrouterKey(e.target.value)}
+                    onKeyDown={handleCredentialKeyDown}
+                    placeholder="sk-or-v1-..."
+                    className="w-full bg-[#141414] border border-[#333] rounded-xl pl-4 pr-10 py-2.5 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] transition-colors select-text"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowOpenRouterKey((prev) => !prev)}
+                    className="absolute right-3 text-neutral-400 hover:text-white transition-colors cursor-pointer p-1"
+                    title={showOpenRouterKey ? 'Hide key' : 'Show key'}
+                    aria-label={showOpenRouterKey ? 'Hide key' : 'Show key'}
+                  >
+                    {showOpenRouterKey ? (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </div>
 
               <div>
@@ -354,14 +413,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     Tavily API Key
                   </a>
                 </label>
-                <input
-                  type="password"
-                  required
-                  value={tavilyKey}
-                  onChange={(e) => setTavilyKey(e.target.value)}
-                  placeholder="tvly-..."
-                  className="w-full bg-[#141414] border border-[#333] rounded-xl px-4 py-2.5 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] transition-colors"
-                />
+                <div className="relative flex items-center">
+                  <input
+                    type={showTavilyKey ? 'text' : 'password'}
+                    required
+                    value={tavilyKey}
+                    onChange={(e) => setTavilyKey(e.target.value)}
+                    onKeyDown={handleCredentialKeyDown}
+                    placeholder="tvly-..."
+                    className="w-full bg-[#141414] border border-[#333] rounded-xl pl-4 pr-10 py-2.5 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] transition-colors select-text"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowTavilyKey((prev) => !prev)}
+                    className="absolute right-3 text-neutral-400 hover:text-white transition-colors cursor-pointer p-1"
+                    title={showTavilyKey ? 'Hide key' : 'Show key'}
+                    aria-label={showTavilyKey ? 'Hide key' : 'Show key'}
+                  >
+                    {showTavilyKey ? (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {error && <p className="text-sm text-red-500">{error}</p>}
@@ -406,8 +486,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <h2 className="text-2xl font-bold font-serif mb-2 text-center text-white">
               Sign In to nanobot
             </h2>
+            {/* Updated Sign In heading text per user instruction [Commented by: Google AI Studio on 30/10/2026 10:49 AM] */}
             <p className="text-xs text-neutral-400 text-center mb-6">
-              Enter your username and password to load your zero-knowledge encrypted chats.
+              Enter your username and password
             </p>
 
             <form onSubmit={handleSignIn} className="space-y-4">
@@ -420,8 +501,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   required
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
+                  onKeyDown={handleCredentialKeyDown}
                   placeholder="Enter username"
-                  className="w-full bg-[#141414] border border-[#333] rounded-xl px-4 py-3 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] transition-colors"
+                  className="w-full bg-[#141414] border border-[#333] rounded-xl px-4 py-3 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] transition-colors select-text"
                 />
               </div>
 
@@ -429,14 +511,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <label className="block text-xs uppercase tracking-wider text-neutral-400 mb-1">
                   Password
                 </label>
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter password"
-                  className="w-full bg-[#141414] border border-[#333] rounded-xl px-4 py-3 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] transition-colors"
-                />
+                <div className="relative flex items-center">
+                  <input
+                    type={showSignInPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={handleCredentialKeyDown}
+                    placeholder="Enter password"
+                    className="w-full bg-[#141414] border border-[#333] rounded-xl pl-4 pr-10 py-3 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] transition-colors select-text"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSignInPassword((prev) => !prev)}
+                    className="absolute right-3 text-neutral-400 hover:text-white transition-colors cursor-pointer p-1"
+                    title={showSignInPassword ? 'Hide password' : 'Show password'}
+                    aria-label={showSignInPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showSignInPassword ? (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {error && <p className="text-sm text-red-500">{error}</p>}

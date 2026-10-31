@@ -1,6 +1,0 @@
-{
-  "summary":  "Comprehensive implementation plan covering the local encrypted storage migration, three-dots contextual menus, incognito mode, updated share and import URL flows, user message hover editing, AI model upgrade to nvidia/nemotron-3.5-super-vl:free with 1M token ceiling and 8 context messages, Appearance tab removal with theme selector in Account, Note section refinement, Add-ons rebranding with OAuth connection modal for GitHub/Slack/Cloudflare/Supabase/Netlify, and Noodle rebranding.",
-  "updatedAt":  "2026-10-28T11:18:10.928186315Z",
-  "requestFeedback":  true,
-  "userFacing":  true
-}

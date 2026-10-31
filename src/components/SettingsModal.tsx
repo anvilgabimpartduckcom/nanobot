@@ -38,42 +38,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const isLight = currentTheme === 'Minimalist Light';
 
-  // Updated handleSwitchTheme to save chosen theme to Supabase with error handling and local storage sync [Commented by: Google AI Studio on 20/10/2026 11:47 AM]
-  const handleSwitchTheme = async (nextTheme: AppTheme) => {
+  // Stored theme strictly in browser localStorage without syncing to remote backend [Commented by: Google AI Studio on 30/10/2026 11:00 AM]
+  const handleSwitchTheme = (nextTheme: AppTheme) => {
     setCurrentTheme(nextTheme);
     localStorage.setItem('nanobot_theme', nextTheme);
     if (onThemeChange) {
       onThemeChange(nextTheme);
     }
-    const updated: UserProfile = {
-      ...user,
-      theme: nextTheme
-    };
-    onUpdateUser(updated);
-
-    const profiles = getLocalProfiles();
-    const idx = profiles.findIndex((p) => p.id === user.id);
-    if (idx >= 0) {
-      profiles[idx].theme = nextTheme;
-      saveLocalProfiles(profiles);
-    }
-
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { error } = await supabase
-          .from('user_profiles')
-          .update({ theme: nextTheme })
-          .eq('email', user.email);
-        if (error) {
-          console.warn('Supabase theme update notice:', error.message);
-        }
-      } catch (err) {
-        console.warn('Supabase theme update failed:', err);
-      }
-    }
-
-    setStatusMessage(`Theme switched to ${nextTheme}`);
-    setTimeout(() => setStatusMessage(null), 3000);
   };
 
   // Account Tab form fields
@@ -81,6 +52,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [password, setPassword] = useState(currentPasswordSecret);
   const [openrouterKey, setOpenrouterKey] = useState(user.openrouter_key);
   const [tavilyKey, setTavilyKey] = useState(user.tavily_key);
+
+  // Visibility toggles for masked fields in Account Settings [Commented by: Google AI Studio on 30/10/2026 10:50 AM]
+  const [showPassword, setShowPassword] = useState(false);
+  const [showOpenRouterKey, setShowOpenRouterKey] = useState(false);
+  const [showTavilyKey, setShowTavilyKey] = useState(false);
+
+  // Enabled copying from masked and credential inputs on Ctrl+C [Commented by: Google AI Studio on 30/10/2026 10:50 AM]
+  const handleCredentialKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
+      const target = e.currentTarget;
+      const start = target.selectionStart ?? 0;
+      const end = target.selectionEnd ?? 0;
+      const textToCopy = start !== end ? target.value.substring(start, end) : target.value;
+      if (textToCopy) {
+        navigator.clipboard.writeText(textToCopy).catch(() => {});
+      }
+    }
+  };
 
   // AI Configuration Tab
   const [customInstructions, setCustomInstructions] = useState(user.ai_instructions || '');
@@ -158,18 +147,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             tavily_key: encryptedTv,
             model_training: updated.model_training,
             ai_instructions: encryptedInst,
-            plugins_connected: updated.plugins_connected,
-            theme: currentTheme
+            plugins_connected: updated.plugins_connected
           })
           .eq('email', user.email);
       }
 
       onUpdateUser(updated, password.trim());
-      setStatusMessage('Account details saved successfully.');
-      setTimeout(() => setStatusMessage(null), 3000);
     } catch (err: unknown) {
-      const e = err as Error;
-      setStatusMessage(`Error saving: ${e.message}`);
+      console.warn('Account update warning:', err);
     }
   };
 
@@ -400,12 +385,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {/* Right Column (Content Window) */}
         <div className="flex-1 p-6 sm:p-8 overflow-y-auto">
-          {statusMessage && (
-            <div className="mb-4 p-3 bg-neutral-900 border border-neutral-700 rounded-xl text-xs text-emerald-400">
-              {statusMessage}
-            </div>
-          )}
-
           {/* TAB 1: ACCOUNT */}
           {activeTab === 'account' && (
             <div className="space-y-5 max-w-xl">
@@ -426,7 +405,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className={`w-full rounded-xl px-4 py-2.5 focus:outline-none transition-colors ${
+                  onKeyDown={handleCredentialKeyDown}
+                  className={`w-full rounded-xl px-4 py-2.5 focus:outline-none transition-colors select-text ${
                     isLight
                       ? 'bg-neutral-50 border border-neutral-300 text-neutral-900 focus:border-emerald-600 focus:bg-white'
                       : 'bg-[#141414] border border-[#333] text-white focus:border-[#39ff14]'
@@ -440,16 +420,38 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 }`}>
                   Password
                 </label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className={`w-full rounded-xl px-4 py-2.5 focus:outline-none transition-colors ${
-                    isLight
-                      ? 'bg-neutral-50 border border-neutral-300 text-neutral-900 focus:border-emerald-600 focus:bg-white'
-                      : 'bg-[#141414] border border-[#333] text-white focus:border-[#39ff14]'
-                  }`}
-                />
+                {/* Masked by default with eye visibility toggle and copy support [Commented by: Google AI Studio on 30/10/2026 10:50 AM] */}
+                <div className="relative flex items-center">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={handleCredentialKeyDown}
+                    className={`w-full rounded-xl pl-4 pr-10 py-2.5 focus:outline-none transition-colors select-text ${
+                      isLight
+                        ? 'bg-neutral-50 border border-neutral-300 text-neutral-900 focus:border-emerald-600 focus:bg-white'
+                        : 'bg-[#141414] border border-[#333] text-white focus:border-[#39ff14]'
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    className="absolute right-3 text-neutral-400 hover:text-white transition-colors cursor-pointer p-1"
+                    title={showPassword ? 'Hide password' : 'Show password'}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </div>
 
               <div>
@@ -466,16 +468,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     Openrouter API Key
                   </a>
                 </label>
-                <input
-                  type="password"
-                  value={openrouterKey}
-                  onChange={(e) => setOpenrouterKey(e.target.value)}
-                  className={`w-full rounded-xl px-4 py-2.5 focus:outline-none transition-colors ${
-                    isLight
-                      ? 'bg-neutral-50 border border-neutral-300 text-neutral-900 focus:border-emerald-600 focus:bg-white'
-                      : 'bg-[#141414] border border-[#333] text-white focus:border-[#39ff14]'
-                  }`}
-                />
+                <div className="relative flex items-center">
+                  <input
+                    type={showOpenRouterKey ? 'text' : 'password'}
+                    value={openrouterKey}
+                    onChange={(e) => setOpenrouterKey(e.target.value)}
+                    onKeyDown={handleCredentialKeyDown}
+                    className={`w-full rounded-xl pl-4 pr-10 py-2.5 focus:outline-none transition-colors select-text ${
+                      isLight
+                        ? 'bg-neutral-50 border border-neutral-300 text-neutral-900 focus:border-emerald-600 focus:bg-white'
+                        : 'bg-[#141414] border border-[#333] text-white focus:border-[#39ff14]'
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowOpenRouterKey((prev) => !prev)}
+                    className="absolute right-3 text-neutral-400 hover:text-white transition-colors cursor-pointer p-1"
+                    title={showOpenRouterKey ? 'Hide key' : 'Show key'}
+                    aria-label={showOpenRouterKey ? 'Hide key' : 'Show key'}
+                  >
+                    {showOpenRouterKey ? (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </div>
 
               <div>
@@ -492,16 +515,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     Tavily API Key
                   </a>
                 </label>
-                <input
-                  type="password"
-                  value={tavilyKey}
-                  onChange={(e) => setTavilyKey(e.target.value)}
-                  className={`w-full rounded-xl px-4 py-2.5 focus:outline-none transition-colors ${
-                    isLight
-                      ? 'bg-neutral-50 border border-neutral-300 text-neutral-900 focus:border-emerald-600 focus:bg-white'
-                      : 'bg-[#141414] border border-[#333] text-white focus:border-[#39ff14]'
-                  }`}
-                />
+                <div className="relative flex items-center">
+                  <input
+                    type={showTavilyKey ? 'text' : 'password'}
+                    value={tavilyKey}
+                    onChange={(e) => setTavilyKey(e.target.value)}
+                    onKeyDown={handleCredentialKeyDown}
+                    className={`w-full rounded-xl pl-4 pr-10 py-2.5 focus:outline-none transition-colors select-text ${
+                      isLight
+                        ? 'bg-neutral-50 border border-neutral-300 text-neutral-900 focus:border-emerald-600 focus:bg-white'
+                        : 'bg-[#141414] border border-[#333] text-white focus:border-[#39ff14]'
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowTavilyKey((prev) => !prev)}
+                    className="absolute right-3 text-neutral-400 hover:text-white transition-colors cursor-pointer p-1"
+                    title={showTavilyKey ? 'Hide key' : 'Show key'}
+                    aria-label={showTavilyKey ? 'Hide key' : 'Show key'}
+                  >
+                    {showTavilyKey ? (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {/* Theme toggle in Account Settings for switching between Neon Black and Minimalist Light  [Commented by: Google AI Studio on 20/10/2026 11:29 AM] */}
