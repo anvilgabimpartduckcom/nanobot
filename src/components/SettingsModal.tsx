@@ -254,22 +254,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  // Configured MCP permission authorization and account connection flow [Commented by: Google AI Studio on 19/10/2026 02:25 AM]
+  // The catalogue has no live MCP transport or provider authorization flow yet.
   const handlePluginAction = (plugin: PluginDefinition) => {
-    if (connectedPlugins[plugin.id]) {
-      const nextPlugins = {
-        ...connectedPlugins,
-        [plugin.id]: false
-      };
-      setConnectedPlugins(nextPlugins);
-      persistPlugins(nextPlugins);
-      setStatusMessage(`${plugin.name} MCP server disconnected.`);
-      setTimeout(() => setStatusMessage(null), 3500);
-    } else {
-      setAuthorizingPlugin(plugin);
-      setAuthAccount(user.email || '');
-      setAuthError(null);
-    }
+    setStatusMessage(`${plugin.name} is listed in the catalogue, but its MCP connection is not implemented yet.`);
+    setTimeout(() => setStatusMessage(null), 4500);
   };
 
   const handleGrantAuthorization = async () => {
@@ -693,7 +681,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div>
                 <h2 className="text-xl font-bold font-serif mb-1">Add-ons</h2>
                 <p className="text-xs text-neutral-400">
-                  Explore available Model Context Protocol (MCP) add-ons, configure authorizations, and connect them to empower your noodles.
+                  Browse planned Model Context Protocol (MCP) add-ons. Live provider authorization and tool execution are not implemented yet.
                 </p>
               </div>
 
@@ -705,7 +693,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
               <div className="space-y-3 pt-2">
                 {MCP_PLUGINS.map((plugin) => {
-                  const isConnected = Boolean(connectedPlugins[plugin.id]);
+                  const isConnected = false; // Saved flags are not proof of a live MCP connection.
                   const isExpanded = expandedToolsPluginId === plugin.id;
                   return (
                     <div
@@ -725,21 +713,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           <div>
                             <div className="text-sm font-semibold text-white flex items-center gap-2">
                               {plugin.name}
-                              {isConnected ? (
-                                <span className="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded font-mono">
-                                  ✓ Connected
-                                </span>
-                              ) : (
-                                <span className="text-[10px] bg-neutral-900 text-neutral-400 border border-neutral-800 px-1.5 py-0.5 rounded font-mono">
-                                  Not Connected
-                                </span>
-                              )}
+                              <span className="text-[10px] bg-neutral-900 text-neutral-400 border border-neutral-800 px-1.5 py-0.5 rounded font-mono">
+                                Not Available
+                              </span>
                             </div>
                             <div className="text-xs text-neutral-400 mt-0.5 leading-snug">
                               {plugin.description}
                             </div>
                             <div className="text-[11px] text-neutral-500 font-mono mt-1">
-                              Server: {plugin.mcpServerName} • <span className="text-emerald-400 font-semibold">{plugin.tools.length} Tools Available</span>
+                              Planned server: {plugin.mcpServerName} • {plugin.tools.length} planned tools
                             </div>
                           </div>
                         </div>
@@ -749,13 +731,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           <button
                             type="button"
                             onClick={() => handlePluginAction(plugin)}
-                            className={`px-3 py-1.5 rounded-lg font-semibold text-xs transition-colors shrink-0 cursor-pointer ${
-                              isConnected
-                                ? 'bg-neutral-800 text-neutral-300 hover:bg-rose-950 hover:text-rose-300 border border-neutral-700'
-                                : 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-sm'
-                            }`}
+                            disabled
+                            title="MCP connections are not implemented yet"
+                            className="px-3 py-1.5 rounded-lg font-semibold text-xs bg-neutral-800 text-neutral-500 border border-neutral-700 cursor-not-allowed"
                           >
-                            {isConnected ? 'Disconnect' : 'Connect'}
+                            Unavailable
                           </button>
                         </div>
                       </div>
@@ -777,7 +757,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       {isExpanded && (
                         <div className="mt-2 bg-[#0c0c0c] border border-[#222] rounded-lg p-2.5 space-y-1.5 text-xs">
                           <div className="text-neutral-400 font-medium text-[11px] mb-1">
-                            Available MCP Tools Provided to AI Model:
+                            Planned MCP tools (not currently executable):
                           </div>
                           <div className="grid grid-cols-1 gap-1 max-h-36 overflow-y-auto pr-1">
                             {plugin.tools.map((tool) => (
