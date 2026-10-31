@@ -29,6 +29,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Validate monitor syntax
+        run: python -m py_compile scripts/integration_compatibility_monitor.py
+
       - name: Check feeds and report new updates
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
