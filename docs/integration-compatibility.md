@@ -66,7 +66,7 @@ Source URLs:
 
 The script validates the IDs found in `src/lib/plugins.ts` against the source map before it checks feeds. If a new integration is added without a corresponding source mapping, or a stale mapping remains after an integration is removed, the monitor stops with a clear coverage error.
 
-On its first successful run, it records a baseline and does not open issues for old entries. Later runs report only previously unseen source item IDs. The monitor stores up to 1,000 IDs in `docs/integration-monitor-state.json` to avoid repeatedly reporting the same updates.
+On its first successful run, it records a baseline and does not open issues for old entries. Later runs report only previously unseen source item IDs. The monitor stores up to 1,000 IDs in `docs/integration-monitor-state.json` to avoid repeatedly reporting the same updates. GitHub Actions restores and saves this file using its cache service, so the workflow does not need to push commits or bypass `main` branch protection. If the cache is unavailable or expires, the next run establishes a fresh baseline rather than generating a backlog of old alerts.
 
 ## Manual review and known limits
 
@@ -118,7 +118,7 @@ The monitor is read-only with respect to provider services. It must not automati
 
 The script uses the repository's `GITHUB_TOKEN` only for GitHub API requests needed to read release/commit metadata and open issues. It does **not** send that token to provider RSS feeds or external sites. It does not need Cloudflare, Supabase, Netlify, Google, Slack, Notion, Firecrawl or Tavily account credentials.
 
-The workflow also commits its own monitor state file. Because `main` is protected in this repository, verify that the repository's branch rules permit the Actions bot to push this state update; otherwise the feed check may succeed while the final state-save step fails. Do not weaken branch protection just to make this workflow pass.
+The workflow stores its monitor state using GitHub Actions cache and requires no write permission to repository contents. It needs only read access to repository contents and permission to open issues. This avoids requiring the Actions bot to push commits to protected `main`; do not weaken branch protection to run the monitor.
 
 A detected change is a **review signal**, not proof that Nanobot is broken or that a code change is required.
 
