@@ -28,7 +28,7 @@ The registry currently contains 11 integration IDs:
 
 ## Automated monitoring coverage
 
-The workflow at `.github/workflows/integration-compatibility-monitor.yml` runs weekly (Mondays at 08:15 UTC) and can also be started manually from the GitHub Actions tab.
+The workflow at `.github/workflows/integration-compatibility-monitor.yml` runs monthly on the first day of each month at 08:15 UTC and can also be started manually from the GitHub Actions tab.
 
 The monitor in `scripts/integration_compatibility_monitor.py` maps each registry ID to one or more official or provider-maintained public sources:
 
