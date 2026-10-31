@@ -22,8 +22,6 @@ import { analyzeFileWithScript, ProcessedFile } from './lib/fileReader';
 import { performDynamicSearch, runDeepResearch, extractUrlsWithTavily } from './lib/tavily';
 import { uploadArchiveToR2, fetchArchiveFromR2, deleteArchiveFromR2 } from './lib/r2';
 import { markdownToHtml, escapeHtml, safeUrl } from './lib/markdown';
-// Imported MCP_PLUGINS to equip the AI model with real tools from connected servers [Commented by: Google AI Studio on 13/10/2026 10:53 AM]
-import { MCP_PLUGINS } from './lib/plugins';
 // Imported Cloudflare Worker API client for authenticated chat persistence [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
 import { workerClient, WorkerMessage, WorkerFileOutput } from './lib/workerClient';
 // Imported IndexedDB storage manager for client-only original user files and orphaned cleanup [Commented by: Google AI Studio on 15/10/2026 09:22 AM]
@@ -1161,16 +1159,6 @@ export default function App() {
 
     // Configured system prompt with real MCP server tool definitions, persona rules, and URL scraping capability [Commented by: Google AI Studio on 14/10/2026 10:35 AM]
     const customInstructions = currentUser?.ai_instructions || '';
-    const connectedPlugins = currentUser?.plugins_connected || {};
-    const activePlugins = MCP_PLUGINS.filter((p) => connectedPlugins[p.id as keyof typeof connectedPlugins]);
-    const toolsContext = activePlugins
-      .map(
-        (p) =>
-          `[Server: ${p.mcpServerName} (${p.name})]:\n` +
-          p.tools.map((t) => `  * ${t.name}: ${t.description}`).join('\n')
-      )
-      .join('\n\n');
-
     // Updated system identity to source available AI chat bot [Commented by: Google AI Studio on 29/10/2026 09:00 AM]
     const systemPrompt = `You are 'nanobot', a privacy first, source available AI chat bot. You can process text, images, and files seamlessly. Current Date/Time: ${getCurrentDateTime()}.
 Follow these guidelines strictly:
