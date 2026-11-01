@@ -1,84 +1,180 @@
--- Updated Supabase schema: user profiles, credentials, custom instructions, and AI file code outputs strictly in Supabase; user chats stored exclusively in Cloudflare [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
+-- Nanobot Production Supabase Schema: Real Supabase Auth, Strict User Isolation, and Zero-Knowledge Storage [Commented by: Google AI Studio on 01/11/2026 01:50 PM]
 
 -- 1. Enable UUID Extension & Schema Usage
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Explicit schema usage grants for PostgREST Data API [Commented by: Google AI Studio on 23/10/2026 12:48 AM]
+-- Schema usage grants for PostgREST Data API
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 
--- 2. User Profiles Table
--- Stores username, email, zero-knowledge salt, API keys (OpenRouter & Tavily), AI custom instructions, and connected MCP plugins
+-- 2. User Profiles Table (Strictly NO email column)
+-- Foreign-keyed directly to Supabase Auth auth.users(id) with ON DELETE CASCADE
 CREATE TABLE IF NOT EXISTS public.user_profiles (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email TEXT UNIQUE NOT NULL,
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     username TEXT UNIQUE NOT NULL,
-    openrouter_key TEXT UNIQUE NOT NULL,
-    tavily_key TEXT UNIQUE NOT NULL,
+    openrouter_key TEXT NOT NULL,
+    tavily_key TEXT NOT NULL,
     ai_instructions TEXT DEFAULT '',
     model_training BOOLEAN DEFAULT TRUE,
-    plugins_connected JSONB DEFAULT '{"google_drive":false,"gmail":false,"google_docs":false,"notion":false,"firecrawl":false,"tavily":false}'::jsonb,
+    plugins_connected JSONB DEFAULT '{"google_drive":false,"gmail":false,"google_docs":false,"notion":false,"firecrawl":false,"tavily":false,"cloudflare":false,"github":false,"netlify":false,"supabase":false,"slack":false}'::jsonb,
     salt TEXT NOT NULL DEFAULT '',
-    -- Added theme column in Supabase user_profiles table with default Neon Black [Commented by: Google AI Studio on 20/10/2026 11:47 AM]
     theme TEXT DEFAULT 'Neon Black',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Migration for existing deployments to add theme column safely
-ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS theme TEXT DEFAULT 'Neon Black';
+-- Safe migration for existing deployments: drop legacy email column if previously present [Commented by: Google AI Studio on 01/11/2026 01:50 PM]
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' AND table_name = 'user_profiles' AND column_name = 'email'
+    ) THEN
+        ALTER TABLE public.user_profiles DROP COLUMN email CASCADE;
+    END IF;
+END $$;
 
--- Row Level Security for user_profiles
+-- Row Level Security for user_profiles: strictly isolated to the authenticated user's own UID
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Allow select for uniqueness and login"
+DROP POLICY IF EXISTS "Allow select for uniqueness and login" ON public.user_profiles;
+DROP POLICY IF EXISTS "Allow insert profile" ON public.user_profiles;
+DROP POLICY IF EXISTS "Allow update profile" ON public.user_profiles;
+DROP POLICY IF EXISTS "Allow delete profile" ON public.user_profiles;
+DROP POLICY IF EXISTS "Users can view their own profile" ON public.user_profiles;
+DROP POLICY IF EXISTS "Users can insert their own profile" ON public.user_profiles;
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.user_profiles;
+DROP POLICY IF EXISTS "Users can delete their own profile" ON public.user_profiles;
+
+CREATE POLICY "Users can view their own profile"
     ON public.user_profiles FOR SELECT
-    USING (true);
+    TO authenticated
+    USING (auth.uid() = id);
 
-CREATE POLICY "Allow insert profile"
+CREATE POLICY "Users can insert their own profile"
     ON public.user_profiles FOR INSERT
-    WITH CHECK (true);
+    TO authenticated
+    WITH CHECK (auth.uid() = id);
 
-CREATE POLICY "Allow update profile"
+CREATE POLICY "Users can update their own profile"
     ON public.user_profiles FOR UPDATE
-    USING (true);
+    TO authenticated
+    USING (auth.uid() = id)
+    WITH CHECK (auth.uid() = id);
 
-CREATE POLICY "Allow delete profile"
+CREATE POLICY "Users can delete their own profile"
     ON public.user_profiles FOR DELETE
-    USING (true);
+    TO authenticated
+    USING (auth.uid() = id);
 
--- Explicit Data API grants for public.user_profiles ensuring PostgREST exposure under Supabase Oct 30 2026 policy [Commented by: Google AI Studio on 23/10/2026 12:48 AM]
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.user_profiles TO anon, authenticated, service_role;
+-- Secure RPC function to check username availability without exposing user records or keys to public [Commented by: Google AI Studio on 01/11/2026 01:50 PM]
+CREATE OR REPLACE FUNCTION public.check_username_available(username_to_check TEXT)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+    SELECT NOT EXISTS (
+        SELECT 1 FROM public.user_profiles
+        WHERE lower(username) = lower(trim(username_to_check))
+    );
+$$;
 
--- 3. AI File Code Outputs Table
--- Persists the code written by the AI model to read any non-image files, along with execution output and file metadata
+GRANT EXECUTE ON FUNCTION public.check_username_available(TEXT) TO anon, authenticated;
+
+-- Grants for user_profiles: PostgREST access strictly for authenticated users and service_role
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.user_profiles TO authenticated, service_role;
+
+-- 3. Conversations Table
+-- Authoritative persistent store for user conversations linked directly to auth.users
+CREATE TABLE IF NOT EXISTS public.conversations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    title TEXT NOT NULL DEFAULT 'New Noodle',
+    pinned BOOLEAN NOT NULL DEFAULT FALSE,
+    share_id TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can manage their own conversations" ON public.conversations;
+
+CREATE POLICY "Users can manage their own conversations"
+    ON public.conversations FOR ALL
+    TO authenticated
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+
+CREATE INDEX IF NOT EXISTS idx_conversations_user
+    ON public.conversations (user_id, updated_at DESC);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.conversations TO authenticated, service_role;
+
+-- 4. Messages Table
+-- Chat messages belonging to conversations, strictly isolated by user_id and conversation_id
+CREATE TABLE IF NOT EXISTS public.messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id UUID NOT NULL REFERENCES public.conversations(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    role TEXT NOT NULL CHECK (role IN ('user', 'ai')),
+    content TEXT NOT NULL,
+    sources_json JSONB DEFAULT '[]'::jsonb,
+    reasoning TEXT,
+    display_attachments_json JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can manage their own messages" ON public.messages;
+
+CREATE POLICY "Users can manage their own messages"
+    ON public.messages FOR ALL
+    TO authenticated
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+
+CREATE INDEX IF NOT EXISTS idx_messages_conversation
+    ON public.messages (conversation_id, created_at ASC);
+
+CREATE INDEX IF NOT EXISTS idx_messages_user
+    ON public.messages (user_id);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.messages TO authenticated, service_role;
+
+-- 5. AI File Code Outputs Table
+-- Persists code written by AI to inspect files, along with execution output and metadata
 CREATE TABLE IF NOT EXISTS public.file_code_outputs (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-    user_id TEXT NOT NULL,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     conversation_id TEXT NOT NULL,
     source_file_id TEXT NOT NULL,
     file_name TEXT NOT NULL,
     file_type TEXT NOT NULL,
     output_type TEXT NOT NULL, -- 'reader_script' | 'text_extraction' | 'code_execution'
-    reader_code TEXT,          -- The exact code written by the AI model to read/inspect the file
-    extracted_output TEXT NOT NULL, -- The extracted output or data summary resulting from reading the file
+    reader_code TEXT,
+    extracted_output TEXT NOT NULL,
     metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Row Level Security for file_code_outputs
 ALTER TABLE public.file_code_outputs ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Allow all operations for file_code_outputs"
+DROP POLICY IF EXISTS "Allow all operations for file_code_outputs" ON public.file_code_outputs;
+DROP POLICY IF EXISTS "Users can manage their own file code outputs" ON public.file_code_outputs;
+
+CREATE POLICY "Users can manage their own file code outputs"
     ON public.file_code_outputs FOR ALL
-    USING (true);
+    TO authenticated
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
 
--- Explicit Data API grants for public.file_code_outputs ensuring PostgREST exposure under Supabase Oct 30 2026 policy [Commented by: Google AI Studio on 23/10/2026 12:48 AM]
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.file_code_outputs TO anon, authenticated, service_role;
-
--- Indexes for fast lookup of conversation file code outputs
 CREATE INDEX IF NOT EXISTS idx_file_code_outputs_user
     ON public.file_code_outputs (user_id);
 
 CREATE INDEX IF NOT EXISTS idx_file_code_outputs_conversation
     ON public.file_code_outputs (conversation_id, created_at DESC);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.file_code_outputs TO authenticated, service_role;

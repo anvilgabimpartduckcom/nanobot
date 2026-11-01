@@ -208,6 +208,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           }
         }
 
+        // Updated profile query to use strict user.id instead of legacy email [Commented by: Google AI Studio on 01/11/2026 01:58 PM]
         await supabase
           .from('user_profiles')
           .update({
@@ -218,7 +219,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             ai_instructions: encryptedInst,
             plugins_connected: updated.plugins_connected
           })
-          .eq('email', user.email);
+          .eq('id', user.id);
       }
 
       onUpdateUser(updated, password.trim());
@@ -244,7 +245,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       saveLocalProfiles(profiles);
 
       if (isSupabaseConfigured && supabase) {
-        await supabase.from('user_profiles').delete().eq('email', user.email);
+        await supabase.from('user_profiles').delete().eq('id', user.id);
+        await supabase.auth.signOut().catch(() => {});
       }
 
       onDeleteAccount();
@@ -274,7 +276,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       }
 
       if (isSupabaseConfigured && supabase) {
-        supabase.from('user_profiles').update({ ai_instructions: customInstructions }).eq('email', user.email);
+        supabase.from('user_profiles').update({ ai_instructions: customInstructions }).eq('id', user.id);
       }
 
       setInstructionsSavedNotice(true);
@@ -300,7 +302,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
 
     if (isSupabaseConfigured && supabase) {
-      supabase.from('user_profiles').update({ model_training: nextVal }).eq('email', user.email);
+      supabase.from('user_profiles').update({ model_training: nextVal }).eq('id', user.id);
     }
   };
 
@@ -319,7 +321,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
 
     if (isSupabaseConfigured && supabase) {
-      supabase.from('user_profiles').update({ plugins_connected: nextPlugins }).eq('email', user.email);
+      supabase.from('user_profiles').update({ plugins_connected: nextPlugins }).eq('id', user.id);
     }
   };
 

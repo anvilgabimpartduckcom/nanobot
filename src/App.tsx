@@ -5,7 +5,7 @@ import { AuthModal } from './components/AuthModal';
 // Imported SettingsModal and AppTheme type for Neon Black and Minimalist Light themes [Commented by: Google AI Studio on 20/10/2026 11:30 AM]
 import { SettingsModal, AppTheme } from './components/SettingsModal';
 import { AboutModal } from './components/AboutModal';
-// Imported Supabase persistence: profiles and AI file code outputs saved to Supabase; user chats saved exclusively to Cloudflare; cascading 30-day purge support [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
+// Imported Supabase persistence: authoritative profiles, conversations, messages, and AI file code outputs saved to Supabase [Commented by: Google AI Studio on 01/11/2026 02:02 PM]
 import {
   UserProfile,
   isSupabaseConfigured,
@@ -15,7 +15,12 @@ import {
   fetchFileCodeOutputsFromSupabase,
   deleteFileCodeOutputsFromSupabase,
   purgeExpiredFileCodeOutputs,
-  removeEncryptedChatRecord
+  removeEncryptedChatRecord,
+  restoreActiveSession,
+  fetchRemoteConversationsFromSupabase,
+  persistConversationToSupabase,
+  deleteConversationFromSupabase,
+  migrateLocalChatsToSupabase
 } from './lib/supabase';
 import { deriveKeyFromPassword, encryptData, decryptData, encryptText, decryptText } from './lib/crypto';
 import { analyzeFileWithScript, ProcessedFile } from './lib/fileReader';
@@ -255,11 +260,37 @@ export default function App() {
     return () => clearInterval(timer);
   }, [isGenerating]);
 
-  // Saved chats and reasoning locally with encryption; no 30-day auto-purge for local storage [Commented by: Google AI Studio on 28/10/2026 11:42 AM]
+  // Auto-restore genuine Supabase Auth session on application mount [Commented by: Google AI Studio on 01/11/2026 02:05 PM]
+  useEffect(() => {
+    if (!supabase) return;
+
+    restoreActiveSession().then((res) => {
+      if (res.user) {
+        setCurrentUser(res.user);
+        if (res.user.theme) setTheme(res.user.theme);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        setCurrentUser(null);
+        setPasswordSecret('');
+        setCryptoKey(null);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // Saved chats and reasoning with Supabase as authoritative store and local encryption as snappy cache [Commented by: Google AI Studio on 01/11/2026 02:05 PM]
   const saveLocalEncryptedChats = async (allChats: ChatSession[], key?: CryptoKey | null, user?: UserProfile | null) => {
     if (isIncognito) return; // Incognito chats are strictly never persisted to history or storage
     const targetUser = user !== undefined ? user : currentUser;
     const targetKey = key !== undefined ? key : cryptoKey;
+
+    // 1. Snappy local encrypted client cache
     if (targetUser && targetKey) {
       try {
         const payload = JSON.stringify(allChats);
@@ -275,40 +306,66 @@ export default function App() {
         console.error('Local storage write error:', e);
       }
     }
+
+    // 2. Authoritative persistence in Supabase database for authenticated accounts
+    if (targetUser && isSupabaseConfigured) {
+      for (const chat of allChats) {
+        persistConversationToSupabase(targetUser.id, chat).catch((err) => {
+          console.warn('Supabase conversation persistence notice:', err);
+        });
+      }
+    }
   };
 
   const loadLocalEncryptedChats = async (key: CryptoKey, user: UserProfile) => {
     try {
+      // 1. Authoritative check: load remote conversations from Supabase PostgreSQL database
+      if (isSupabaseConfigured) {
+        const remoteChats = await fetchRemoteConversationsFromSupabase(user.id);
+        if (remoteChats && remoteChats.length > 0) {
+          setChats(remoteChats as ChatSession[]);
+          return;
+        }
+
+        // If remote database has no conversations yet, migrate local cached records safely to Supabase
+        await migrateLocalChatsToSupabase(user.id, key);
+        const migratedChats = await fetchRemoteConversationsFromSupabase(user.id);
+        if (migratedChats && migratedChats.length > 0) {
+          setChats(migratedChats as ChatSession[]);
+          return;
+        }
+      }
+
+      // 2. Fallback to local encrypted store if offline
       const rawEncrypted = localStorage.getItem(`nanobot_encrypted_chats_${user.id}`);
       if (rawEncrypted) {
         const decrypted = await decryptText(rawEncrypted, key);
         const parsed = JSON.parse(decrypted);
-        if (Array.isArray(parsed)) {
+        if (Array.isArray(parsed) && parsed.length > 0) {
           setChats(parsed);
           return;
         }
       }
-      // Migration from unencrypted local cache if available
+
+      // 3. Migration from legacy unencrypted local cache if available
       const legacy = localStorage.getItem('nanobot_chats');
       if (legacy) {
         const parsed = JSON.parse(legacy);
         if (Array.isArray(parsed) && parsed.length > 0) {
           setChats(parsed);
-          // Encrypt into user's private encrypted store
           saveLocalEncryptedChats(parsed, key, user);
           return;
         }
       }
       setChats([]);
     } catch (err) {
-      console.warn('Failed to decrypt local encrypted chats:', err);
+      console.warn('Failed to load user chats:', err);
       setChats([]);
     }
   };
 
-  // Derive CryptoKey and load encrypted local storage when user logs in with password
+  // Derive CryptoKey and load authoritative store when user logs in with password
   useEffect(() => {
-    // Loaded encrypted local chats; Cloudflare D1 is reserved strictly for shared chats [Commented by: Google AI Studio on 28/10/2026 11:42 AM]
     if (currentUser && passwordSecret) {
       deriveKeyFromPassword(passwordSecret, currentUser.salt || 'default_nanobot_salt')
         .then((key) => {
@@ -317,23 +374,20 @@ export default function App() {
         })
         .catch((err) => {
           console.error('Error deriving encryption key:', err);
-          try {
-            const stored = JSON.parse(localStorage.getItem('nanobot_chats') || '[]');
-            setChats(Array.isArray(stored) ? stored : []);
-          } catch {
-            setChats([]);
+          if (isSupabaseConfigured) {
+            fetchRemoteConversationsFromSupabase(currentUser.id).then((remote) => {
+              if (remote && remote.length > 0) setChats(remote as ChatSession[]);
+            });
           }
         });
     } else if (currentUser) {
-      try {
-        const stored = JSON.parse(localStorage.getItem('nanobot_chats') || '[]');
-        setChats(Array.isArray(stored) ? stored : []);
-      } catch {
-        setChats([]);
+      if (isSupabaseConfigured) {
+        fetchRemoteConversationsFromSupabase(currentUser.id).then((remote) => {
+          if (remote && remote.length > 0) setChats(remote as ChatSession[]);
+        });
       }
     } else {
       setCryptoKey(null);
-      // Locally stored chats retain permanently without 30-day auto-purge
       try {
         const stored = JSON.parse(localStorage.getItem('nanobot_chats') || '[]');
         setChats(Array.isArray(stored) ? stored : []);
@@ -1698,6 +1752,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
     if (currentUser) {
       workerClient.deleteConversation(id).catch(() => {});
       deleteFileCodeOutputsFromSupabase(currentUser.id, id).catch(() => {});
+      deleteConversationFromSupabase(currentUser.id, id).catch(() => {});
     }
     setChats((prev) => prev.filter((c) => c.id !== id));
     if (activeChatId === id) handleStartNewChat();

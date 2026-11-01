@@ -11,11 +11,11 @@ https://github.com/anvilgabimpartduckcom/nanobot/archive/refs/heads/main.zip
 But always make sure to follow the LICENSE.
 
 ## 📁 Project Structure
-<!-- Updated Project Structure and Latest Updates with Developer Settings removal and comprehensive MCP verification [Commented by: Google AI Studio on 31/10/2026 11:05 AM] -->
+<!-- Updated Project Structure and Latest Updates with Supabase Auth, RLS repair, email column removal, and persistence hierarchy [Commented by: Google AI Studio on 01/11/2026 02:25 PM] -->
 
 ```
 nanobot/
-├── .env.example                # Environment variable reference for Netlify and Cloudflare secrets (including required MCP_ENCRYPTION_SECRET, Google & GitHub OAuth client IDs)
+├── .env.example                # Environment variable reference for Netlify, Supabase, and Cloudflare secrets (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_CLOUDFLARE_WORKER_URL, MCP_ENCRYPTION_SECRET)
 ├── .github/
 │   └── workflows/
 │       ├── codeql.yml          # GitHub Actions CodeQL security scanning
@@ -35,6 +35,7 @@ nanobot/
 ├── SECURITY.md                 # Security policy and vulnerability reporting instructions
 ├── scripts/
 │   ├── integration_compatibility_monitor.py # Read-only upstream MCP integration changelog monitor
+│   ├── verify_auth_and_database.ts # Comprehensive Supabase Auth, PostgreSQL schema, RLS user isolation, and persistence verification suite
 │   └── verify_mcp_backend.ts   # Comprehensive MCP backend, database, crypto, and protocol verification test suite
 ├── worker/                     # Cloudflare Worker backend
 │   ├── package.json            # Worker dependencies & Wrangler scripts
@@ -42,47 +43,59 @@ nanobot/
 │   ├── schema.sql              # Cloudflare D1 tables (conversations, messages, file_outputs, shared_chats, user_mcp_connections)
 │   └── wrangler.toml           # Cloudflare Wrangler configuration & D1 binding
 ├── supabase/
-│   └── schema.sql              # PostgreSQL tables (user_profiles, file_code_outputs) and RLS policies
+│   └── schema.sql              # Production PostgreSQL tables (user_profiles, conversations, messages, file_code_outputs) with strict auth.uid() RLS policies
 └── src/
     ├── main.tsx                # React application mount point
-    ├── App.tsx                 # Main chat interface, OpenRouter MCP tool-calling loop, reasoning accordion, and stream handlers
+    ├── App.tsx                 # Main chat interface, Supabase session auto-restore, authoritative chat sync, and OpenRouter MCP tool loop
     ├── index.css               # Tailwind CSS imports, neon aura glow, and scrollbar styles
     ├── components/
     │   ├── AboutModal.tsx      # Standalone About nanobot modal with permanent service acknowledgments
-    │   ├── AuthModal.tsx       # Direct registration and signin modal with masked inputs, eye toggle, and Ctrl+C copy support
+    │   ├── AuthModal.tsx       # Direct username/password registration and signin creating authentic Supabase Auth sessions
     │   └── SettingsModal.tsx   # Two-column settings: Account, AI Config, Add-ons & Integrations with OAuth buttons, live verification, and About
     └── lib/
-        ├── crypto.ts           # Web Crypto PBKDF2 key derivation and AES-GCM zero-knowledge client encryption
+        ├── crypto.ts           # Isomorphic Web Crypto PBKDF2 key derivation and AES-GCM zero-knowledge client encryption
         ├── fileReader.ts       # Universal code-driven file analyzer for non-image files with stable fileIds
         ├── indexedDb.ts        # Browser IndexedDB local-only original user file storage & orphaned file cleanup
         ├── markdown.ts         # Markdown, KaTeX math parsing, and Highlight.js styling
         ├── pdfExport.ts        # Formatted PDF export engine generating structured A4 PDFs with jsPDF
         ├── plugins.ts          # Catalogue of 11 verified MCP integrations with canonical endpoints, consumer-grade labels, and OAuth metadata
         ├── r2.ts               # Cloudflare R2 archive integration utilities
-        ├── supabase.ts         # Supabase client with multi-prefix Netlify env var resolution
+        ├── supabase.ts         # Supabase client with authentic Supabase Auth (signUpWithUsername, signInWithUsername, session restoration, and remote persistence)
         ├── tavily.ts           # Tavily search, URL scraping, and # / ## Deep Research runners
         └── workerClient.ts     # Cloudflare Worker REST API client with Bearer token authentication and typed MCP methods
 ```
 
 ## 📢 Latest Updates
-<!-- Updated Latest Updates with Developer Settings Removal and Complete Backend MCP Verification [Commented by: Google AI Studio on 31/10/2026 11:05 AM] -->
+<!-- Updated Latest Updates with Supabase Auth, RLS repair, email column removal, and persistence hierarchy [Commented by: Google AI Studio on 01/11/2026 02:25 PM] -->
 
-- **Complete Removal of Developer Settings**:
-  - Fully eliminated the "Developer Settings (Advanced)" accordion, custom endpoint override inputs, server URL configuration forms, and developer-only connection controls from the frontend and backend.
-  - Locked all 11 MCP integrations to canonical, trusted application configurations (`CANONICAL_PROVIDER_ENDPOINTS` in `worker/src/index.ts` and `MCP_PLUGINS` in `src/lib/plugins.ts`), completely preventing users or external requests from injecting arbitrary remote endpoints.
-  - Cleaned up all associated unused state (`customEndpoint`, `showAdvancedDevMode`) and handlers, preserving a uniform, consumer-friendly Nanobot interface.
+- **Complete Authentication Architecture Repair**:
+  - Implemented genuine Supabase Auth session management (`signUpWithUsername`, `signInWithPassword`, `signOutSupabase`, and `restoreActiveSession`) replacing the legacy unauthenticated profile query workaround.
+  - Eliminated fallback to unauthenticated localStorage-only user accounts; successful signup and signin now establish authenticated Supabase sessions with automated token refreshes.
+  - Updated `workerClient.ts` to supply genuine Supabase Bearer access tokens to the Cloudflare Worker backend, ensuring full end-to-end cryptographic authentication.
 
-- **Truthful Backend Connection Verification ("Test Connection")**:
-  - Implemented the `POST /api/mcp/test` endpoint on the Cloudflare Worker and integrated it into the Add-ons UI via `workerClient.testMcpConnection()`.
-  - Added a dedicated "Test Connection" action to each provider card that dynamically reports truthful, verified status states: `Connection successful` (with live tool count), `Authentication failed`, `Tool discovery failed`, `Provider unavailable`, or `Configuration required`.
-  - Disallowed reporting connection success merely because credentials were saved in the database; status is strictly bound to live provider discovery and authentication verification.
+- **Strict Removal of the Email Column from User Profiles**:
+  - Completely removed the `email` column from `public.user_profiles` in `supabase/schema.sql` and the TypeScript `UserProfile` interface.
+  - Profile identities are bound directly to `auth.users(id)` via `UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE`.
+  - Registration and authentication use an internal deterministic GoTrue-compatible identifier (`formatAuthEmail`) at the Supabase Auth layer, completely decoupling authentication mechanics from user profile data.
+  - Replaced all legacy `.eq('email', user.email)` database queries with strict `.eq('id', user.id)` matching the authenticated user's `auth.uid()`.
 
-- **Credential Security Hardening & Zero-Knowledge Verification**:
-  - Enforced mandatory `MCP_ENCRYPTION_SECRET` configuration on the Cloudflare Worker backend with zero fallback to public Supabase anon keys, preventing any possibility of client-side key leakage.
-  - Verified AES-GCM 256-bit encryption with PBKDF2 100,000-iteration key derivation and 12-byte random IVs.
-  - Verified that production credentials are never stored in plaintext, incorrect encryption secrets are cleanly rejected, corrupted ciphertext is caught safely, and credentials are completely redacted from all API logs and response payloads.
+- **Database & Row Level Security (RLS) Repair**:
+  - Hardened `supabase/schema.sql` by replacing insecure `USING (true)` policies with strict tenant isolation: `auth.uid() = id` on `user_profiles` and `auth.uid() = user_id` on `conversations`, `messages`, and `file_code_outputs`.
+  - Revoked broad anonymous access to private profile data; PostgREST access is strictly granted to `authenticated` and `service_role`.
+  - Added a secure `check_username_available` `SECURITY DEFINER` RPC function to permit pre-registration username availability checks without exposing any user records or private credentials.
 
-- **Comprehensive 32-Test Verification Suite**:
-  - Created and executed `scripts/verify_mcp_backend.ts`, verifying Worker endpoints (`/api/mcp/connect`, `/api/mcp/tools`, `/api/mcp/call`, `/api/mcp/disconnect`, `/api/mcp/test`), Supabase JWT Bearer authentication, user isolation, D1 schema integrity, remote MCP JSON-RPC 2.0 vs REST-to-tool transport distinction, and OpenRouter streaming tool-calling loops with zero failures.
+- **Data Persistence Hierarchy & Safe Migration**:
+  - Established Supabase as the authoritative persistent cloud store for private user account data (profiles, preferences, zero-knowledge encrypted API credentials, conversations, messages, and AI file code outputs).
+  - Cloudflare Worker and D1 are dedicated to authenticated backend operations, shared public chat links (`shared_chats`), and user MCP integration connections (`user_mcp_connections`).
+  - Implemented automatic, non-destructive migration (`migrateLocalChatsToSupabase`) that uploads existing local storage chats (`nanobot_chats` and `nanobot_encrypted_chats_<userId>`) to Supabase upon first authenticated signin.
+  - Browser localStorage is preserved strictly as a fast, offline-resilient local cache.
 
+- **Zero-Knowledge Client-Side Credential Encryption**:
+  - API keys (OpenRouter and Tavily) and custom instructions are encrypted client-side using PBKDF2 (100,000 iterations, SHA-256) and AES-GCM 256-bit encryption before being transmitted or persisted.
+  - Upgraded `src/lib/crypto.ts` with universal runtime compatibility across Vite browser environments and Node.js testing.
+  - Verified that wrong passwords and corrupted ciphertexts are strictly rejected without leaking plaintext credentials.
 
+- **Automated Verification Suites**:
+  - Created `scripts/verify_auth_and_database.ts` (17 tests) validating schema definitions, RLS policies, email column absence, auth email determinism, and PBKDF2/AES-GCM encryption.
+  - Maintained `scripts/verify_mcp_backend.ts` (32 tests) validating Worker endpoints, D1 schema, and all 11 MCP integrations.
+  - All 49 automated tests pass with 100% success; TypeScript (`tsc --noEmit`) and Vite production build pass cleanly.

@@ -1,17 +1,20 @@
-// Enhanced Supabase client with live table syncing and connection probing [Commented by: Google AI Studio on 13/10/2026 03:17 AM]
+// Nanobot Supabase Client: Genuine Supabase Auth, Strict User Isolation, and Authoritative Data Persistence [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
 
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient, Session, User } from '@supabase/supabase-js';
+import { deriveKeyFromPassword, generateSalt, encryptText, decryptText } from './crypto';
 
-// Added multi-prefix environment variable support for Netlify and Supabase [Commented by: Google AI Studio on 13/10/2026 10:17 AM]
+// Multi-prefix environment variable support for Netlify and Supabase deployment environments [Commented by: Google AI Studio on 01/11/2026 02:18 PM]
+const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : (typeof process !== 'undefined' ? process.env : {});
+
 const supabaseUrl =
-  (import.meta.env.VITE_SUPABASE_URL as string) ||
-  (import.meta.env.NEXT_PUBLIC_SUPABASE_DATABASE_URL as string) ||
-  (import.meta.env.NEXT_PUBLIC_SUPABASE_URL as string) ||
+  (env.VITE_SUPABASE_URL as string) ||
+  (env.NEXT_PUBLIC_SUPABASE_DATABASE_URL as string) ||
+  (env.NEXT_PUBLIC_SUPABASE_URL as string) ||
   '';
 
 const supabaseAnonKey =
-  (import.meta.env.VITE_SUPABASE_ANON_KEY as string) ||
-  (import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string) ||
+  (env.VITE_SUPABASE_ANON_KEY as string) ||
+  (env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string) ||
   '';
 
 export const isSupabaseConfigured = Boolean(
@@ -22,31 +25,29 @@ export const isSupabaseConfigured = Boolean(
 );
 
 export const supabase: SupabaseClient | null = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey)
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+    })
   : null;
 
+// UserProfile model strictly without email column, keeping sensitive credentials encrypted [Commented by: Google AI Studio on 01/11/2026 02:10 PM]
 export interface UserProfile {
   id: string;
-  email: string;
   username: string;
   openrouter_key: string;
   tavily_key: string;
   ai_instructions: string;
   model_training: boolean;
-  plugins_connected: {
-    google_drive: boolean;
-    gmail: boolean;
-    google_docs: boolean;
-    notion: boolean;
-    firecrawl: boolean;
-    [key: string]: boolean;
-  };
+  plugins_connected: Record<string, boolean>;
   salt: string;
-  // Added theme preference support for Neon Black and Minimalist Light themes [Commented by: Google AI Studio on 20/10/2026 11:27 AM]
   theme?: 'Neon Black' | 'Minimalist Light';
 }
 
-// Added FileCodeOutput model and Supabase persistence functions for AI file reading code outputs [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
+// Model for AI file reader code outputs stored in Supabase public.file_code_outputs [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
 export interface FileCodeOutput {
   id?: string;
   user_id: string;
@@ -62,27 +63,26 @@ export interface FileCodeOutput {
   updated_at?: string;
 }
 
-export interface EncryptedChatRecord {
-  id: string;
-  user_id: string;
-  title_ciphertext: string;
-  data_ciphertext: string;
-  iv: string;
-  salt: string;
-  pinned: boolean;
-  updated_at: string;
+// Standardized internal auth identifier generator for Supabase Auth [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
+export function formatAuthEmail(username: string): string {
+  const sanitized = username.trim().toLowerCase().replace(/[^a-z0-9_.-]/g, '');
+  return `${sanitized || 'user'}@nanobot.auth.internal`;
 }
 
 // Check live Supabase connection status
 export async function testSupabaseConnection(): Promise<{ connected: boolean; message: string }> {
   if (!supabase) {
-    return { connected: false, message: 'Netlify environment variables (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY) pending in local preview.' };
+    return {
+      connected: false,
+      message: 'Supabase environment variables (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY) are not configured.',
+    };
   }
 
   try {
-    const { error } = await supabase.from('user_profiles').select('id').limit(1);
-    if (error) {
-      return { connected: false, message: `Connected to Supabase, but encountered table query notice: ${error.message}` };
+    const { error } = await supabase.from('conversations').select('id').limit(1);
+    // 401 or PGRST301 means table exists and RLS blocked unauthorized anon select, which proves connection is live
+    if (error && error.code !== 'PGRST301' && error.code !== '42501') {
+      return { connected: false, message: `Database check: ${error.message}` };
     }
     return { connected: true, message: 'Successfully connected to live Supabase PostgreSQL database.' };
   } catch (err: unknown) {
@@ -91,9 +91,31 @@ export async function testSupabaseConnection(): Promise<{ connected: boolean; me
   }
 }
 
-// Local persistent mock store when Supabase environment variables are pending in preview
+// Check if username is available for registration via secure RPC function [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
+export async function checkUsernameAvailable(username: string): Promise<boolean> {
+  const trimmed = username.trim();
+  if (!trimmed) return false;
+
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.rpc('check_username_available', {
+        username_to_check: trimmed,
+      });
+      if (!error && typeof data === 'boolean') {
+        return data;
+      }
+    } catch {
+      // Fallback check if RPC is not yet created in Supabase
+    }
+  }
+
+  // Safe fallback to local cache
+  const localUsers = getLocalProfiles();
+  return !localUsers.some((u) => u.username.toLowerCase() === trimmed.toLowerCase());
+}
+
+// Local persistent profile cache (used solely for offline display or transitional caching)
 const LOCAL_STORAGE_USERS_KEY = 'nanobot_supabase_users';
-const LOCAL_STORAGE_CHATS_KEY = 'nanobot_encrypted_chats';
 
 export function getLocalProfiles(): UserProfile[] {
   try {
@@ -111,100 +133,615 @@ export function saveLocalProfiles(profiles: UserProfile[]) {
   }
 }
 
-export async function fetchUserProfiles(): Promise<UserProfile[]> {
-  if (supabase) {
-    try {
-      const { data, error } = await supabase.from('user_profiles').select('*');
-      if (!error && data && data.length > 0) {
-        return data as UserProfile[];
-      }
-    } catch (e) {
-      console.warn('Remote user_profiles fetch notice:', e);
+// Genuine Supabase Auth Sign Up creating an authentic Supabase Auth session and encrypted profile [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
+export async function signUpWithUsername(
+  username: string,
+  password: string,
+  openrouterKey: string,
+  tavilyKey: string
+): Promise<{ user: UserProfile; session: Session | null }> {
+  const uName = username.trim();
+  const pwd = password.trim();
+  const orKey = openrouterKey.trim();
+  const tvKey = tavilyKey.trim();
+
+  if (!uName || !pwd || !orKey || !tvKey) {
+    throw new Error('All fields (Username, Password, OpenRouter Key, Tavily Key) are mandatory.');
+  }
+
+  if (!supabase) {
+    throw new Error('Supabase client is not configured. Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set.');
+  }
+
+  // Check username availability
+  const isAvailable = await checkUsernameAvailable(uName);
+  if (!isAvailable) {
+    throw new Error('This username is already taken. Please choose another username.');
+  }
+
+  const authEmail = formatAuthEmail(uName);
+
+  // 1. Create authentic Supabase Auth user
+  const { data: authData, error: authErr } = await supabase.auth.signUp({
+    email: authEmail,
+    password: pwd,
+  });
+
+  if (authErr) {
+    throw new Error(authErr.message || 'Failed to create user account with Supabase Auth.');
+  }
+
+  const authUser = authData.user;
+  if (!authUser) {
+    throw new Error('Supabase Auth did not return a valid user identity.');
+  }
+
+  // Auto sign in if session is not immediately provided (e.g. if email confirmation is turned off in project)
+  let session = authData.session;
+  if (!session) {
+    const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
+      email: authEmail,
+      password: pwd,
+    });
+    if (!signInErr && signInData.session) {
+      session = signInData.session;
     }
   }
-  return getLocalProfiles();
+
+  // 2. Generate zero-knowledge encryption salt & encrypt sensitive API keys
+  const salt = generateSalt();
+  const cryptoKey = await deriveKeyFromPassword(pwd, salt);
+  const encryptedOpenRouter = await encryptText(orKey, cryptoKey, salt);
+  const encryptedTavily = await encryptText(tvKey, cryptoKey, salt);
+
+  const initialPlugins = {
+    google_drive: false,
+    gmail: false,
+    google_docs: false,
+    notion: false,
+    firecrawl: false,
+    tavily: false,
+    cloudflare: false,
+    github: false,
+    netlify: false,
+    supabase: false,
+    slack: false,
+  };
+
+  // 3. Persist profile record strictly tied to authUser.id (without email column) [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
+  const { error: profileErr } = await supabase.from('user_profiles').insert([
+    {
+      id: authUser.id,
+      username: uName,
+      openrouter_key: encryptedOpenRouter,
+      tavily_key: encryptedTavily,
+      ai_instructions: '',
+      model_training: true,
+      plugins_connected: initialPlugins,
+      salt: salt,
+      theme: 'Neon Black',
+    },
+  ]);
+
+  if (profileErr) {
+    console.error('Failed to create user profile in Supabase:', profileErr.message);
+    throw new Error(`Profile creation failed: ${profileErr.message}`);
+  }
+
+  const resolvedUser: UserProfile = {
+    id: authUser.id,
+    username: uName,
+    openrouter_key: orKey,
+    tavily_key: tvKey,
+    ai_instructions: '',
+    model_training: true,
+    plugins_connected: initialPlugins,
+    salt: salt,
+    theme: 'Neon Black',
+  };
+
+  // Update local memory cache
+  const localList = getLocalProfiles().filter((u) => u.id !== resolvedUser.id);
+  localList.push(resolvedUser);
+  saveLocalProfiles(localList);
+
+  return { user: resolvedUser, session };
 }
 
-export function getLocalEncryptedChats(userId: string): EncryptedChatRecord[] {
+// Genuine Supabase Auth Sign In producing an authentic session access token [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
+export async function signInWithUsername(
+  username: string,
+  password: string
+): Promise<{ user: UserProfile; session: Session }> {
+  const uName = username.trim();
+  const pwd = password.trim();
+
+  if (!uName || !pwd) {
+    throw new Error('Please enter both username and password.');
+  }
+
+  if (!supabase) {
+    throw new Error('Supabase client is not configured.');
+  }
+
+  const authEmail = formatAuthEmail(uName);
+
+  // 1. Authenticate with Supabase Auth
+  const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
+    email: authEmail,
+    password: pwd,
+  });
+
+  if (authErr || !authData.session || !authData.user) {
+    throw new Error(authErr?.message || 'Invalid username or password.');
+  }
+
+  const userId = authData.user.id;
+
+  // 2. Fetch authenticated user's private profile using strict RLS auth.uid() = id
+  const { data: profileRow, error: profileErr } = await supabase
+    .from('user_profiles')
+    .select('*')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (profileErr || !profileRow) {
+    throw new Error('Profile record not found for this account.');
+  }
+
+  // 3. Decrypt zero-knowledge encrypted credentials in browser memory
+  const derivedKey = await deriveKeyFromPassword(pwd, profileRow.salt || 'default_nanobot_salt');
+  let decryptedOr = profileRow.openrouter_key;
+  let decryptedTv = profileRow.tavily_key;
+  let decryptedInst = profileRow.ai_instructions || '';
+
   try {
-    const all = JSON.parse(localStorage.getItem(LOCAL_STORAGE_CHATS_KEY) || '[]');
-    return all.filter((c: EncryptedChatRecord) => {
-      // 30 days auto-purge filter: 30 * 24 * 60 * 60 * 1000 ms
-      const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-      const isRecent = Date.now() - new Date(c.updated_at).getTime() < thirtyDaysMs;
-      return c.user_id === userId && isRecent;
-    });
+    decryptedOr = await decryptText(profileRow.openrouter_key, derivedKey);
+  } catch (err) {
+    console.warn('OpenRouter key decryption note:', err);
+  }
+
+  try {
+    decryptedTv = await decryptText(profileRow.tavily_key, derivedKey);
+  } catch (err) {
+    console.warn('Tavily key decryption note:', err);
+  }
+
+  try {
+    if (profileRow.ai_instructions) {
+      decryptedInst = await decryptText(profileRow.ai_instructions, derivedKey);
+    }
   } catch {
+    decryptedInst = profileRow.ai_instructions || '';
+  }
+
+  const userProfile: UserProfile = {
+    id: profileRow.id,
+    username: profileRow.username,
+    openrouter_key: decryptedOr,
+    tavily_key: decryptedTv,
+    ai_instructions: decryptedInst,
+    model_training: profileRow.model_training ?? true,
+    plugins_connected: profileRow.plugins_connected || {},
+    salt: profileRow.salt,
+    theme: profileRow.theme || 'Neon Black',
+  };
+
+  // Cache locally
+  const localList = getLocalProfiles().filter((u) => u.id !== userProfile.id);
+  localList.push(userProfile);
+  saveLocalProfiles(localList);
+
+  return { user: userProfile, session: authData.session };
+}
+
+// Restore active Supabase session and user profile on app load [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
+export async function restoreActiveSession(passwordSecret?: string): Promise<{ user: UserProfile | null; session: Session | null }> {
+  if (!supabase) return { user: null, session: null };
+
+  try {
+    const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
+    if (sessionErr || !session || !session.user) {
+      return { user: null, session: null };
+    }
+
+    const userId = session.user.id;
+    const { data: profileRow, error: profileErr } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (profileErr || !profileRow) {
+      return { user: null, session };
+    }
+
+    let decryptedOr = profileRow.openrouter_key;
+    let decryptedTv = profileRow.tavily_key;
+    let decryptedInst = profileRow.ai_instructions || '';
+
+    if (passwordSecret) {
+      try {
+        const key = await deriveKeyFromPassword(passwordSecret, profileRow.salt || 'default_nanobot_salt');
+        decryptedOr = await decryptText(profileRow.openrouter_key, key);
+        decryptedTv = await decryptText(profileRow.tavily_key, key);
+        if (profileRow.ai_instructions) {
+          decryptedInst = await decryptText(profileRow.ai_instructions, key);
+        }
+      } catch (e) {
+        console.warn('Password decryption failed during restore:', e);
+      }
+    }
+
+    const userProfile: UserProfile = {
+      id: profileRow.id,
+      username: profileRow.username,
+      openrouter_key: decryptedOr,
+      tavily_key: decryptedTv,
+      ai_instructions: decryptedInst,
+      model_training: profileRow.model_training ?? true,
+      plugins_connected: profileRow.plugins_connected || {},
+      salt: profileRow.salt,
+      theme: profileRow.theme || 'Neon Black',
+    };
+
+    return { user: userProfile, session };
+  } catch (err) {
+    console.warn('Failed to restore Supabase session:', err);
+    return { user: null, session: null };
+  }
+}
+
+// Sign out from Supabase Auth [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
+export async function signOutSupabase(): Promise<void> {
+  if (supabase) {
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.warn('Supabase sign out error:', err);
+    }
+  }
+}
+
+// Update profile in Supabase using strict auth.uid() = id isolation [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
+export async function updateUserProfileInSupabase(
+  userId: string,
+  updatedFields: {
+    username?: string;
+    openrouter_key?: string;
+    tavily_key?: string;
+    ai_instructions?: string;
+    model_training?: boolean;
+    plugins_connected?: Record<string, boolean>;
+    theme?: string;
+  },
+  passwordSecret?: string,
+  salt?: string
+): Promise<boolean> {
+  if (!supabase) return false;
+
+  const payload: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (updatedFields.username !== undefined) payload.username = updatedFields.username;
+  if (updatedFields.model_training !== undefined) payload.model_training = updatedFields.model_training;
+  if (updatedFields.plugins_connected !== undefined) payload.plugins_connected = updatedFields.plugins_connected;
+  if (updatedFields.theme !== undefined) payload.theme = updatedFields.theme;
+
+  if (passwordSecret && salt) {
+    try {
+      const key = await deriveKeyFromPassword(passwordSecret, salt);
+      if (updatedFields.openrouter_key !== undefined) {
+        payload.openrouter_key = await encryptText(updatedFields.openrouter_key, key, salt);
+      }
+      if (updatedFields.tavily_key !== undefined) {
+        payload.tavily_key = await encryptText(updatedFields.tavily_key, key, salt);
+      }
+      if (updatedFields.ai_instructions !== undefined) {
+        payload.ai_instructions = await encryptText(updatedFields.ai_instructions, key, salt);
+      }
+    } catch (encErr) {
+      console.warn('Credential encryption error during profile update:', encErr);
+    }
+  }
+
+  try {
+    const { error } = await supabase
+      .from('user_profiles')
+      .update(payload)
+      .eq('id', userId);
+
+    if (error) {
+      console.error('Failed to update user profile in Supabase:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Supabase profile update exception:', err);
+    return false;
+  }
+}
+
+// Delete user account profile from Supabase [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
+export async function deleteUserAccountFromSupabase(userId: string): Promise<boolean> {
+  if (!supabase) return false;
+
+  try {
+    const { error } = await supabase.from('user_profiles').delete().eq('id', userId);
+    if (error) {
+      console.warn('Delete profile error:', error.message);
+    }
+    await supabase.auth.signOut().catch(() => {});
+    return true;
+  } catch (err) {
+    console.error('Failed to delete account from Supabase:', err);
+    return false;
+  }
+}
+
+// ==========================================
+// REMOTE CONVERSATION & MESSAGE PERSISTENCE
+// ==========================================
+
+export interface RemoteConversationRow {
+  id: string;
+  user_id: string;
+  title: string;
+  pinned: boolean;
+  share_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RemoteMessageRow {
+  id: string;
+  conversation_id: string;
+  user_id: string;
+  role: 'user' | 'ai';
+  content: string;
+  sources_json?: Array<{ title: string; url: string }>;
+  reasoning?: string;
+  display_attachments_json?: Array<{ type: string; name: string; fileId?: string; isLocalMissing?: boolean }>;
+  created_at: string;
+}
+
+// Fetch all conversations with their messages from Supabase authoritative store [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
+export async function fetchRemoteConversationsFromSupabase(
+  userId: string
+): Promise<Array<{
+  id: string;
+  title: string;
+  pinned: boolean;
+  updated: number;
+  shareId?: string;
+  messages: Array<{
+    role: 'user' | 'ai';
+    content: string;
+    sources?: Array<{ title: string; url: string }>;
+    reasoning?: string;
+    displayAttachments?: Array<{ type: string; name: string; fileId?: string; isLocalMissing?: boolean }>;
+  }>;
+}>> {
+  if (!supabase) return [];
+
+  try {
+    const { data: convs, error: convErr } = await supabase
+      .from('conversations')
+      .select('*')
+      .eq('user_id', userId)
+      .order('pinned', { ascending: false })
+      .order('updated_at', { ascending: false });
+
+    if (convErr || !convs) {
+      console.warn('Failed to fetch remote conversations:', convErr?.message);
+      return [];
+    }
+
+    const { data: msgs, error: msgErr } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: true });
+
+    if (msgErr) {
+      console.warn('Failed to fetch remote messages:', msgErr.message);
+    }
+
+    const messagesByConv: Record<string, any[]> = {};
+    (msgs || []).forEach((m: any) => {
+      if (!messagesByConv[m.conversation_id]) {
+        messagesByConv[m.conversation_id] = [];
+      }
+      messagesByConv[m.conversation_id].push({
+        role: m.role,
+        content: m.content,
+        sources: Array.isArray(m.sources_json) ? m.sources_json : [],
+        reasoning: m.reasoning || '',
+        displayAttachments: Array.isArray(m.display_attachments_json) ? m.display_attachments_json : [],
+      });
+    });
+
+    return convs.map((c: any) => ({
+      id: c.id,
+      title: c.title,
+      pinned: Boolean(c.pinned),
+      updated: new Date(c.updated_at).getTime(),
+      shareId: c.share_id || undefined,
+      messages: messagesByConv[c.id] || [],
+    }));
+  } catch (err) {
+    console.error('Exception fetching remote conversations:', err);
     return [];
   }
 }
 
-export async function fetchUserEncryptedChats(userId: string): Promise<EncryptedChatRecord[]> {
-  if (supabase) {
-    try {
-      const { data, error } = await supabase
-        .from('chats')
-        .select('*')
-        .eq('user_id', userId)
-        .order('updated_at', { ascending: false });
+// Persist or update a conversation in Supabase [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
+export async function persistConversationToSupabase(
+  userId: string,
+  chat: {
+    id: string;
+    title: string;
+    pinned: boolean;
+    updated: number;
+    shareId?: string;
+    messages: Array<{
+      role: 'user' | 'ai';
+      content: string | unknown;
+      sources?: Array<{ title: string; url: string }>;
+      reasoning?: string;
+      displayAttachments?: Array<{ type: string; name: string; fileId?: string; isLocalMissing?: boolean }>;
+    }>;
+  }
+): Promise<boolean> {
+  if (!supabase) return false;
 
-      if (!error && data) {
-        // Enforce 30 days auto-purge filter
-        const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-        return (data as EncryptedChatRecord[]).filter(
-          (c) => Date.now() - new Date(c.updated_at).getTime() < thirtyDaysMs
-        );
+  try {
+    // 1. Upsert conversation record
+    const { error: convErr } = await supabase.from('conversations').upsert(
+      [
+        {
+          id: chat.id,
+          user_id: userId,
+          title: chat.title || 'New Noodle',
+          pinned: Boolean(chat.pinned),
+          share_id: chat.shareId || null,
+          updated_at: new Date(chat.updated || Date.now()).toISOString(),
+        },
+      ],
+      { onConflict: 'id' }
+    );
+
+    if (convErr) {
+      console.warn('Supabase conversation upsert notice:', convErr.message);
+      return false;
+    }
+
+    // 2. Replace messages for this conversation
+    await supabase.from('messages').delete().eq('conversation_id', chat.id);
+
+    if (chat.messages && chat.messages.length > 0) {
+      const msgRows = chat.messages.map((m) => {
+        let textContent = '';
+        if (typeof m.content === 'string') {
+          textContent = m.content;
+        } else if (Array.isArray(m.content)) {
+          textContent = (m.content as any[])
+            .map((c) => (c.type === 'text' ? c.text : ''))
+            .filter(Boolean)
+            .join('\n');
+        } else {
+          textContent = JSON.stringify(m.content);
+        }
+
+        return {
+          conversation_id: chat.id,
+          user_id: userId,
+          role: m.role,
+          content: textContent,
+          sources_json: Array.isArray(m.sources) ? m.sources : [],
+          reasoning: m.reasoning || '',
+          display_attachments_json: Array.isArray(m.displayAttachments) ? m.displayAttachments : [],
+        };
+      });
+
+      const { error: msgErr } = await supabase.from('messages').insert(msgRows);
+      if (msgErr) {
+        console.warn('Supabase messages insert notice:', msgErr.message);
       }
-    } catch (e) {
-      console.warn('Remote chats fetch notice:', e);
     }
+
+    return true;
+  } catch (err) {
+    console.warn('Supabase conversation persistence exception:', err);
+    return false;
   }
-  return getLocalEncryptedChats(userId);
 }
 
-export async function persistEncryptedChatRecord(chatRecord: EncryptedChatRecord) {
-  // Always keep in local encrypted store as backup
+// Delete a conversation and its messages from Supabase [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
+export async function deleteConversationFromSupabase(userId: string, conversationId: string): Promise<boolean> {
+  if (!supabase) return false;
+
   try {
-    let all = JSON.parse(localStorage.getItem(LOCAL_STORAGE_CHATS_KEY) || '[]');
-    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-    all = all.filter((c: EncryptedChatRecord) => Date.now() - new Date(c.updated_at).getTime() < thirtyDaysMs);
-    const idx = all.findIndex((c: EncryptedChatRecord) => c.id === chatRecord.id);
-    if (idx >= 0) all[idx] = chatRecord;
-    else all.push(chatRecord);
-    localStorage.setItem(LOCAL_STORAGE_CHATS_KEY, JSON.stringify(all));
-  } catch (e) {
-    console.error('Failed to save encrypted chat locally', e);
-  }
+    const { error } = await supabase
+      .from('conversations')
+      .delete()
+      .eq('id', conversationId)
+      .eq('user_id', userId);
 
-  // Sync to live Supabase if connected
-  if (supabase) {
-    try {
-      await supabase.from('chats').upsert([chatRecord]);
-    } catch (e) {
-      console.warn('Supabase upsert chat notice:', e);
+    if (error) {
+      console.warn('Failed to delete conversation from Supabase:', error.message);
+      return false;
     }
+    return true;
+  } catch (err) {
+    console.error('Delete conversation exception:', err);
+    return false;
   }
 }
 
-export async function removeEncryptedChatRecord(chatId: string) {
+// Safe migration of existing local chats to authoritative Supabase store [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
+export async function migrateLocalChatsToSupabase(userId: string, key?: CryptoKey | null): Promise<void> {
+  if (!supabase) return;
+
   try {
-    const all = JSON.parse(localStorage.getItem(LOCAL_STORAGE_CHATS_KEY) || '[]');
-    const next = all.filter((c: EncryptedChatRecord) => c.id !== chatId);
-    localStorage.setItem(LOCAL_STORAGE_CHATS_KEY, JSON.stringify(next));
-  } catch (e) {
-    console.error('Failed to delete chat locally', e);
-  }
+    let localChats: any[] = [];
 
-  if (supabase) {
-    try {
-      await supabase.from('chats').delete().eq('id', chatId);
-    } catch (e) {
-      console.warn('Supabase delete chat notice:', e);
+    // Try reading encrypted local cache first
+    const enc = localStorage.getItem(`nanobot_encrypted_chats_${userId}`);
+    if (enc && key) {
+      try {
+        const decrypted = await decryptText(enc, key);
+        const parsed = JSON.parse(decrypted);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          localChats = parsed;
+        }
+      } catch (e) {
+        console.warn('Decryption note during migration:', e);
+      }
     }
+
+    // Fallback to legacy unencrypted chats
+    if (localChats.length === 0) {
+      const legacy = localStorage.getItem('nanobot_chats');
+      if (legacy) {
+        try {
+          const parsed = JSON.parse(legacy);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            localChats = parsed;
+          }
+        } catch {}
+      }
+    }
+
+    if (localChats.length === 0) return;
+
+    // Check existing remote count
+    const { count } = await supabase
+      .from('conversations')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
+    // If Supabase already has conversations, avoid overwriting blindly
+    if (count && count > 0) {
+      return;
+    }
+
+    // Upload local chats to Supabase
+    for (const chat of localChats) {
+      await persistConversationToSupabase(userId, chat);
+    }
+
+    console.info(`Successfully migrated ${localChats.length} local conversations to Supabase.`);
+  } catch (err) {
+    console.warn('Migration to Supabase notice:', err);
   }
 }
 
-// Save AI file reader code outputs to Supabase public.file_code_outputs table [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
+// ==========================================
+// FILE CODE OUTPUT PERSISTENCE (Supabase)
+// ==========================================
+
 export async function saveFileCodeOutputToSupabase(record: FileCodeOutput): Promise<boolean> {
   const localKey = `nanobot_file_outputs_${record.user_id}_${record.conversation_id}`;
   try {
@@ -218,20 +755,23 @@ export async function saveFileCodeOutputToSupabase(record: FileCodeOutput): Prom
 
   if (supabase) {
     try {
-      const { error } = await supabase.from('file_code_outputs').upsert([
-        {
-          user_id: record.user_id,
-          conversation_id: record.conversation_id,
-          source_file_id: record.source_file_id,
-          file_name: record.file_name,
-          file_type: record.file_type,
-          output_type: record.output_type,
-          reader_code: record.reader_code || '',
-          extracted_output: record.extracted_output,
-          metadata: record.metadata || {},
-          updated_at: new Date().toISOString()
-        }
-      ], { onConflict: 'id' });
+      const { error } = await supabase.from('file_code_outputs').upsert(
+        [
+          {
+            user_id: record.user_id,
+            conversation_id: record.conversation_id,
+            source_file_id: record.source_file_id,
+            file_name: record.file_name,
+            file_type: record.file_type,
+            output_type: record.output_type,
+            reader_code: record.reader_code || '',
+            extracted_output: record.extracted_output,
+            metadata: record.metadata || {},
+            updated_at: new Date().toISOString(),
+          },
+        ],
+        { onConflict: 'id' }
+      );
       if (error) {
         console.warn('Supabase file_code_outputs upsert notice:', error.message);
         return false;
@@ -245,7 +785,6 @@ export async function saveFileCodeOutputToSupabase(record: FileCodeOutput): Prom
   return true;
 }
 
-// Fetch AI file reader code outputs from Supabase public.file_code_outputs table [Commented by: Google AI Studio on 19/10/2026 11:02 AM]
 export async function fetchFileCodeOutputsFromSupabase(
   userId: string,
   conversationId: string
@@ -275,7 +814,6 @@ export async function fetchFileCodeOutputsFromSupabase(
   }
 }
 
-// Delete AI file reader code outputs from Supabase and local cache when a conversation is deleted [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
 export async function deleteFileCodeOutputsFromSupabase(
   userId: string,
   conversationId: string
@@ -307,7 +845,6 @@ export async function deleteFileCodeOutputsFromSupabase(
   return true;
 }
 
-// Purge expired AI file reader code outputs older than 30 days from Supabase and local storage [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
 export async function purgeExpiredFileCodeOutputs(userId: string): Promise<void> {
   const thirtyDaysAgoIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   if (supabase) {
@@ -321,4 +858,18 @@ export async function purgeExpiredFileCodeOutputs(userId: string): Promise<void>
       console.warn('Supabase purgeExpiredFileCodeOutputs notice:', e);
     }
   }
+}
+
+// Safely clear legacy local encrypted chat cache entry when a conversation is deleted [Commented by: Google AI Studio on 01/11/2026 02:08 PM]
+export function removeEncryptedChatRecord(chatId: string): void {
+  try {
+    const raw = localStorage.getItem('nanobot_encrypted_chats');
+    if (raw) {
+      const all = JSON.parse(raw);
+      if (Array.isArray(all)) {
+        const next = all.filter((c: any) => c.id !== chatId);
+        localStorage.setItem('nanobot_encrypted_chats', JSON.stringify(next));
+      }
+    }
+  } catch {}
 }

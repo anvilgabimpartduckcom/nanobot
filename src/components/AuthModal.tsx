@@ -1,8 +1,7 @@
-// Removed email id login concept completely for direct username, password, and API keys entry on Sign Up, and implemented zero-knowledge client-side encryption for credentials saved to Supabase [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
+// Nanobot AuthModal: Genuine Supabase Auth, Strict Username Identification, Zero-Knowledge Credential Encryption, and PostgREST RLS Security [Commented by: Google AI Studio on 01/11/2026 01:55 PM]
 
 import React, { useState } from 'react';
-import { supabase, isSupabaseConfigured, getLocalProfiles, saveLocalProfiles, UserProfile } from '../lib/supabase';
-import { generateSalt, deriveKeyFromPassword, encryptText, decryptText } from '../lib/crypto';
+import { UserProfile, signUpWithUsername, signInWithUsername, checkUsernameAvailable } from '../lib/supabase';
 
 interface AuthModalProps {
   mode: 'signin' | 'signup';
@@ -17,7 +16,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
-  onSwitchMode
+  onSwitchMode,
 }) => {
   const [currentMode, setCurrentMode] = useState<'signin' | 'signup'>(initialMode);
 
@@ -27,7 +26,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [openrouterKey, setOpenrouterKey] = useState('');
   const [tavilyKey, setTavilyKey] = useState('');
 
-  // Visibility toggles for masked fields [Commented by: Google AI Studio on 30/10/2026 10:49 AM]
+  // Visibility toggles for masked fields
   const [showPassword, setShowPassword] = useState(false);
   const [showOpenRouterKey, setShowOpenRouterKey] = useState(false);
   const [showTavilyKey, setShowTavilyKey] = useState(false);
@@ -36,9 +35,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [usernameTakenError, setUsernameTakenError] = useState(false);
-  const [passwordTakenError, setPasswordTakenError] = useState(false);
 
-  // Enabled copying from masked and credential inputs on Ctrl+C [Commented by: Google AI Studio on 30/10/2026 10:49 AM]
+  // Enabled copying from masked and credential inputs on Ctrl+C / Cmd+C [Commented by: Google AI Studio on 01/11/2026 01:55 PM]
   const handleCredentialKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
       const target = e.currentTarget;
@@ -56,17 +54,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleSwitchMode = (targetMode: 'signin' | 'signup') => {
     setError(null);
     setUsernameTakenError(false);
-    setPasswordTakenError(false);
     setCurrentMode(targetMode);
     if (onSwitchMode) onSwitchMode(targetMode);
   };
 
-  // Direct Account Creation: Username, Password, OpenRouter Key, Tavily Key
+  // Direct Account Creation: Username, Password, OpenRouter Key, Tavily Key via genuine Supabase Auth [Commented by: Google AI Studio on 01/11/2026 01:55 PM]
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setUsernameTakenError(false);
-    setPasswordTakenError(false);
 
     const uName = username.trim();
     const pwd = password.trim();
@@ -78,132 +74,37 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
+    if (pwd.length < 6) {
+      setError('Password must be at least 6 characters long.');
+      return;
+    }
+
     setLoading(true);
     try {
-      const existingUsers = getLocalProfiles();
-
-      // Check username uniqueness locally and in Supabase; mark usernameTakenError if duplicate [Commented by: Google AI Studio on 22/10/2026 04:48 AM]
-      let isUsernameTaken = existingUsers.some(
-        (u) => u.username.toLowerCase() === uName.toLowerCase()
-      );
-
-      if (!isUsernameTaken && isSupabaseConfigured && supabase) {
-        const { data: remoteUsers, error: sbCheckErr } = await supabase
-          .from('user_profiles')
-          .select('username')
-          .ilike('username', uName);
-
-        if (!sbCheckErr && remoteUsers && remoteUsers.length > 0) {
-          isUsernameTaken = true;
-        }
-      }
-
-      // Check password uniqueness using deterministic SHA-256 credential hashing; mark passwordTakenError if duplicate [Commented by: Google AI Studio on 22/10/2026 04:48 AM]
-      const pwdBuffer = await crypto.subtle.digest(
-        'SHA-256',
-        new TextEncoder().encode('nanobot_pass_salt_' + pwd)
-      );
-      const pwdHash = Array.from(new Uint8Array(pwdBuffer))
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('');
-
-      const registeredPwdHashes: string[] = JSON.parse(
-        localStorage.getItem('nanobot_registered_password_hashes') || '[]'
-      );
-      let isPasswordTaken = registeredPwdHashes.includes(pwdHash);
-
-      if (!isPasswordTaken && isSupabaseConfigured && supabase) {
-        try {
-          const { data: remotePwds } = await supabase
-            .from('user_profiles')
-            .select('id')
-            .eq('salt', pwdHash);
-          if (remotePwds && remotePwds.length > 0) {
-            isPasswordTaken = true;
-          }
-        } catch {
-          // Ignore remote schema difference if column is absent
-        }
-      }
-
-      if (isUsernameTaken || isPasswordTaken) {
-        if (isUsernameTaken) setUsernameTakenError(true);
-        if (isPasswordTaken) setPasswordTakenError(true);
+      // Pre-check username availability
+      const isAvailable = await checkUsernameAvailable(uName);
+      if (!isAvailable) {
+        setUsernameTakenError(true);
         setLoading(false);
         return;
       }
 
-      const salt = generateSalt();
-      // Derive client-side zero-knowledge key from password and salt
-      const cryptoKey = await deriveKeyFromPassword(pwd, salt);
-
-      // Zero-Knowledge credential encryption: encrypt API keys before storing in Supabase so developer cannot read them [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
-      const encryptedOpenRouterKey = await encryptText(orKey, cryptoKey, salt);
-      const encryptedTavilyKey = await encryptText(tvKey, cryptoKey, salt);
-
-      const generatedUserId = 'usr_' + Date.now();
-      const internalEmail = `${uName.toLowerCase().replace(/[^a-z0-9_-]/g, '')}@nanobot.internal`;
-
-      // Memory/local profile keeps decrypted keys for client-side chat execution
-      const newUser: UserProfile = {
-        id: generatedUserId,
-        email: internalEmail,
-        username: uName,
-        openrouter_key: orKey,
-        tavily_key: tvKey,
-        ai_instructions: '',
-        model_training: true,
-        plugins_connected: {
-          google_drive: false,
-          gmail: false,
-          google_docs: false,
-          notion: false,
-          firecrawl: false
-        },
-        salt,
-        // Set default theme to Neon Black for newly registered user [Commented by: Google AI Studio on 20/10/2026 11:47 AM]
-        theme: 'Neon Black'
-      };
-
-      existingUsers.push(newUser);
-      saveLocalProfiles(existingUsers);
-      // Saved unique password hash to local registry ensuring passwords cannot be reused across accounts [Commented by: Google AI Studio on 22/10/2026 04:48 AM]
-      registeredPwdHashes.push(pwdHash);
-      localStorage.setItem('nanobot_registered_password_hashes', JSON.stringify(registeredPwdHashes));
-
-      // Save encrypted profile to remote Supabase user_profiles (stored as ciphertexts, unreadable by admin)
-      if (isSupabaseConfigured && supabase) {
-        const { error: insertErr } = await supabase.from('user_profiles').insert([
-          {
-            email: internalEmail,
-            username: uName,
-            openrouter_key: encryptedOpenRouterKey,
-            tavily_key: encryptedTavilyKey,
-            ai_instructions: '',
-            model_training: true,
-            plugins_connected: newUser.plugins_connected,
-            salt: newUser.salt,
-            // Saved default theme alongside other user provided data in Supabase [Commented by: Google AI Studio on 20/10/2026 11:47 AM]
-            theme: 'Neon Black'
-          }
-        ]);
-
-        if (insertErr) {
-          console.warn('Supabase remote profile notice:', insertErr.message);
-        }
-      }
-
-      onSuccess(newUser, pwd);
+      const { user } = await signUpWithUsername(uName, pwd, orKey, tvKey);
+      onSuccess(user, pwd);
       onClose();
     } catch (err: unknown) {
       const e = err as Error;
-      setError(e.message || 'Error creating account.');
+      if (e.message && e.message.toLowerCase().includes('already taken')) {
+        setUsernameTakenError(true);
+      } else {
+        setError(e.message || 'Error creating account. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // Sign In Handler: Username + Password only
+  // Sign In Handler: Username + Password via genuine Supabase Auth session [Commented by: Google AI Studio on 01/11/2026 01:55 PM]
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -218,42 +119,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     setLoading(true);
     try {
-      let matched: UserProfile | null = null;
-
-      // 1. Query remote Supabase user_profiles
-      if (isSupabaseConfigured && supabase) {
-        const { data, error: sbErr } = await supabase
-          .from('user_profiles')
-          .select('*')
-          .ilike('username', uName)
-          .maybeSingle();
-
-        if (data && !sbErr) {
-          matched = data as UserProfile;
-        }
-      }
-
-      // 2. Query local profile store as fallback
-      if (!matched) {
-        const localUsers = getLocalProfiles();
-        matched = localUsers.find((u) => u.username.toLowerCase() === uName.toLowerCase()) || null;
-      }
-
-      if (!matched) {
-        throw new Error('No account found with this username. Please check your credentials or Sign Up.');
-      }
-
-      // Zero-Knowledge credential decryption: decrypt encrypted API keys locally in the browser [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
-      const derivedKey = await deriveKeyFromPassword(pwd, matched.salt || 'default_nanobot_salt');
-      const decryptedOr = await decryptText(matched.openrouter_key, derivedKey);
-      const decryptedTv = await decryptText(matched.tavily_key, derivedKey);
-      const decryptedInstructions = await decryptText(matched.ai_instructions || '', derivedKey);
-
-      matched.openrouter_key = decryptedOr;
-      matched.tavily_key = decryptedTv;
-      matched.ai_instructions = decryptedInstructions;
-
-      onSuccess(matched, pwd);
+      const { user } = await signInWithUsername(uName, pwd);
+      onSuccess(user, pwd);
       onClose();
     } catch (err: unknown) {
       const e = err as Error;
@@ -268,7 +135,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       <div className="relative w-full max-w-md bg-[#0a0a0a] border border-[#333] rounded-2xl p-6 sm:p-8 text-white shadow-2xl">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-neutral-400 hover:text-white text-xl p-1"
+          className="absolute top-4 right-4 text-neutral-400 hover:text-white text-xl p-1 cursor-pointer"
           aria-label="Close"
         >
           ✕
@@ -279,14 +146,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <h2 className="text-2xl font-bold font-serif mb-2 text-center text-white">
               Register to nanobot
             </h2>
-            {/* Updated register subtitle to 'Enter your username, password, and API keys.' [Commented by: Google AI Studio on 22/10/2026 04:48 AM] */}
             <p className="text-xs text-neutral-400 text-center mb-6">
               Enter your username, password, and API keys.
             </p>
 
             <form onSubmit={handleCreateAccount} className="space-y-4">
               <div>
-                {/* Rendered Username label with red 'Username already taken' error indicator beside it  [Commented by: Google AI Studio on 22/10/2026 04:48 AM] */}
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-xs uppercase tracking-wider text-neutral-400">
                     Username
@@ -297,7 +162,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     </span>
                   )}
                 </div>
-                {/* Updated username placeholder to 'Enter username'  [Commented by: Google AI Studio on 22/10/2026 04:48 AM] */}
                 <input
                   type="text"
                   required
@@ -306,36 +170,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     setUsername(e.target.value);
                     if (usernameTakenError) setUsernameTakenError(false);
                   }}
+                  onKeyDown={handleCredentialKeyDown}
                   placeholder="Enter username"
-                  className={`w-full bg-[#141414] border ${usernameTakenError ? 'border-red-500 focus:border-red-500' : 'border-[#333] focus:border-[#39ff14]'} rounded-xl px-4 py-2.5 text-white placeholder-neutral-500 focus:outline-none transition-colors`}
+                  className={`w-full bg-[#141414] border ${
+                    usernameTakenError
+                      ? 'border-red-500 focus:border-red-500'
+                      : 'border-[#333] focus:border-[#39ff14]'
+                  } rounded-xl px-4 py-2.5 text-white placeholder-neutral-500 focus:outline-none transition-colors select-text`}
                 />
               </div>
 
               <div>
-                {/* Rendered Password label with red 'Password already taken' error indicator beside it  [Commented by: Google AI Studio on 22/10/2026 04:48 AM] */}
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-xs uppercase tracking-wider text-neutral-400">
                     Password
                   </label>
-                  {passwordTakenError && (
-                    <span className="text-xs font-semibold text-red-500">
-                      Password already taken
-                    </span>
-                  )}
                 </div>
-                {/* Masked by default with eye visibility toggle and copy support [Commented by: Google AI Studio on 30/10/2026 10:49 AM] */}
                 <div className="relative flex items-center">
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
                     value={password}
-                    onChange={(e) => {
-                      setPassword(e.target.value);
-                      if (passwordTakenError) setPasswordTakenError(false);
-                    }}
+                    onChange={(e) => setPassword(e.target.value)}
                     onKeyDown={handleCredentialKeyDown}
-                    placeholder="Enter password"
-                    className={`w-full bg-[#141414] border ${passwordTakenError ? 'border-red-500 focus:border-red-500' : 'border-[#333] focus:border-[#39ff14]'} rounded-xl pl-4 pr-10 py-2.5 text-white placeholder-neutral-500 focus:outline-none transition-colors select-text`}
+                    placeholder="Enter password (min. 6 characters)"
+                    className="w-full bg-[#141414] border border-[#333] rounded-xl pl-4 pr-10 py-2.5 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] transition-colors select-text"
                   />
                   <button
                     type="button"
@@ -464,7 +323,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     Already have an account? <span className="underline font-medium">Sign In</span>
                   </button>
                 </div>
-                {/* Updated help text to 'Need Help with creating account? Visit here' with lowercase 'a'  [Commented by: Google AI Studio on 22/10/2026 05:36 AM] */}
                 <div>
                   <span className="text-xs text-neutral-400">
                     Need Help with creating account?{' '}
@@ -486,7 +344,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <h2 className="text-2xl font-bold font-serif mb-2 text-center text-white">
               Sign In to nanobot
             </h2>
-            {/* Updated Sign In heading text per user instruction [Commented by: Google AI Studio on 30/10/2026 10:49 AM] */}
             <p className="text-xs text-neutral-400 text-center mb-6">
               Enter your username and password
             </p>
