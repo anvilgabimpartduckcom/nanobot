@@ -967,9 +967,15 @@ export default function App() {
       return;
     }
 
-    // Determined API keys strictly from authenticated user profile, removing obsolete global env fallbacks [Commented by: Google AI Studio on 18/10/2026 12:50 PM]
+    // Determined API keys strictly from authenticated user profile, removing obsolete global env fallbacks [Commented by: Google AI Studio on 01/11/2026 04:18 PM]
     const orKey = currentUser?.openrouter_key || '';
     const tvKey = currentUser?.tavily_key || '';
+
+    if (orKey.startsWith('enc:')) {
+      alert('Your OpenRouter API Key is zero-knowledge encrypted. Please open Account Settings and enter your account password to unlock your credentials for this session.');
+      setIsSettingsOpen(true);
+      return;
+    }
 
     if (!orKey && !trimmedPrompt.startsWith('#')) {
       alert('Please Sign In or configure your OpenRouter API Key in Account Settings.');

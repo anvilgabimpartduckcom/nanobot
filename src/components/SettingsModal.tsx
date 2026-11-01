@@ -1,9 +1,9 @@
 // Created two-column SettingsModal with Account, AI Configuration, live MCP Add-ons, and About nanobot [Commented by: Google AI Studio on 31/10/2026 10:31 AM]
 
 import React, { useState, useEffect } from 'react';
-import { UserProfile, supabase, isSupabaseConfigured, getLocalProfiles, saveLocalProfiles } from '../lib/supabase';
+import { UserProfile, supabase, isSupabaseConfigured, getLocalProfiles, saveLocalProfiles, deleteUserAccountFromSupabase } from '../lib/supabase';
 import { MCP_PLUGINS, PluginDefinition } from '../lib/plugins';
-import { deriveKeyFromPassword, encryptText } from '../lib/crypto';
+import { deriveKeyFromPassword, encryptText, decryptText } from '../lib/crypto';
 import { workerClient, McpConnection, McpTool } from '../lib/workerClient';
 
 
@@ -170,46 +170,58 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   if (!isOpen) return null;
 
   // Handle Account Save
-  // Zero-knowledge encryption for updated API credentials before storing in Supabase [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
+  // Zero-knowledge encryption for updated API credentials before storing in Supabase; strictly fails closed [Commented by: Google AI Studio on 01/11/2026 04:18 PM]
   const handleSaveAccount = async () => {
     setStatusMessage(null);
     try {
-      // Saved chosen theme option to Supabase alongside other user provided data [Commented by: Google AI Studio on 20/10/2026 11:40 AM]
+      const secretToUse = password.trim() || currentPasswordSecret;
+      const hasPlaintextKeys =
+        (openrouterKey.trim() !== '' && !openrouterKey.trim().startsWith('enc:')) ||
+        (tavilyKey.trim() !== '' && !tavilyKey.trim().startsWith('enc:')) ||
+        (customInstructions.trim() !== '' && !customInstructions.trim().startsWith('enc:'));
+
+      if (hasPlaintextKeys && !secretToUse) {
+        setStatusMessage('Error: Password is required to encrypt your credentials before saving.');
+        return;
+      }
+
+      let encryptedOr = openrouterKey.trim();
+      let encryptedTv = tavilyKey.trim();
+      let encryptedInst = customInstructions.trim();
+
+      if (secretToUse) {
+        try {
+          const key = await deriveKeyFromPassword(secretToUse, user.salt || 'default_nanobot_salt');
+          if (encryptedOr && !encryptedOr.startsWith('enc:')) {
+            encryptedOr = await encryptText(encryptedOr, key, user.salt || 'salt');
+          }
+          if (encryptedTv && !encryptedTv.startsWith('enc:')) {
+            encryptedTv = await encryptText(encryptedTv, key, user.salt || 'salt');
+          }
+          if (encryptedInst && !encryptedInst.startsWith('enc:')) {
+            encryptedInst = await encryptText(encryptedInst, key, user.salt || 'salt');
+          }
+        } catch (encErr) {
+          console.error('Failed to encrypt credentials on save; failing closed:', encErr);
+          setStatusMessage('Encryption failed: Credentials could not be encrypted and were not saved.');
+          return;
+        }
+      }
+
       const updated: UserProfile = {
         ...user,
         username: username.trim(),
-        openrouter_key: openrouterKey.trim(),
-        tavily_key: tavilyKey.trim(),
+        openrouter_key: encryptedOr,
+        tavily_key: encryptedTv,
         model_training: modelTraining,
-        ai_instructions: customInstructions,
+        ai_instructions: encryptedInst,
         plugins_connected: connectedPlugins as UserProfile['plugins_connected'],
         theme: currentTheme
       };
 
-      // Update local storage
-      const profiles = getLocalProfiles();
-      const idx = profiles.findIndex((p) => p.id === user.id);
-      if (idx >= 0) profiles[idx] = updated;
-      saveLocalProfiles(profiles);
-
       // Update Supabase if configured (encrypt secrets so developer cannot see them)
       if (isSupabaseConfigured && supabase) {
-        let encryptedOr = updated.openrouter_key;
-        let encryptedTv = updated.tavily_key;
-        let encryptedInst = updated.ai_instructions;
-        if (password.trim()) {
-          try {
-            const key = await deriveKeyFromPassword(password.trim(), user.salt || 'default_nanobot_salt');
-            encryptedOr = await encryptText(updated.openrouter_key, key, user.salt || 'salt');
-            encryptedTv = await encryptText(updated.tavily_key, key, user.salt || 'salt');
-            encryptedInst = await encryptText(updated.ai_instructions || '', key, user.salt || 'salt');
-          } catch (e) {
-            console.warn('Encryption notice:', e);
-          }
-        }
-
-        // Updated profile query to use strict user.id instead of legacy email [Commented by: Google AI Studio on 01/11/2026 01:58 PM]
-        await supabase
+        const { error: updateErr } = await supabase
           .from('user_profiles')
           .update({
             username: updated.username,
@@ -217,14 +229,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             tavily_key: encryptedTv,
             model_training: updated.model_training,
             ai_instructions: encryptedInst,
-            plugins_connected: updated.plugins_connected
+            plugins_connected: updated.plugins_connected,
+            theme: currentTheme,
+            updated_at: new Date().toISOString()
           })
           .eq('id', user.id);
+
+        if (updateErr) {
+          console.error('Supabase profile update failed:', updateErr.message);
+          setStatusMessage(`Error saving to database: ${updateErr.message}`);
+          return;
+        }
       }
 
-      onUpdateUser(updated, password.trim());
+      // Update local storage
+      const profiles = getLocalProfiles();
+      const idx = profiles.findIndex((p) => p.id === user.id);
+      if (idx >= 0) profiles[idx] = updated;
+      saveLocalProfiles(profiles);
+
+      onUpdateUser(updated, secretToUse);
+      setStatusMessage('✓ Account settings saved securely.');
+      setTimeout(() => setStatusMessage(null), 3000);
     } catch (err: unknown) {
-      console.warn('Account update warning:', err);
+      const e = err as Error;
+      console.warn('Account update warning:', e);
+      setStatusMessage(`Error: ${e.message}`);
     }
   };
 
@@ -237,16 +267,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     onClose();
   };
 
-  // Handle Delete Account directly without window.confirm to ensure stability within iframe environments [Commented by: Google AI Studio on 29/10/2026 04:00 PM]
+  // Handle Delete Account safely with database cleanup [Commented by: Google AI Studio on 01/11/2026 04:18 PM]
   const handleDeleteAccount = async () => {
     try {
-      // Remove user profile from local profiles
-      const profiles = getLocalProfiles().filter((p) => p.id !== user.id);
-      saveLocalProfiles(profiles);
-
       if (isSupabaseConfigured && supabase) {
-        await supabase.from('user_profiles').delete().eq('id', user.id);
-        await supabase.auth.signOut().catch(() => {});
+        await deleteUserAccountFromSupabase(user.id);
+      } else {
+        const profiles = getLocalProfiles().filter((p) => p.id !== user.id);
+        saveLocalProfiles(profiles);
       }
 
       onDeleteAccount();
@@ -659,6 +687,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </button>
                 </div>
               </div>
+
+              {((openrouterKey && openrouterKey.startsWith('enc:')) || (tavilyKey && tavilyKey.startsWith('enc:'))) && (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 flex items-start gap-2">
+                  <span className="text-base leading-none">🔒</span>
+                  <div>
+                    <p className="font-semibold">Session Restored: Credentials Encrypted</p>
+                    <p className="text-amber-200/80 mt-0.5">
+                      Your API keys are zero-knowledge encrypted. Enter your account password above to unlock or update credentials for this session.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className={`block text-xs uppercase tracking-wider mb-1 ${

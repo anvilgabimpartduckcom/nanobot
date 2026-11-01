@@ -89,7 +89,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         return;
       }
 
-      const { user } = await signUpWithUsername(uName, pwd, orKey, tvKey);
+      const { user, session } = await signUpWithUsername(uName, pwd, orKey, tvKey);
+      if (!session) {
+        throw new Error('Unable to establish an authenticated session. Please check Supabase Auth settings.');
+      }
       onSuccess(user, pwd);
       onClose();
     } catch (err: unknown) {
@@ -104,7 +107,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  // Sign In Handler: Username + Password via genuine Supabase Auth session [Commented by: Google AI Studio on 01/11/2026 01:55 PM]
+  // Sign In Handler: Username + Password via genuine Supabase Auth session [Commented by: Google AI Studio on 01/11/2026 04:18 PM]
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -119,7 +122,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     setLoading(true);
     try {
-      const { user } = await signInWithUsername(uName, pwd);
+      const { user, session } = await signInWithUsername(uName, pwd);
+      if (!session) {
+        throw new Error('No authenticated session was established.');
+      }
       onSuccess(user, pwd);
       onClose();
     } catch (err: unknown) {

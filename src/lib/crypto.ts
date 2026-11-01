@@ -117,28 +117,31 @@ export async function decryptData(ciphertextBase64: string, ivBase64: string, ke
   }
 }
 
-// Helper functions for zero-knowledge transparent string encryption and decryption [Commented by: Google AI Studio on 01/11/2026 02:20 PM]
+// Helper functions for zero-knowledge transparent string encryption and decryption [Commented by: Google AI Studio on 01/11/2026 04:18 PM]
 export async function encryptText(text: string, key: CryptoKey, salt: string): Promise<string> {
   if (!text) return text;
+  if (!key) {
+    throw new Error('Encryption failed closed: Missing cryptographic key.');
+  }
   try {
     const enc = await encryptData(text, key, salt);
     return `enc:${enc.iv}:${enc.ciphertext}`;
-  } catch (err) {
-    console.warn('Failed to encrypt text field:', err);
-    return text;
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`Encryption failed closed: ${message}`);
   }
 }
 
 export async function decryptText(encryptedText: string, key: CryptoKey): Promise<string> {
   if (!encryptedText || !encryptedText.startsWith('enc:')) return encryptedText;
-  try {
-    const parts = encryptedText.split(':');
-    if (parts.length < 3) return encryptedText;
-    const iv = parts[1];
-    const ciphertext = parts.slice(2).join(':');
-    return await decryptData(ciphertext, iv, key);
-  } catch (err) {
-    console.warn('Failed to decrypt text field:', err);
-    return encryptedText;
+  if (!key) {
+    throw new Error('Decryption failed closed: Missing cryptographic key.');
   }
+  const parts = encryptedText.split(':');
+  if (parts.length < 3) {
+    throw new Error('Decryption failed closed: Malformed encrypted token format.');
+  }
+  const iv = parts[1];
+  const ciphertext = parts.slice(2).join(':');
+  return await decryptData(ciphertext, iv, key);
 }

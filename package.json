@@ -8,7 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test:auth": "tsx scripts/verify_auth_and_database.ts",
+    "test:mcp": "tsx scripts/verify_mcp_backend.ts"
   },
   "dependencies": {
     "@google/genai": "^2.32.0",

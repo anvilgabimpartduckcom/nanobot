@@ -63,10 +63,20 @@ export interface FileCodeOutput {
   updated_at?: string;
 }
 
-// Standardized internal auth identifier generator for Supabase Auth [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
+// Standardized internal auth identifier generator for Supabase Auth with normalization and collision prevention [Commented by: Google AI Studio on 01/11/2026 04:18 PM]
 export function formatAuthEmail(username: string): string {
   const sanitized = username.trim().toLowerCase().replace(/[^a-z0-9_.-]/g, '');
   return `${sanitized || 'user'}@nanobot.auth.internal`;
+}
+
+export function validateUsername(username: string): { valid: boolean; error?: string } {
+  const trimmed = username.trim();
+  if (!trimmed) return { valid: false, error: 'Username cannot be blank.' };
+  if (trimmed.length < 2 || trimmed.length > 32) return { valid: false, error: 'Username must be between 2 and 32 characters.' };
+  if (!/^[a-zA-Z0-9_.-]+$/.test(trimmed)) {
+    return { valid: false, error: 'Username can only contain letters, numbers, underscores, hyphens, and periods.' };
+  }
+  return { valid: true };
 }
 
 // Check live Supabase connection status
@@ -133,13 +143,13 @@ export function saveLocalProfiles(profiles: UserProfile[]) {
   }
 }
 
-// Genuine Supabase Auth Sign Up creating an authentic Supabase Auth session and encrypted profile [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
+// Genuine Supabase Auth Sign Up creating an authentic Supabase Auth session and encrypted profile [Commented by: Google AI Studio on 01/11/2026 04:18 PM]
 export async function signUpWithUsername(
   username: string,
   password: string,
   openrouterKey: string,
   tavilyKey: string
-): Promise<{ user: UserProfile; session: Session | null }> {
+): Promise<{ user: UserProfile; session: Session }> {
   const uName = username.trim();
   const pwd = password.trim();
   const orKey = openrouterKey.trim();
@@ -147,6 +157,15 @@ export async function signUpWithUsername(
 
   if (!uName || !pwd || !orKey || !tvKey) {
     throw new Error('All fields (Username, Password, OpenRouter Key, Tavily Key) are mandatory.');
+  }
+
+  const validation = validateUsername(uName);
+  if (!validation.valid) {
+    throw new Error(validation.error || 'Invalid username.');
+  }
+
+  if (pwd.length < 6) {
+    throw new Error('Password must be at least 6 characters long.');
   }
 
   if (!supabase) {
@@ -176,7 +195,7 @@ export async function signUpWithUsername(
     throw new Error('Supabase Auth did not return a valid user identity.');
   }
 
-  // Auto sign in if session is not immediately provided (e.g. if email confirmation is turned off in project)
+  // Establish authentic session
   let session = authData.session;
   if (!session) {
     const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
@@ -188,7 +207,14 @@ export async function signUpWithUsername(
     }
   }
 
-  // 2. Generate zero-knowledge encryption salt & encrypt sensitive API keys
+  // Require a valid session; fail closed if email confirmation is enabled in project [Commented by: Google AI Studio on 01/11/2026 04:18 PM]
+  if (!session) {
+    throw new Error(
+      'Signup requires email confirmation in your Supabase project settings. For username-based authentication, please disable "Confirm email" in Supabase Auth > Providers > Email.'
+    );
+  }
+
+  // 2. Generate zero-knowledge encryption salt & encrypt sensitive API keys (fails closed if key derivation or encryption errors)
   const salt = generateSalt();
   const cryptoKey = await deriveKeyFromPassword(pwd, salt);
   const encryptedOpenRouter = await encryptText(orKey, cryptoKey, salt);
@@ -208,7 +234,7 @@ export async function signUpWithUsername(
     slack: false,
   };
 
-  // 3. Persist profile record strictly tied to authUser.id (without email column) [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
+  // 3. Persist profile record strictly tied to authUser.id with valid session (without email column) [Commented by: Google AI Studio on 01/11/2026 04:18 PM]
   const { error: profileErr } = await supabase.from('user_profiles').insert([
     {
       id: authUser.id,
@@ -403,7 +429,7 @@ export async function signOutSupabase(): Promise<void> {
   }
 }
 
-// Update profile in Supabase using strict auth.uid() = id isolation [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
+// Update profile in Supabase using strict auth.uid() = id isolation and fail-closed encryption [Commented by: Google AI Studio on 01/11/2026 04:18 PM]
 export async function updateUserProfileInSupabase(
   userId: string,
   updatedFields: {
@@ -424,10 +450,25 @@ export async function updateUserProfileInSupabase(
     updated_at: new Date().toISOString(),
   };
 
-  if (updatedFields.username !== undefined) payload.username = updatedFields.username;
+  if (updatedFields.username !== undefined) {
+    const val = validateUsername(updatedFields.username);
+    if (!val.valid) throw new Error(val.error || 'Invalid username');
+    payload.username = updatedFields.username.trim();
+  }
   if (updatedFields.model_training !== undefined) payload.model_training = updatedFields.model_training;
   if (updatedFields.plugins_connected !== undefined) payload.plugins_connected = updatedFields.plugins_connected;
   if (updatedFields.theme !== undefined) payload.theme = updatedFields.theme;
+
+  const hasKeyUpdate =
+    (updatedFields.openrouter_key !== undefined && !updatedFields.openrouter_key.startsWith('enc:')) ||
+    (updatedFields.tavily_key !== undefined && !updatedFields.tavily_key.startsWith('enc:')) ||
+    (updatedFields.ai_instructions !== undefined && !updatedFields.ai_instructions.startsWith('enc:') && updatedFields.ai_instructions.trim() !== '');
+
+  if (hasKeyUpdate) {
+    if (!passwordSecret || !salt) {
+      throw new Error('Encryption failed closed: Cannot persist sensitive credentials without encryption password.');
+    }
+  }
 
   if (passwordSecret && salt) {
     try {
@@ -439,10 +480,11 @@ export async function updateUserProfileInSupabase(
         payload.tavily_key = await encryptText(updatedFields.tavily_key, key, salt);
       }
       if (updatedFields.ai_instructions !== undefined) {
-        payload.ai_instructions = await encryptText(updatedFields.ai_instructions, key, salt);
+        payload.ai_instructions = updatedFields.ai_instructions ? await encryptText(updatedFields.ai_instructions, key, salt) : '';
       }
     } catch (encErr) {
-      console.warn('Credential encryption error during profile update:', encErr);
+      console.error('Credential encryption error during profile update; failing closed:', encErr);
+      throw encErr;
     }
   }
 
@@ -463,15 +505,28 @@ export async function updateUserProfileInSupabase(
   }
 }
 
-// Delete user account profile from Supabase [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
+// Delete user account and dependent records safely from Supabase [Commented by: Google AI Studio on 01/11/2026 04:18 PM]
 export async function deleteUserAccountFromSupabase(userId: string): Promise<boolean> {
   if (!supabase) return false;
 
   try {
-    const { error } = await supabase.from('user_profiles').delete().eq('id', userId);
-    if (error) {
-      console.warn('Delete profile error:', error.message);
+    // 1. Attempt database-level atomic deletion RPC
+    const { error: rpcErr } = await supabase.rpc('delete_user_account');
+    if (rpcErr) {
+      console.warn('delete_user_account RPC notice, running cascading delete:', rpcErr.message);
+      // Fallback: delete dependent records directly under user RLS
+      await supabase.from('file_code_outputs').delete().eq('user_id', userId);
+      await supabase.from('messages').delete().eq('user_id', userId);
+      await supabase.from('conversations').delete().eq('user_id', userId);
+      await supabase.from('user_profiles').delete().eq('id', userId);
     }
+
+    // 2. Clear local storage caches for this user
+    localStorage.removeItem(`nanobot_encrypted_chats_${userId}`);
+    const localUsers = getLocalProfiles().filter((u) => u.id !== userId);
+    saveLocalProfiles(localUsers);
+
+    // 3. Sign out of Supabase Auth
     await supabase.auth.signOut().catch(() => {});
     return true;
   } catch (err) {
@@ -576,7 +631,7 @@ export async function fetchRemoteConversationsFromSupabase(
   }
 }
 
-// Persist or update a conversation in Supabase [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
+// Persist or update a conversation atomically in Supabase [Commented by: Google AI Studio on 01/11/2026 04:18 PM]
 export async function persistConversationToSupabase(
   userId: string,
   chat: {
@@ -586,18 +641,66 @@ export async function persistConversationToSupabase(
     updated: number;
     shareId?: string;
     messages: Array<{
+      id?: string;
       role: 'user' | 'ai';
       content: string | unknown;
       sources?: Array<{ title: string; url: string }>;
       reasoning?: string;
       displayAttachments?: Array<{ type: string; name: string; fileId?: string; isLocalMissing?: boolean }>;
+      created_at?: string;
     }>;
   }
 ): Promise<boolean> {
   if (!supabase) return false;
 
   try {
-    // 1. Upsert conversation record
+    const msgRows = (chat.messages || []).map((m: any) => {
+      let textContent = '';
+      if (typeof m.content === 'string') {
+        textContent = m.content;
+      } else if (Array.isArray(m.content)) {
+        textContent = (m.content as any[])
+          .map((c) => (c.type === 'text' ? c.text : ''))
+          .filter(Boolean)
+          .join('\n');
+      } else {
+        textContent = JSON.stringify(m.content);
+      }
+
+      return {
+        id: m.id || undefined,
+        conversation_id: chat.id,
+        user_id: userId,
+        role: m.role,
+        content: textContent,
+        sources_json: Array.isArray(m.sources) ? m.sources : [],
+        reasoning: m.reasoning || '',
+        display_attachments_json: Array.isArray(m.displayAttachments) ? m.displayAttachments : [],
+        created_at: m.created_at || new Date().toISOString(),
+      };
+    });
+
+    const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(chat.id);
+    if (isUuid) {
+      const { data: rpcData, error: rpcErr } = await supabase.rpc('save_conversation_and_messages', {
+        p_conversation_id: chat.id,
+        p_title: chat.title || 'New Noodle',
+        p_pinned: Boolean(chat.pinned),
+        p_share_id: chat.shareId || null,
+        p_updated_at: new Date(chat.updated || Date.now()).toISOString(),
+        p_messages: msgRows,
+      });
+
+      if (!rpcErr && rpcData?.success) {
+        return true;
+      }
+      if (rpcErr && rpcErr.code !== 'PGRST202' && !rpcErr.message.includes('function') && !rpcErr.message.includes('not found')) {
+        console.error('save_conversation_and_messages RPC error:', rpcErr.message);
+        return false;
+      }
+    }
+
+    // Safe fallback sequence: upsert conversation, and only delete/insert messages if upsert succeeds [Commented by: Google AI Studio on 01/11/2026 04:18 PM]
     const { error: convErr } = await supabase.from('conversations').upsert(
       [
         {
@@ -613,52 +716,39 @@ export async function persistConversationToSupabase(
     );
 
     if (convErr) {
-      console.warn('Supabase conversation upsert notice:', convErr.message);
+      console.error('Supabase conversation upsert failed; aborting message persistence:', convErr.message);
       return false;
     }
 
-    // 2. Replace messages for this conversation
-    await supabase.from('messages').delete().eq('conversation_id', chat.id);
+    if (msgRows.length > 0) {
+      const { error: delErr } = await supabase
+        .from('messages')
+        .delete()
+        .eq('conversation_id', chat.id)
+        .eq('user_id', userId);
 
-    if (chat.messages && chat.messages.length > 0) {
-      const msgRows = chat.messages.map((m) => {
-        let textContent = '';
-        if (typeof m.content === 'string') {
-          textContent = m.content;
-        } else if (Array.isArray(m.content)) {
-          textContent = (m.content as any[])
-            .map((c) => (c.type === 'text' ? c.text : ''))
-            .filter(Boolean)
-            .join('\n');
-        } else {
-          textContent = JSON.stringify(m.content);
-        }
-
-        return {
-          conversation_id: chat.id,
-          user_id: userId,
-          role: m.role,
-          content: textContent,
-          sources_json: Array.isArray(m.sources) ? m.sources : [],
-          reasoning: m.reasoning || '',
-          display_attachments_json: Array.isArray(m.displayAttachments) ? m.displayAttachments : [],
-        };
-      });
+      if (delErr) {
+        console.error('Failed to clear old messages before replacement:', delErr.message);
+        return false;
+      }
 
       const { error: msgErr } = await supabase.from('messages').insert(msgRows);
       if (msgErr) {
-        console.warn('Supabase messages insert notice:', msgErr.message);
+        console.error('Supabase messages insert failed:', msgErr.message);
+        return false;
       }
+    } else {
+      await supabase.from('messages').delete().eq('conversation_id', chat.id).eq('user_id', userId);
     }
 
     return true;
   } catch (err) {
-    console.warn('Supabase conversation persistence exception:', err);
+    console.error('Supabase conversation persistence exception:', err);
     return false;
   }
 }
 
-// Delete a conversation and its messages from Supabase [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
+// Delete a conversation and its messages from Supabase [Commented by: Google AI Studio on 01/11/2026 04:18 PM]
 export async function deleteConversationFromSupabase(userId: string, conversationId: string): Promise<boolean> {
   if (!supabase) return false;
 
@@ -680,7 +770,7 @@ export async function deleteConversationFromSupabase(userId: string, conversatio
   }
 }
 
-// Safe migration of existing local chats to authoritative Supabase store [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
+// Safe migration of existing local chats to authoritative Supabase store [Commented by: Google AI Studio on 01/11/2026 04:18 PM]
 export async function migrateLocalChatsToSupabase(userId: string, key?: CryptoKey | null): Promise<void> {
   if (!supabase) return;
 
@@ -716,23 +806,39 @@ export async function migrateLocalChatsToSupabase(userId: string, key?: CryptoKe
 
     if (localChats.length === 0) return;
 
-    // Check existing remote count
-    const { count } = await supabase
+    // Check existing remote count distinguishing failure from empty DB [Commented by: Google AI Studio on 01/11/2026 04:18 PM]
+    const { count, error: countErr } = await supabase
       .from('conversations')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId);
 
-    // If Supabase already has conversations, avoid overwriting blindly
-    if (count && count > 0) {
+    if (countErr) {
+      console.warn('Migration aborted: Unable to verify remote state due to query error:', countErr.message);
       return;
     }
 
-    // Upload local chats to Supabase
-    for (const chat of localChats) {
-      await persistConversationToSupabase(userId, chat);
+    // If Supabase already has conversations, avoid overwriting blindly
+    if (typeof count === 'number' && count > 0) {
+      return;
     }
 
-    console.info(`Successfully migrated ${localChats.length} local conversations to Supabase.`);
+    // Upload local chats to Supabase with error verification
+    let allSucceeded = true;
+    for (const chat of localChats) {
+      const ok = await persistConversationToSupabase(userId, chat);
+      if (!ok) {
+        allSucceeded = false;
+        console.warn(`Failed to persist chat "${chat.id}" during migration`);
+      }
+    }
+
+    if (allSucceeded) {
+      // Safely clear legacy unencrypted chats only after remote verification succeeds
+      localStorage.removeItem('nanobot_chats');
+      console.info(`Successfully migrated ${localChats.length} local conversations to Supabase.`);
+    } else {
+      console.warn('Migration was partially incomplete; preserving local records for safe retry.');
+    }
   } catch (err) {
     console.warn('Migration to Supabase notice:', err);
   }
