@@ -1,151 +1,286 @@
-SOURCE AVAILABLE BUT NOT FOR SALE LICENSE (SABNFS LICENSE)
+SOURCE AVAILABLE BUT NOT FOR SALE LICENSE
+(SABNFS LICENSE)
 
-Copyright (c) 2026 anvilgabimpartduckcom (Owner of this repository)
-
-All rights are reserved unless this License specifically allows something.
+Copyright © 2026 Sonic (anvilgabimpartduckcom).
+All rights reserved.
 
 1. DEFINITIONS
 
-For this License:
+1.1. "Licensor" means Sonic (anvilgabimpartduckcom), the copyright holder of the Work.
 
-1.1. "Licensor" means anvilgabimpartduckcom, the owner of the original code covered by this License.
+1.2. "Work" means any code-based or code-assisted project, product, or creation made available by the Licensor. This includes, but is not limited to, software, applications, programs, scripts, websites, web applications, games, libraries, frameworks, APIs, operating systems, firmware, automation tools, AI-powered applications, digital products, and other works created wholly or partly using code.
 
-1.2. "Code" means the source code and related code files covered by this License.
+1.3. "Source Materials" means human-readable source code and related materials associated with the Work, including configuration files, scripts, project files, documentation, schemas, and other materials provided by the Licensor.
 
-1.3. "Original Code" means the code as it was originally published by the Licensor.
+1.4. "Modified Work" means the Work, or any portion of it, that has been changed, adapted, translated, extended, or otherwise modified.
 
-1.4. "Modified Code" means any version of the code that someone has changed.
+1.5. "Executable Form" means a compiled, built, packaged, or otherwise executable version of the Work.
 
-1.5. "You" means any person or organization using the Code under this License.
+1.6. "Associated Materials" means documentation, assets, configuration files, designs, and other materials distributed with or as part of the Work.
 
-1.6. "Commercial Use" means using the Code to make money, earn revenue, gain a commercial benefit, or support a business.
+1.7. "Commercial Use" means using the Work, or any part of it, for business, commercial, revenue-generating, or monetary-benefit purposes.
 
-1.7. "Distribution" means sharing, publishing, transferring, or making the Code or Modified Code available to other people or organizations.
+1.8. "Distribution" means publishing, sharing, transferring, uploading, sublicensing, hosting, or otherwise making the Work or a Modified Work available to another person or entity.
 
-2. OWNERSHIP
+1.9. "Private Copy" means a copy of the Work or a Modified Work that You make and keep solely for Your own private, personal, and non-commercial use, on devices or storage accounts under Your control, without making that copy accessible to other people.
 
-2.1. The Licensor remains the owner of the Original Code.
+1.10. "You" means any individual or legal entity exercising permissions under this License.
 
-2.2. This License does not transfer ownership of the Original Code to You.
+1.11. "Written Permission" means explicit permission granted in a written form by the Licensor, including email or another recorded written communication.
 
-2.3. Contributors keep the copyright to their own original contributions unless they agree otherwise in writing. Their contributions must still follow this License.
+2. OWNERSHIP AND COPYRIGHT
 
-3. WHAT YOU ARE ALLOWED TO DO
+2.1. The Work and all associated intellectual property rights remain the property of the Licensor or their respective rights holders.
 
-As long as You follow this License, You may:
+2.2. This License does not transfer ownership of the Work to You.
 
-- Read and inspect the Code.
-- Study the Code to understand how it works.
-- Modify the Code for Your own private, non-commercial use.
-- Run and test the Code for Your own private, non-commercial use.
-- Learn from the Code's design and implementation.
+2.3. You acknowledge that the Work is protected by applicable copyright and intellectual property laws.
 
-These permissions do not allow You to sell, use commercially, or share the Code or Modified Code without the Licensor's written permission.
+3. PERMISSIONS GRANTED
 
-4. YOU MAY NOT SELL THE CODE
+3.1. Subject to all the terms and restrictions of this License, the Licensor grants You a limited, non-exclusive, non-transferable, non-sublicensable, terminable permission to:
 
-4.1. You may not sell the Original Code or any Modified Code.
+3.1.1. Access and inspect the Source Materials.
 
-4.2. You may not charge people for access to, copies of, or distribution of the Code or Modified Code.
+3.1.2. Study and learn from the Work.
 
-4.3. You may not include the Code or Modified Code in a product that You sell.
+3.1.3. Download and keep Private Copies of the Work.
 
-4.4. These restrictions apply whether You sell the Code by itself, combine it with other materials, or include it in another product.
+3.1.4. Execute and run the Work for private, personal, and non-commercial purposes.
 
-5. COMMERCIAL USE IS NOT ALLOWED
+3.1.5. Test and experiment with the Work for private, personal, and non-commercial purposes.
 
-5.1. You may not use the Code or Modified Code for business or other commercial purposes without the Licensor's written permission.
+3.1.6. Modify the Work for private, personal, and non-commercial purposes.
 
-5.2. You may not use the Code or Modified Code to provide paid services or run a business without the Licensor's written permission.
+3.2. These permissions do not include the right to sell, commercially use, publish, share, distribute, or sublicense the Work or any Modified Work.
 
-5.3. You may not include the Code or Modified Code in a commercial product or service without the Licensor's written permission.
+4. NO SELLING OR RESALE
 
-6. YOU MAY NOT SHARE THE CODE WITHOUT PERMISSION
+4.1. You may not sell, resell, rent, lease, license, sublicense, or otherwise exchange the Work or any part of it for money or other commercial consideration without Written Permission from the Licensor.
 
-6.1. You may not share, publish, sublicense, or distribute the Original Code or Modified Code without the Licensor's written permission.
+4.2. This restriction applies to:
 
-6.2. You may not upload the Code or Modified Code to another repository, website, platform, or public archive without the Licensor's written permission.
+4.2.1. Original versions of the Work.
 
-6.3. You may not give away or redistribute the Code or Modified Code, even for free, without the Licensor's written permission.
+4.2.2. Modified versions of the Work.
 
-7. CHANGING THE CODE
+4.2.3. Source Materials.
 
-7.1. You may change the Code for Your own private, non-commercial use, as long as You follow this License.
+4.2.4. Executable Forms.
 
-7.2. You may not publish or share Your changes with other people without the Licensor's written permission.
+4.2.5. Republished or repackaged versions.
 
-7.3. If the Licensor gives You permission to publish or share Modified Code, You must keep this License and the relevant copyright notices with it.
+4.2.6. Products substantially based on the Work.
 
-7.4. Changing the Code does not make You the owner of the Original Code.
+5. NO COMMERCIAL USE
 
-8. GITHUB FORKS AND OTHER REPOSITORIES
+5.1. You may not use the Work or any Modified Work for Commercial Use without Written Permission from the Licensor.
 
-8.1. You may not create or publish a fork of the repository containing the Code without the Licensor's written permission.
+5.2. Commercial Use includes, but is not limited to:
 
-8.2. You may not copy the Code into another public or private repository for sharing or collaborative development without the Licensor's written permission.
+5.2.1. Using the Work in a commercial product or service.
 
-8.3. Any permission to create a fork or copy the repository must be given in writing by the Licensor.
+5.2.2. Using the Work to provide paid services.
 
-9. CREDIT AND COPYRIGHT NOTICES
+5.2.3. Incorporating the Work into a product or service that generates revenue.
 
-9.1. You must keep the existing copyright notices, license notices, and credit statements in any copy of the Code that You are allowed to use.
+5.2.4. Using the Work in a business or commercial organization.
 
-9.2. If You receive permission to publish or distribute Modified Code, You must identify the original copyright holder and state that You changed the Code, if You did.
+5.2.5. Monetizing the Work through advertisements, subscriptions, paid access, or other revenue-generating methods.
 
-9.3. You may not remove or change copyright notices in a way that falsely suggests You own the Original Code.
+5.3. Private, personal, and non-commercial use remains permitted under this License.
+
+6. NO UNAUTHORIZED DISTRIBUTION
+
+6.1. You may not distribute, publish, upload, mirror, share, transfer, or otherwise make the Work or any Modified Work available to another person or entity without Written Permission from the Licensor.
+
+6.2. This restriction applies to both public and private distribution, including:
+
+6.2.1. Public or private code repositories.
+
+6.2.2. Code-hosting platforms.
+
+6.2.3. File-sharing websites.
+
+6.2.4. Package registries.
+
+6.2.5. Software marketplaces.
+
+6.2.6. Websites and online services.
+
+6.2.7. Cloud storage or shared storage accounts.
+
+6.2.8. Messaging platforms and file-transfer services.
+
+6.3. Making the Work available to another person through a private link, invitation, shared account, or restricted-access repository also counts as Distribution.
+
+6.4. The fact that the Licensor makes the Work publicly accessible through an official website or repository does not grant You permission to redistribute it.
+
+6.5. Section 3 permits You to make and keep Private Copies for Your own use. Such copies do not grant You permission to share or distribute the Work.
+
+6.6. Distribution is prohibited unless the Licensor grants Written Permission, except where applicable law independently grants You a right that cannot legally be restricted by this License.
+
+7. MODIFICATIONS AND DERIVATIVE WORKS
+
+7.1. You may modify the Work for private, personal, and non-commercial purposes.
+
+7.2. However:
+
+7.2.1. You may not sell or commercially use a Modified Work without Written Permission.
+
+7.2.2. You may not distribute or publish a Modified Work without Written Permission.
+
+7.2.3. You may not claim ownership of the original Work.
+
+7.2.4. You must preserve applicable copyright and license notices.
+
+7.2.5. Modifications containing or derived from material covered by this License remain subject to this License.
+
+7.3. Nothing in this section transfers ownership of independently created material to the Licensor.
+
+8. PRIVATE COPIES, FORKS, AND REPOSITORIES
+
+8.1. You may create and maintain Private Copies of the Work for Your own private, personal, and non-commercial use.
+
+8.2. Permitted Private Copies include:
+
+8.2.1. Copies downloaded to Your personal computer.
+
+8.2.2. Copies stored on Your personal devices.
+
+8.2.3. Copies kept in local folders or local development environments.
+
+8.2.4. Private backup copies stored in storage accounts that only You can access.
+
+8.2.5. Private working copies used for studying, testing, experimenting with, or modifying the Work.
+
+8.3. You may create a local working copy or local development branch for Your own use, provided that it is not shared with another person.
+
+8.4. A copy is not considered private if another person can access, download, view, or obtain it through a shared repository, shared storage account, public link, or other distribution method.
+
+8.5. You may not create, publish, maintain, or distribute a public or private hosted repository containing the Work or a Modified Work if that repository makes the material accessible to another person, unless You have Written Permission.
+
+8.6. You may not use Private Copies as a way to bypass the Distribution restrictions in this License.
+
+9. COPYRIGHT NOTICES AND ATTRIBUTION
+
+9.1. You must not remove, alter, hide, or misrepresent copyright notices, license notices, authorship information, or other ownership notices included with the Work.
+
+9.2. When using the Work in a manner permitted by this License, You must retain the original copyright and license notices in the relevant Source Materials.
+
+9.3. You may not claim that You are the original author or copyright holder of the Work.
 
 10. CONTRIBUTIONS
 
-10.1. Unless agreed otherwise in writing, each contributor keeps the copyright to their own original contributions.
+10.1. If You submit modifications, patches, improvements, or other contributions to the Licensor, You retain ownership of the original material that You independently created, unless You separately agree otherwise in writing.
 
-10.2. Contributions added to the project must follow this License unless a separate written agreement says otherwise.
+10.2. By voluntarily submitting a contribution for inclusion in the Work, You grant the Licensor permission to use, reproduce, modify, distribute, and incorporate that contribution into the Work.
 
-10.3. Contributing to the project does not make someone the owner of the Original Code.
+10.3. This permission does not automatically transfer ownership of Your contribution to the Licensor.
+
+10.4. Contributions incorporated into the Work remain subject to any applicable terms agreed upon between the contributor and the Licensor.
 
 11. LIMITED PATENT PERMISSION
 
-11.1. If the Licensor owns patent rights that are necessarily affected by the activities this License allows, the Licensor grants You limited permission to use those patent rights only for activities allowed by this License. This permission is non-exclusive, cannot be transferred to someone else, and does not require royalty payments.
+11.1. To the extent that the Licensor has patent rights that necessarily apply to the Work, the Licensor grants You a limited, non-exclusive, non-transferable, non-sublicensable patent license solely for activities expressly permitted by this License.
 
-11.2. This permission does not allow You to do anything that this License prohibits.
+11.2. This permission does not authorize Commercial Use or Distribution prohibited by this License.
 
-11.3. The Licensor does not grant patent rights that they do not own or control.
+11.3. No other patent rights are granted or implied.
 
-12. THIRD-PARTY SOFTWARE
+12. THIRD-PARTY MATERIALS AND DEPENDENCIES
 
-12.1. The Code may include or depend on software, libraries, tools, or other components made by other people or organizations.
+12.1. The Work may contain, use, or depend on third-party software, libraries, frameworks, assets, services, or other materials.
 
-12.2. Those third-party components remain subject to their own licenses and terms.
+12.2. Such third-party materials are not automatically governed by this License.
 
-12.3. This License does not replace or override the licenses that apply to third-party components.
+12.3. They remain subject to their own applicable licenses, terms, and conditions.
 
-13. NO OTHER PERMISSIONS
+12.4. You are responsible for complying with the applicable terms governing third-party materials.
 
-13.1. You only have the permissions specifically granted by this License. No other permissions are granted automatically or implied.
+12.5. Nothing in this License removes or overrides rights granted by the owners of third-party materials.
 
-13.2. Without the Licensor's written permission, You may not sell, use commercially, redistribute, sublicense, or publicly publish the Code or Modified Code.
+13. NO IMPLIED RIGHTS
 
-14. ENDING YOUR PERMISSION TO USE THE CODE
+13.1. No rights are granted to You except those expressly stated in this License.
 
-14.1. If You seriously violate this License, Your permissions under this License end automatically.
+13.2. In particular, this License does not grant You permission to:
 
-14.2. If Your permissions end, You must stop using the permissions granted by this License.
+13.2.1. Sell the Work.
 
-14.3. Ending Your permissions does not remove responsibilities or rights that arose before termination, or provisions that are meant to continue afterward.
+13.2.2. Use the Work commercially.
 
-15. NO WARRANTY
+13.2.3. Distribute the Work publicly or privately.
 
-THE CODE IS PROVIDED "AS IS". THE LICENSOR DOES NOT MAKE ANY PROMISES OR WARRANTIES ABOUT THE CODE, INCLUDING WHETHER IT WILL WORK PROPERLY, BE SUITABLE FOR YOUR NEEDS, BE SECURE, OR AVOID INFRINGING SOMEONE ELSE'S RIGHTS.
+13.2.4. Publish forks or Modified Works.
 
-16. LIMITATION OF LIABILITY
+13.2.5. Sublicense the Work.
 
-TO THE MAXIMUM EXTENT ALLOWED BY LAW, THE LICENSOR IS NOT RESPONSIBLE FOR CLAIMS, DAMAGES, OR OTHER LIABILITY ARISING FROM THE CODE OR YOUR USE OF IT.
+13.2.6. Claim ownership of the Work.
 
-17. CHANGES TO THIS LICENSE
+13.2.7. Use the Licensor's name or branding in a way that implies endorsement.
 
-17.1. The Licensor may publish new versions of this License.
+13.3. Any permission not expressly granted by this License requires Written Permission from the Licensor, except where applicable law independently grants a right that cannot legally be restricted.
 
-17.2. Unless a new version specifically says otherwise, each version of the Code remains covered by the license that came with it.
+14. WRITTEN PERMISSION AND EXCEPTIONS
 
-18. FINAL TERMS
+14.1. The Licensor may grant Written Permission for activities that are otherwise restricted by this License.
 
-This License explains the rules for using the Code. Any exception to these rules must be approved in writing by the Licensor.
+14.2. Any such permission must clearly identify the activity, material, purpose, and scope being authorized.
+
+14.3. Written Permission only overrides the restrictions that it expressly identifies. All other terms and restrictions of this License remain in effect.
+
+14.4. Permission to distribute one version of the Work does not automatically grant permission to distribute other versions, Modified Works, or unrelated projects.
+
+14.5. Permission to distribute the Work does not automatically grant permission to sell it or use it commercially.
+
+14.6. No permission should be assumed from silence, public availability, or informal statements that do not clearly authorize the relevant activity.
+
+15. TERMINATION
+
+15.1. This License automatically terminates if You materially or seriously violate any of its terms.
+
+15.2. Upon termination, You must stop exercising the permissions granted by this License, including accessing, using, modifying, and executing the Work, except where applicable law provides otherwise.
+
+15.3. You must also stop any unauthorized Distribution of the Work or Modified Works.
+
+15.4. Termination does not remove any legal rights or remedies that the Licensor may have under applicable law.
+
+15.5. The Licensor may restore permission through Written Permission.
+
+16. NO WARRANTY
+
+16.1. THE WORK IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTIES OF ANY KIND, WHETHER EXPRESS, IMPLIED, OR STATUTORY.
+
+16.2. TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE LICENSOR DISCLAIMS ALL WARRANTIES, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT.
+
+16.3. THE LICENSOR DOES NOT GUARANTEE THAT THE WORK WILL BE ERROR-FREE, SECURE, AVAILABLE, OR SUITABLE FOR ANY PARTICULAR PURPOSE.
+
+17. LIMITATION OF LIABILITY
+
+17.1. TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE LICENSOR SHALL NOT BE LIABLE FOR ANY DAMAGES ARISING FROM OR RELATED TO THE USE OR INABILITY TO USE THE WORK.
+
+17.2. THIS INCLUDES DIRECT, INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR OTHER DAMAGES, EVEN IF THE LICENSOR HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+17.3. NOTHING IN THIS SECTION EXCLUDES LIABILITY THAT CANNOT LEGALLY BE EXCLUDED OR LIMITED UNDER APPLICABLE LAW.
+
+18. CHANGES AND VERSIONS
+
+18.1. The Licensor may publish updated versions of this License.
+
+18.2. Unless expressly stated otherwise in writing, a new version of this License does not automatically change the terms governing versions of the Work released under an earlier version.
+
+18.3. Each release of the Work may identify the specific terms of this License that apply to it.
+
+19. FINAL TERMS
+
+19.1. If any provision of this License is found to be invalid or unenforceable, the remaining provisions will continue to apply to the extent permitted by applicable law.
+
+19.2. A failure by the Licensor to enforce any provision does not constitute a permanent waiver of that provision.
+
+19.3. This License constitutes the terms governing Your use of the Work, subject to any separate written agreement between You and the Licensor.
+
+19.4. By accessing, using, modifying, or otherwise exercising permissions under this License, You acknowledge that You have read and agree to its terms.
+
+Copyright © 2026 Sonic (anvilgabimpartduckcom).
+All rights reserved.
