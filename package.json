@@ -13,7 +13,7 @@
     "test:mcp": "tsx scripts/verify_mcp_backend.ts"
   },
   "dependencies": {
-    "@google/genai": "^2.32.0",
+    "@google/genai": "^3.0.0",
     "@supabase/supabase-js": "^2.117.3",
     "@tailwindcss/vite": "^4.3.5",
     "@vitejs/plugin-react": "^6.1.1",
