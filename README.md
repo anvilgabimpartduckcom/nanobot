@@ -106,6 +106,6 @@ nanobot/
   - Both test suites, TypeScript typechecking (`npm run lint`), and Vite production build (`npm run build`) pass cleanly with 100% success.
   
 ## New here? You might love these
-<!-- A hyperlinks section [Commented by: Developer on 21/11/26 11:17 AM]
+<!-- A hyperlinks section [Commented by: Developer on 21/11/26 11:17 AM] -->
 ### [nanobot 101](https://tropical-chime-8c1.notion.site/nanobot-101-3f4b104092f3804792d0c68bca97e821): A helper docs on nanobot, where you can learn all about it and get technical details.
 ### [AI News](https://tropical-chime-8c1.notion.site/AI-News-3e6b104092f38092a013ff0804763a13): Not exactly related to nanobot, but you might want to visit here if you care about AI news every week.
