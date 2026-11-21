@@ -1,4 +1,4 @@
-// Model Context Protocol (MCP) plugin catalogue with consumer-grade authorization metadata [Commented by: Google AI Studio on 31/10/2026 10:52 AM]
+// Model Context Protocol (MCP) plugin catalogue with consumer-grade authorization metadata [Commented by: Google AI Studio on 31/10/2026 10:52 PM]
 
 export interface MCPToolDefinition {
   name: string;
@@ -39,7 +39,7 @@ export const MCP_PLUGINS: PluginDefinition[] = [
     credentialPlaceholder: 'Paste your Cloudflare API token',
     helpUrl: 'https://dash.cloudflare.com/profile/api-tokens',
     helpActionText: 'Open Cloudflare API Tokens',
-    whyTokenText: 'Cloudflare uses scoped API Tokens so you can grant Nanobot exact permissions (Workers, D1 SQL, R2, DNS) and revoke access at any time from your Cloudflare dashboard.',
+    whyTokenText: 'Cloudflare uses scoped API Tokens so you can grant nanobot exact permissions (Workers, D1 SQL, R2, DNS) and revoke access at any time from your Cloudflare dashboard.',
     scopes: ['workers:read', 'workers:write', 'd1:read', 'd1:write', 'r2:read', 'r2:write', 'dns:read', 'dns:write'],
     permissions: [
       'Search Cloudflare product API documentation and parameters dynamically',
@@ -56,7 +56,7 @@ export const MCP_PLUGINS: PluginDefinition[] = [
     id: 'github',
     name: 'GitHub',
     iconUrl: 'https://github.githubassets.com/favicons/favicon.png',
-    description: 'Search code repositories, read files, commit code updates, create issues, and open pull requests directly through Nanobot.',
+    description: 'Search code repositories, read files, commit code updates, create issues, and open pull requests directly through nanobot.',
     mcpServerName: 'github-mcp',
     mcpEndpoint: 'https://api.github.com',
     authType: 'oauth',
@@ -87,7 +87,7 @@ export const MCP_PLUGINS: PluginDefinition[] = [
     id: 'netlify',
     name: 'Netlify',
     iconUrl: 'https://www.netlify.com/favicon.ico',
-    description: 'Inspect deployed sites, trigger new deploy builds, check build logs, and manage environment variables directly through Nanobot.',
+    description: 'Inspect deployed sites, trigger new deploy builds, check build logs, and manage environment variables directly through nanobot.',
     mcpServerName: 'netlify-mcp',
     mcpEndpoint: 'https://netlify-mcp.netlify.app/mcp',
     authType: 'api_key',
@@ -141,7 +141,7 @@ export const MCP_PLUGINS: PluginDefinition[] = [
     id: 'google_docs',
     name: 'Google Docs',
     iconUrl: 'https://ssl.gstatic.com/images/branding/product/2x/docs_2020q4_48dp.png',
-    description: 'Create new documents, read their contents, format paragraphs, and append text or meeting notes directly through Nanobot.',
+    description: 'Create new documents, read their contents, format paragraphs, and append text or meeting notes directly through nanobot.',
     mcpServerName: 'gdocs-mcp',
     mcpEndpoint: 'https://docs.googleapis.com',
     authType: 'oauth',
@@ -168,7 +168,7 @@ export const MCP_PLUGINS: PluginDefinition[] = [
     id: 'google_drive',
     name: 'Google Drive',
     iconUrl: 'https://ssl.gstatic.com/images/branding/product/2x/drive_2020q4_48dp.png',
-    description: 'Search files and folders in your Google Drive, read document contents, and organize files directly through Nanobot.',
+    description: 'Search files and folders in your Google Drive, read document contents, and organize files directly through nanobot.',
     mcpServerName: 'gdrive-mcp',
     mcpEndpoint: 'https://www.googleapis.com',
     authType: 'oauth',
@@ -178,7 +178,7 @@ export const MCP_PLUGINS: PluginDefinition[] = [
     credentialPlaceholder: 'Google OAuth token (or click Connect Google Account)',
     helpUrl: 'https://myaccount.google.com/permissions',
     helpActionText: 'Manage Google Account Permissions',
-    whyTokenText: 'Google Drive uses official Google OAuth authorization so Nanobot can locate and inspect files you ask about safely.',
+    whyTokenText: 'Google Drive uses official Google OAuth authorization so nanobot can locate and inspect files you ask about safely.',
     scopes: ['https://www.googleapis.com/auth/drive.readonly', 'https://www.googleapis.com/auth/drive.file'],
     permissions: [
       'View and search files, metadata, and folders in your Google Drive',
@@ -195,7 +195,7 @@ export const MCP_PLUGINS: PluginDefinition[] = [
     id: 'gmail',
     name: 'Gmail',
     iconUrl: 'https://ssl.gstatic.com/ui/v1/icons/mail/rfr/gmail.ico',
-    description: 'Search email threads, read messages in your inbox, compose drafts, and send emails directly through Nanobot.',
+    description: 'Search email threads, read messages in your inbox, compose drafts, and send emails directly through nanobot.',
     mcpServerName: 'gmail-mcp',
     mcpEndpoint: 'https://gmail.googleapis.com',
     authType: 'oauth',
@@ -205,7 +205,7 @@ export const MCP_PLUGINS: PluginDefinition[] = [
     credentialPlaceholder: 'Google OAuth token (or click Connect Google Account)',
     helpUrl: 'https://myaccount.google.com/permissions',
     helpActionText: 'Manage Google Account Permissions',
-    whyTokenText: 'Gmail uses official Google OAuth authorization. Nanobot can read email threads and draft responses only when you ask.',
+    whyTokenText: 'Gmail uses official Google OAuth authorization. nanobot can read email threads and draft responses only when you ask.',
     scopes: ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.compose'],
     permissions: [
       'Search and read email threads and messages in your inbox',
@@ -255,7 +255,7 @@ export const MCP_PLUGINS: PluginDefinition[] = [
     credentialPlaceholder: 'Paste your Tavily API Key (tvly-...)',
     helpUrl: 'https://app.tavily.com/home',
     helpActionText: 'Open Tavily Dashboard',
-    whyTokenText: 'Tavily uses an API key to execute real-time web searches and factual research for Nanobot.',
+    whyTokenText: 'Tavily uses an API key to execute real-time web searches and factual research for nanobot.',
     scopes: ['search', 'extract'],
     permissions: [
       'Perform web search queries with real-time news and fact retrieval',
@@ -278,7 +278,7 @@ export const MCP_PLUGINS: PluginDefinition[] = [
     credentialPlaceholder: 'Paste your Notion token (secret_...)',
     helpUrl: 'https://www.notion.so/my-integrations',
     helpActionText: 'Open Notion Integrations',
-    whyTokenText: 'Notion uses internal integration tokens so you can select exactly which workspace pages and databases Nanobot can access.',
+    whyTokenText: 'Notion uses internal integration tokens so you can select exactly which workspace pages and databases nanobot can access.',
     scopes: ['notion.pages.read', 'notion.pages.write', 'notion.databases.read', 'notion.databases.write'],
     permissions: [
       'Search and access pages and databases in your authorized Notion workspace',

@@ -1,4 +1,4 @@
--- Nanobot Production Supabase Schema: Real Supabase Auth, Strict User Isolation, and Zero-Knowledge Storage [Commented by: Google AI Studio on 01/11/2026 01:50 PM]
+-- nanobot Production Supabase Schema: Real Supabase Auth, Strict User Isolation, and Zero-Knowledge Storage [Commented by: Google AI Studio on 01/11/2026 01:50 PM]
 
 -- 1. Enable UUID Extension & Schema Usage
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";

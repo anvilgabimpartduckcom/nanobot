@@ -1,4 +1,4 @@
--- Cloudflare D1 SQL schema for Nanobot conversations, messages, and AI-generated file outputs [Commented by: Google AI Studio on 15/10/2026 09:22 AM]
+-- Cloudflare D1 SQL schema for nanobot conversations, messages, and AI-generated file outputs [Commented by: Google AI Studio on 15/10/2026 09:22 AM]
 
 -- 1. Conversations Table
 CREATE TABLE IF NOT EXISTS conversations (

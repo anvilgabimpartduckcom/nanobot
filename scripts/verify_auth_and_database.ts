@@ -1,4 +1,4 @@
-// Nanobot Comprehensive Supabase Auth, Database, Storage, and RLS Verification Suite [Commented by: Google AI Studio on 01/11/2026 04:18 PM]
+// nanobot Comprehensive Supabase Auth, Database, Storage, and RLS Verification Suite [Commented by: Google AI Studio on 01/11/2026 04:18 PM]
 
 import { formatAuthEmail, validateUsername } from '../src/lib/supabase';
 import { generateSalt, deriveKeyFromPassword, encryptText, decryptText, decryptData } from '../src/lib/crypto';

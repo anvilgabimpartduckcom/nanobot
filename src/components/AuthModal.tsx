@@ -1,4 +1,4 @@
-// Nanobot AuthModal: Genuine Supabase Auth, Strict Username Identification, Zero-Knowledge Credential Encryption, and PostgREST RLS Security [Commented by: Google AI Studio on 01/11/2026 01:55 PM]
+// nanobot AuthModal: Genuine Supabase Auth, Strict Username Identification, Zero-Knowledge Credential Encryption, and PostgREST RLS Security [Commented by: Google AI Studio on 01/11/2026 01:55 PM]
 
 import React, { useState } from 'react';
 import { UserProfile, signUpWithUsername, signInWithUsername, checkUsernameAvailable } from '../lib/supabase';

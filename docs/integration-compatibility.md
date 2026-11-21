@@ -2,11 +2,11 @@
 
 ## Purpose
 
-This document defines a review-only process for monitoring external services and MCP integrations listed by Nanobot.
+This document defines a review-only process for monitoring external services and MCP integrations listed by nanobot.
 
 The monitor reads public provider changelogs, GitHub release histories, and selected repository commit histories. It creates GitHub issues for newly detected items. It does not automatically decide that an update is breaking, and it does not make application or provider changes.
 
-The inventory is based on `src/lib/plugins.ts`. A plugin listed there means Nanobot advertises the integration; it does **not** prove that the user has connected it, that the configured package is current, or that the integration works at runtime.
+The inventory is based on `src/lib/plugins.ts`. A plugin listed there means nanobot advertises the integration; it does **not** prove that the user has connected it, that the configured package is current, or that the integration works at runtime.
 
 ## Integration inventory
 
@@ -92,7 +92,7 @@ A source inspection on 31 October 2026 found that the current plugin connection 
 
 Therefore, the 11 entries must currently be treated as a plugin catalogue / UI prototype, not as 11 verified working MCP connections. A saved `plugins_connected` flag is not proof of authorization, provider connectivity, or tool execution. Do not show users a real "connected" status until a provider authorization flow and a server-side MCP tool execution path have been implemented and tested.
 
-Some providers also have separate app code in Nanobot (for example, the Supabase and Tavily libraries). Those separate code paths should be audited independently; they do not make the catalogue's simulated connection handler a working MCP implementation.
+Some providers also have separate app code in nanobot (for example, the Supabase and Tavily libraries). Those separate code paths should be audited independently; they do not make the catalogue's simulated connection handler a working MCP implementation.
 
 Before enabling these integrations for real users, perform a separate implementation review covering server-side credential handling, OAuth callback/state validation, token storage/refresh, MCP transport/session management, tool schemas, per-user authorization, audit logging, and execution-error handling. Do not place provider secrets in browser code or system prompts.
 
@@ -104,7 +104,7 @@ Check each registry package against the linked provider-maintained source before
 
 - Notion's official `makenotion/notion-mcp-server` repository says its self-hosted server is no longer actively maintained or supported and directs users to its hosted Remote MCP service. The monitor therefore watches the official Notion JavaScript API client for API-surface changes and lists the Notion API changelog for manual review; it does not imply the registry's Notion package is current.
 - Netlify's provider-maintained MCP repository documents the package `@netlify/mcp`; the registry currently contains a different package string. This monitor does not change that registry entry.
-- Provider MCP repositories are useful signals, but their releases do not prove that Nanobot's configured package has the same code, version, tools, or behavior.
+- Provider MCP repositories are useful signals, but their releases do not prove that nanobot's configured package has the same code, version, tools, or behavior.
 
 These are compatibility-audit findings, not automatic instructions to migrate. Confirm the registry package, its maintainer, published package metadata, and integration code before proposing a change.
 
@@ -116,7 +116,7 @@ Other limitations:
 - Tavily is checked through recent repository commits because the monitored repository has no tagged releases. Not every commit affects the public MCP behavior.
 - The Notion SDK release history is an indirect signal for API compatibility, not a feed of Notion's hosted MCP service.
 - A source outage is recorded in the workflow log. If some sources fail while others succeed, the monitor saves successful results and the source errors for review.
-- This is not a semantic API compatibility test. It cannot inspect private account settings, test OAuth credentials, or prove that an announcement affects Nanobot.
+- This is not a semantic API compatibility test. It cannot inspect private account settings, test OAuth credentials, or prove that an announcement affects nanobot.
 
 ## Security and safety boundaries
 
@@ -134,7 +134,7 @@ The script uses the repository's `GITHUB_TOKEN` only for GitHub API requests nee
 
 The workflow stores its monitor state using GitHub Actions cache and requires no write permission to repository contents. It needs only read access to repository contents and permission to open issues. This avoids requiring the Actions bot to push commits to protected `main`; do not weaken branch protection to run the monitor.
 
-A detected change is a **review signal**, not proof that Nanobot is broken or that a code change is required.
+A detected change is a **review signal**, not proof that nanobot is broken or that a code change is required.
 
 ## Reporting format
 

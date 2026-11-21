@@ -1,4 +1,4 @@
-// Nanobot Web Crypto AES-GCM-256 Client-Side Zero-Knowledge Encryption [Commented by: Google AI Studio on 01/11/2026 02:20 PM]
+// nanobot Web Crypto AES-GCM-256 Client-Side Zero-Knowledge Encryption [Commented by: Google AI Studio on 01/11/2026 02:20 PM]
 
 export interface EncryptedPayload {
   ciphertext: string;

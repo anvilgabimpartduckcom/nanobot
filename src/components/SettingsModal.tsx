@@ -1,4 +1,4 @@
-// Created two-column SettingsModal with Account, AI Configuration, live MCP Add-ons, and About nanobot [Commented by: Google AI Studio on 31/10/2026 10:31 AM]
+// Created two-column SettingsModal with Account, AI Configuration, live MCP Add-ons, and About nanobot [Commented by: Google AI Studio on 31/10/2026 10:31 PM]
 
 import React, { useState, useEffect } from 'react';
 import { UserProfile, supabase, isSupabaseConfigured, getLocalProfiles, saveLocalProfiles, deleteUserAccountFromSupabase } from '../lib/supabase';
@@ -7,7 +7,7 @@ import { deriveKeyFromPassword, encryptText, decryptText } from '../lib/crypto';
 import { workerClient, McpConnection, McpTool } from '../lib/workerClient';
 
 
-// Added theme toggle support between Neon Black and Minimalist Light themes in SettingsModal [Commented by: Google AI Studio on 20/10/2026 11:28 AM]
+// Added theme toggle support between Neon Black and Minimalist Light themes in SettingsModal [Commented by: Google AI Studio on 20/10/2026 11:28 PM]
 export type AppTheme = 'Neon Black' | 'Minimalist Light';
 
 interface SettingsModalProps {
@@ -40,7 +40,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const isLight = currentTheme === 'Minimalist Light';
 
-  // Stored theme strictly in browser localStorage without syncing to remote backend [Commented by: Google AI Studio on 30/10/2026 11:00 AM]
+  // Stored theme strictly in browser localStorage without syncing to remote backend [Commented by: Google AI Studio on 30/10/2026 11:00 PM]
   const handleSwitchTheme = (nextTheme: AppTheme) => {
     setCurrentTheme(nextTheme);
     localStorage.setItem('nanobot_theme', nextTheme);
@@ -55,12 +55,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [openrouterKey, setOpenrouterKey] = useState(user.openrouter_key);
   const [tavilyKey, setTavilyKey] = useState(user.tavily_key);
 
-  // Visibility toggles for masked fields in Account Settings [Commented by: Google AI Studio on 30/10/2026 10:50 AM]
+  // Visibility toggles for masked fields in Account Settings [Commented by: Google AI Studio on 30/10/2026 10:50 PM]
   const [showPassword, setShowPassword] = useState(false);
   const [showOpenRouterKey, setShowOpenRouterKey] = useState(false);
   const [showTavilyKey, setShowTavilyKey] = useState(false);
 
-  // Enabled copying from masked and credential inputs on Ctrl+C [Commented by: Google AI Studio on 30/10/2026 10:50 AM]
+  // Enabled copying from masked and credential inputs on Ctrl+C [Commented by: Google AI Studio on 30/10/2026 10:50 PM]
   const handleCredentialKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
       const target = e.currentTarget;
@@ -89,7 +89,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   );
 
-  // Genuine live MCP connection state backed by Cloudflare Worker REST API [Commented by: Google AI Studio on 31/10/2026 11:05 AM]
+  // Genuine live MCP connection state backed by Cloudflare Worker REST API [Commented by: Google AI Studio on 31/10/2026 11:05 PM]
   const [liveMcpConnections, setLiveMcpConnections] = useState<Record<string, McpConnection>>({});
   const [isLoadingMcp, setIsLoadingMcp] = useState<boolean>(false);
   const [disconnectingPluginId, setDisconnectingPluginId] = useState<string | null>(null);
@@ -130,7 +130,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   }, [isOpen, activeTab]);
 
-  // Listen for OAuth success callbacks from popup windows [Commented by: Google AI Studio on 31/10/2026 10:53 AM]
+  // Listen for OAuth success callbacks from popup windows [Commented by: Google AI Studio on 31/10/2026 10:53 PM]
   useEffect(() => {
     const handleOAuthCallback = async (event: MessageEvent) => {
       if (!authorizingPlugin) return;
@@ -353,7 +353,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  // Open consumer-grade authorization modal with fixed provider configuration [Commented by: Google AI Studio on 31/10/2026 11:05 AM]
+  // Open consumer-grade authorization modal with fixed provider configuration [Commented by: Google AI Studio on 31/10/2026 11:05 PM]
   const handleOpenConnectModal = (plugin: PluginDefinition) => {
     setAuthorizingPlugin(plugin);
     setAuthAccount('');
@@ -361,7 +361,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setShowAuthToken(false);
   };
 
-  // Launch official OAuth popup for supported providers (Google Workspace, GitHub) [Commented by: Google AI Studio on 31/10/2026 10:53 AM]
+  // Launch official OAuth popup for supported providers (Google Workspace, GitHub) [Commented by: Google AI Studio on 31/10/2026 10:53 PM]
   const handleInitiateOAuth = () => {
     if (!authorizingPlugin) return;
     setAuthError(null);
@@ -403,7 +403,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  // Safe clipboard paste handler for credentials [Commented by: Google AI Studio on 31/10/2026 10:53 AM]
+  // Safe clipboard paste handler for credentials [Commented by: Google AI Studio on 31/10/2026 10:53 PM]
   const handlePasteCredential = async () => {
     try {
       const text = await navigator.clipboard.readText();
@@ -416,8 +416,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  // Live MCP server handshake, validation, and encrypted backend persistence [Commented by: Google AI Studio on 31/10/2026 10:53 AM]
-  // Live MCP server handshake, validation, and encrypted backend persistence [Commented by: Google AI Studio on 31/10/2026 11:05 AM]
+  // Live MCP server handshake, validation, and encrypted backend persistence [Commented by: Google AI Studio on 31/10/2026 10:53 PM]
+  // Live MCP server handshake, validation, and encrypted backend persistence [Commented by: Google AI Studio on 31/10/2026 11:05 PM]
   const handleGrantAuthorization = async () => {
     if (!authorizingPlugin) return;
     if (!authAccount.trim()) {
@@ -459,7 +459,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  // Run live backend verification test for a connected provider [Commented by: Google AI Studio on 31/10/2026 11:05 AM]
+  // Run live backend verification test for a connected provider [Commented by: Google AI Studio on 31/10/2026 11:05 PM]
   const handleTestPlugin = async (pluginId: string, pluginName: string) => {
     setTestingPluginId(pluginId);
     try {
@@ -532,7 +532,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      {/* Themed container supporting both Neon Black and Minimalist Light themes  [Commented by: Google AI Studio on 20/10/2026 11:29 AM] */}
+      {/* Themed container supporting both Neon Black and Minimalist Light themes  [Commented by: Google AI Studio on 20/10/2026 11:29 PM] */}
       <div className={`relative w-full max-w-4xl h-[620px] rounded-2xl flex overflow-hidden shadow-2xl transition-colors duration-200 ${
         isLight ? 'bg-white border border-neutral-200 text-neutral-900' : 'bg-[#0c0c0c] border border-[#2b2b2b] text-white'
       }`}>
@@ -585,7 +585,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             AI Configuration
           </button>
 
-          {/* Configured Add-ons navigation tab in SettingsModal [Commented by: Google AI Studio on 28/10/2026 04:26 AM] */}
+          {/* Configured Add-ons navigation tab in SettingsModal [Commented by: Google AI Studio on 28/10/2026 04:26 PM] */}
           <button
             onClick={() => setActiveTab('plugins')}
             className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer ${
@@ -622,7 +622,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* TAB 1: ACCOUNT */}
           {activeTab === 'account' && (
             <div className="space-y-5 max-w-xl">
-              {/* Removed Supabase/Netlify status indicator pill per user instruction [Commented by: Google AI Studio on 23/10/2026 07:38 AM] */}
+              {/* Removed Supabase/Netlify status indicator pill per user instruction [Commented by: Google AI Studio on 23/10/2026 07:38 PM] */}
               <div className={`pb-2 border-b mb-4 ${
                 isLight ? 'border-neutral-200' : 'border-neutral-800'
               }`}>
@@ -654,7 +654,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 }`}>
                   Password
                 </label>
-                {/* Masked by default with eye visibility toggle and copy support [Commented by: Google AI Studio on 30/10/2026 10:50 AM] */}
+                {/* Masked by default with eye visibility toggle and copy support [Commented by: Google AI Studio on 30/10/2026 10:50 PM] */}
                 <div className="relative flex items-center">
                   <input
                     type={showPassword ? 'text' : 'password'}
@@ -794,7 +794,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
 
-              {/* Theme toggle in Account Settings for switching between Neon Black and Minimalist Light  [Commented by: Google AI Studio on 20/10/2026 11:29 AM] */}
+              {/* Theme toggle in Account Settings for switching between Neon Black and Minimalist Light  [Commented by: Google AI Studio on 20/10/2026 11:29 PM] */}
               <div className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
                 isLight ? 'bg-neutral-50 border-neutral-200' : 'bg-[#111] border-[#262626]'
               }`}>
@@ -933,7 +933,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           )}
 
           {/* TAB 3: ADD-ONS & INTEGRATIONS */}
-          {/* Consumer-grade Model Context Protocol (MCP) authorization interface [Commented by: Google AI Studio on 31/10/2026 10:54 AM] */}
+          {/* Consumer-grade Model Context Protocol (MCP) authorization interface [Commented by: Google AI Studio on 31/10/2026 10:54 PM] */}
           {activeTab === 'plugins' && (() => {
             const connectedCount = MCP_PLUGINS.filter((p) => liveMcpConnections[p.id]?.status === 'connected').length;
             const availableCount = MCP_PLUGINS.length - connectedCount;
@@ -951,7 +951,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div>
                     <h2 className="text-xl font-bold font-serif mb-1">Add-ons & Integrations</h2>
                     <p className="text-xs text-neutral-400 leading-relaxed">
-                      Connect your accounts to give Nanobot live capabilities. Nanobot accesses only the permissions you authorize, and all credentials are encrypted on the server.
+                      Connect your accounts to give nanobot live capabilities. nanobot accesses only the permissions you authorize, and all credentials are encrypted on the server.
                     </p>
                   </div>
                   <button
@@ -1078,7 +1078,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                   {liveConn.errorMessage}
                                 </div>
                               )}
-                              {/* Truthful Connection Test Outcome Badge [Commented by: Google AI Studio on 31/10/2026 11:05 AM] */}
+                              {/* Truthful Connection Test Outcome Badge [Commented by: Google AI Studio on 31/10/2026 11:05 PM] */}
                               {testResults[plugin.id] && (
                                 <div
                                   className={`text-[11px] mt-2 px-2.5 py-1.5 rounded-lg font-medium flex items-center justify-between gap-2 border transition-all ${
@@ -1229,7 +1229,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             Connect {authorizingPlugin.name}
                           </h3>
                           <p className="text-xs text-neutral-400">
-                            Authorize Nanobot to access your account
+                            Authorize nanobot to access your account
                           </p>
                         </div>
                       </div>
@@ -1237,7 +1237,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       {/* Plain-Language Capabilities & Permissions Summary */}
                       <div className="space-y-2">
                         <div className="text-xs font-semibold text-neutral-300 uppercase tracking-wider">
-                          What Nanobot will be able to do:
+                          What nanobot will be able to do:
                         </div>
                         <div className="bg-[#161616] border border-[#262626] rounded-xl p-3.5 space-y-2 text-xs text-neutral-300 max-h-36 overflow-y-auto">
                           {authorizingPlugin.permissions.map((perm, idx) => (
@@ -1424,7 +1424,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             return (
               <div className="space-y-4 max-w-xl text-neutral-300">
                 <h2 className="text-xl font-bold font-serif text-white">About nanobot</h2>
-                {/* Updated description to state 'source available AI chatbot' [Commented by: Google AI Studio on 29/10/2026 09:00 AM] */}
+                {/* Updated description to state 'source available AI chatbot' [Commented by: Google AI Studio on 29/10/2026 09:00 PM] */}
                 <p className="text-sm leading-relaxed">
                   Everyone should get to use AI, and that too without giving away their data. So we created nanobot, a source available AI chatbot which respects your privacy, and is free to use. Users bring their own API keys, which helps in further keeping nanobot completely free to use.
                   <br />
@@ -1437,7 +1437,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     See the license under which nanobot comes.
                   </a>
                 </p>
-                {/* Updated developer contact section to include GitHub discussions link and preserved email box per user specification  [Commented by: Google AI Studio on 22/10/2026 04:47 AM] */}
+                {/* Updated developer contact section to include GitHub discussions link and preserved email box per user specification  [Commented by: Google AI Studio on 22/10/2026 04:47 PM] */}
                 <p className="text-sm leading-relaxed">
                   For more information, For reporting a bug, issue, or vulnerability, join the{' '}
                   <a
@@ -1496,7 +1496,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <p className="text-[11px] text-neutral-500">
                     All terms and conditions are under these services.
                   </p>
-                  {/* Added centered 'Made in INDIA 🇮🇳 ❤️' statement under terms and conditions  [Commented by: Google AI Studio on 22/10/2026 05:36 AM] */}
+                  {/* Added centered 'Made in INDIA 🇮🇳 ❤️' statement under terms and conditions  [Commented by: Google AI Studio on 22/10/2026 05:36 PM] */}
                   <p className="text-center text-xs text-neutral-300 font-medium pt-2">
                     Made in INDIA 🇮🇳 ❤️
                   </p>

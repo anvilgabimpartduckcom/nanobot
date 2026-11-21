@@ -1,4 +1,4 @@
-// Implemented formatted PDF export for active noodle chats using jsPDF [Commented by: Google AI Studio on 30/10/2026 10:48 AM]
+// Implemented formatted PDF export for active noodle chats using jsPDF [Commented by: Google AI Studio on 30/10/2026 10:48 PM]
 
 import { jsPDF } from 'jspdf';
 

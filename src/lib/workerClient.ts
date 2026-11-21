@@ -1,4 +1,4 @@
-// Cloudflare Worker REST API client for nanobot chat persistence with Supabase Bearer authentication [Commented by: Google AI Studio on 30/10/2026 10:48 AM]
+// Cloudflare Worker REST API client for nanobot chat persistence with Supabase Bearer authentication [Commented by: Google AI Studio on 30/10/2026 10:48 PM]
 
 import { supabase } from './supabase';
 
@@ -28,7 +28,7 @@ export interface WorkerApiResponse<T> {
   isNetworkError?: boolean;
 }
 
-// Cloud-persisted AI-generated file outputs for cross-device chat context [Commented by: Google AI Studio on 15/10/2026 09:22 AM]
+// Cloud-persisted AI-generated file outputs for cross-device chat context [Commented by: Google AI Studio on 15/10/2026 09:22 PM]
 export interface WorkerFileOutput {
   id?: string;
   conversation_id?: string;
@@ -42,7 +42,7 @@ export interface WorkerFileOutput {
   updated_at?: string;
 }
 
-// Model Context Protocol (MCP) tool and connection models [Commented by: Google AI Studio on 31/10/2026 10:31 AM]
+// Model Context Protocol (MCP) tool and connection models [Commented by: Google AI Studio on 31/10/2026 10:31 PM]
 export interface McpTool {
   name: string;
   description: string;
@@ -65,7 +65,7 @@ export interface McpToolCallResult {
 }
 
 
-// Configured Cloudflare Worker base URL with fallback to production deployment [Commented by: Google AI Studio on 14/10/2026 10:55 AM]
+// Configured Cloudflare Worker base URL with fallback to production deployment [Commented by: Google AI Studio on 14/10/2026 10:55 PM]
 const WORKER_BASE_URL = (
   (import.meta.env.VITE_CLOUDFLARE_WORKER_URL as string) ||
   'https://nanobot-api.mud-amiable-tweed.workers.dev'
@@ -248,7 +248,7 @@ export const workerClient = {
     );
   },
 
-  // Retrieve persisted AI-extracted outputs for a conversation [Commented by: Google AI Studio on 15/10/2026 09:22 AM]
+  // Retrieve persisted AI-extracted outputs for a conversation [Commented by: Google AI Studio on 15/10/2026 09:22 PM]
   async getFileOutputs(
     conversationId: string
   ): Promise<WorkerApiResponse<{ outputs: WorkerFileOutput[] }>> {
@@ -258,7 +258,7 @@ export const workerClient = {
     );
   },
 
-  // Persist an AI-generated file extraction or reader script result to Cloudflare D1 [Commented by: Google AI Studio on 15/10/2026 09:22 AM]
+  // Persist an AI-generated file extraction or reader script result to Cloudflare D1 [Commented by: Google AI Studio on 15/10/2026 09:22 PM]
   async saveFileOutput(
     conversationId: string,
     output: WorkerFileOutput
@@ -272,7 +272,7 @@ export const workerClient = {
     );
   },
 
-  // Delete a persisted AI output for a file from Cloudflare D1 [Commented by: Google AI Studio on 15/10/2026 09:22 AM]
+  // Delete a persisted AI output for a file from Cloudflare D1 [Commented by: Google AI Studio on 15/10/2026 09:22 PM]
   async deleteFileOutput(
     conversationId: string,
     fileId: string
@@ -283,7 +283,7 @@ export const workerClient = {
     );
   },
 
-  // Create or update a public shareable snapshot for a chat session with 30-day retention [Commented by: Google AI Studio on 28/10/2026 11:36 AM]
+  // Create or update a public shareable snapshot for a chat session with 30-day retention [Commented by: Google AI Studio on 28/10/2026 11:36 PM]
   async createShare(
     title: string,
     messages: WorkerMessage[],
@@ -295,7 +295,7 @@ export const workerClient = {
     });
   },
 
-  // Retrieve a public shared chat snapshot without authentication, protected with anti-scraping headers [Commented by: Google AI Studio on 22/10/2026 04:50 AM]
+  // Retrieve a public shared chat snapshot without authentication, protected with anti-scraping headers [Commented by: Google AI Studio on 22/10/2026 04:50 PM]
   async getPublicShare(
     shareId: string
   ): Promise<{ success: boolean; share?: { id: string; title: string; messages: WorkerMessage[]; created_at: string; expires_at: string }; error?: string }> {
@@ -317,14 +317,14 @@ export const workerClient = {
     }
   },
 
-  // Retrieve all connected MCP providers and their dynamically discovered tools [Commented by: Google AI Studio on 31/10/2026 10:31 AM]
+  // Retrieve all connected MCP providers and their dynamically discovered tools [Commented by: Google AI Studio on 31/10/2026 10:31 PM]
   async getMcpTools(): Promise<WorkerApiResponse<{ connections: McpConnection[] }>> {
     return workerFetch<{ connections: McpConnection[] }>('/api/mcp/tools', {
       method: 'GET',
     });
   },
 
-  // Authorize and verify an MCP provider with dynamic tool discovery and backend credential encryption [Commented by: Google AI Studio on 31/10/2026 10:31 AM]
+  // Authorize and verify an MCP provider with dynamic tool discovery and backend credential encryption [Commented by: Google AI Studio on 31/10/2026 10:31 PM]
   async connectMcpProvider(
     providerId: string,
     credentials: Record<string, string>,
@@ -337,7 +337,7 @@ export const workerClient = {
     });
   },
 
-  // Perform genuine live backend connection and discovery verification for an MCP provider [Commented by: Google AI Studio on 31/10/2026 11:05 AM]
+  // Perform genuine live backend connection and discovery verification for an MCP provider [Commented by: Google AI Studio on 31/10/2026 11:05 PM]
   async testMcpConnection(
     providerId: string
   ): Promise<WorkerApiResponse<{
@@ -359,7 +359,7 @@ export const workerClient = {
     });
   },
 
-  // Execute an authentic tool call on a connected MCP server via the Cloudflare Worker backend [Commented by: Google AI Studio on 31/10/2026 10:31 AM]
+  // Execute an authentic tool call on a connected MCP server via the Cloudflare Worker backend [Commented by: Google AI Studio on 31/10/2026 10:31 PM]
   async callMcpTool(
     providerId: string,
     toolName: string,
@@ -375,7 +375,7 @@ export const workerClient = {
     });
   },
 
-  // Disconnect a provider and securely purge credentials and discovered tools [Commented by: Google AI Studio on 31/10/2026 10:31 AM]
+  // Disconnect a provider and securely purge credentials and discovered tools [Commented by: Google AI Studio on 31/10/2026 10:31 PM]
   async disconnectMcpProvider(providerId: string): Promise<WorkerApiResponse<{ message: string }>> {
     return workerFetch<{ message: string }>('/api/mcp/disconnect', {
       method: 'POST',

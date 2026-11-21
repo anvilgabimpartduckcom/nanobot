@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only compatibility monitor for all MCP integrations registered by Nanobot.
+"""Read-only compatibility monitor for all MCP integrations registered by nanobot.
 
 The monitor reads public provider feeds and official GitHub release APIs. It
 creates GitHub issues for newly published items; it never edits app code,
@@ -299,7 +299,7 @@ def create_issue(items):
     lines = [
         "## Newly detected official updates",
         "",
-        "These are review signals, not confirmed compatibility failures. Verify each provider announcement and assess the matching Nanobot integration before changing anything.",
+        "These are review signals, not confirmed compatibility failures. Verify each provider announcement and assess the matching nanobot integration before changing anything.",
         "",
     ]
     for item in items:

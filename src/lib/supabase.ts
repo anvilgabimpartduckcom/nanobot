@@ -1,4 +1,4 @@
-// Nanobot Supabase Client: Genuine Supabase Auth, Strict User Isolation, and Authoritative Data Persistence [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
+// nanobot Supabase Client: Genuine Supabase Auth, Strict User Isolation, and Authoritative Data Persistence [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
 
 import { createClient, SupabaseClient, Session, User } from '@supabase/supabase-js';
 import { deriveKeyFromPassword, generateSalt, encryptText, decryptText } from './crypto';
