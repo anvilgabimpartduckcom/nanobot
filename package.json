@@ -10,7 +10,8 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "test:auth": "tsx scripts/verify_auth_and_database.ts",
-    "test:mcp": "tsx scripts/verify_mcp_backend.ts"
+    "test:mcp": "tsx scripts/verify_mcp_backend.ts",
+    "test": "npm run test:auth && npm run test:mcp"
   },
   "dependencies": {
     "@google/genai": "^3.3.0",

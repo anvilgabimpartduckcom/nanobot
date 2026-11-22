@@ -65,8 +65,8 @@ export interface McpToolCallResult {
 }
 
 
-// Configured Cloudflare Worker base URL with fallback to production deployment [Commented by: Google AI Studio on 14/10/2026 10:55 PM]
-const WORKER_BASE_URL = (
+// Exported Cloudflare Worker base URL for OAuth callback origin validation [Commented by: Google AI Studio at 22/11/2026 11:51]
+export const WORKER_BASE_URL = (
   (import.meta.env.VITE_CLOUDFLARE_WORKER_URL as string) ||
   'https://nanobot-api.mud-amiable-tweed.workers.dev'
 ).replace(/\/$/, '');
@@ -321,6 +321,24 @@ export const workerClient = {
   async getMcpTools(): Promise<WorkerApiResponse<{ connections: McpConnection[] }>> {
     return workerFetch<{ connections: McpConnection[] }>('/api/mcp/tools', {
       method: 'GET',
+    });
+  },
+
+  // Initiate backend-managed MCP 2026-07-28 OAuth 2.1 + PKCE plugin authorization [Commented by: Google AI Studio at 22/11/2026 11:51]
+  async startMcpOAuth(
+    providerId: string,
+    returnOrigin: string
+  ): Promise<WorkerApiResponse<{
+    success?: boolean;
+    providerId?: string;
+    authorizationUrl?: string;
+    state?: string;
+    fallbackRequired?: boolean;
+    error?: string;
+  }>> {
+    return workerFetch('/api/mcp/oauth/start', {
+      method: 'POST',
+      body: JSON.stringify({ providerId, returnOrigin }),
     });
   },
 

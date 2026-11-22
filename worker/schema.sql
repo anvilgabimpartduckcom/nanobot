@@ -99,3 +99,25 @@ CREATE INDEX IF NOT EXISTS idx_mcp_connections_user
 CREATE INDEX IF NOT EXISTS idx_mcp_connections_provider 
   ON user_mcp_connections (provider_id);
 
+-- 6. MCP OAuth PKCE States Table (Short-lived OAuth 2.1 authorization code + PKCE transactions)
+-- Added mcp_oauth_states table for MCP 2026-07-28 backend OAuth 2.1 PKCE state tracking [Commented by: Google AI Studio at 22/11/2026 11:48]
+CREATE TABLE IF NOT EXISTS mcp_oauth_states (
+  state TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  provider_id TEXT NOT NULL,
+  pkce_verifier TEXT NOT NULL,
+  redirect_uri TEXT NOT NULL,
+  return_origin TEXT NOT NULL,
+  token_endpoint TEXT NOT NULL,
+  client_id TEXT NOT NULL,
+  client_secret TEXT,
+  resource TEXT,
+  mcp_endpoint TEXT NOT NULL,
+  scopes TEXT,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_mcp_oauth_states_expires
+  ON mcp_oauth_states (expires_at);
+

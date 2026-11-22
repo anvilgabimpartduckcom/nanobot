@@ -10,6 +10,7 @@ on:
       - 'src/**'
       - 'package.json'
       - 'package-lock.json'
+      - 'scripts/**'
       - 'vite.config.ts'
       - 'tsconfig.json'
       - 'index.html'
@@ -27,7 +28,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # Configured Node.js 24 LTS setup with npm cache and reproducible npm ci using committed package-lock.json [Commented by: Google AI Studio on 22/10/2026 06:25 AM]
+      # Configured Node.js 24 LTS setup with npm cache and reproducible npm ci using committed package-lock.json [Commented by: Google AI Studio on 02/11/2026 08:38 AM]
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -40,6 +41,14 @@ jobs:
 
       - name: Type Check (Lint)
         run: npm run lint
+
+      # Automated auth, database, and encryption test verification [Commented by: Google AI Studio on 02/11/2026 08:38 AM]
+      - name: Run Auth & Database Tests
+        run: npm run test:auth
+
+      # Automated MCP backend and protocol test verification [Commented by: Google AI Studio on 02/11/2026 08:38 AM]
+      - name: Run MCP Backend Tests
+        run: npm run test:mcp
 
       - name: Build Production Bundle
         run: npm run build

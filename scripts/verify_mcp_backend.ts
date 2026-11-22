@@ -62,9 +62,18 @@ class MockD1PreparedStatement implements D1PreparedStatement {
       return { success: true, results: matches as unknown as T[] };
     }
 
-    // user_mcp_connections INSERT / UPSERT
+    // user_mcp_connections INSERT / UPSERT [Commented by: Google AI Studio at 22/11/2026 11:51]
     if (q.includes('INSERT INTO user_mcp_connections')) {
-      const [id, userId, providerId, authType, encCreds, endpointUrl, toolsJson, created, updated] = this.params as string[];
+      const hasExplicitAuthParam = this.params.length >= 9;
+      const [id, userId, providerId, authTypeOrCreds, credsOrEndpoint, endpointOrTools, toolsOrCreated, createdOrUpdated, maybeUpdated] =
+        this.params as string[];
+      const authType = hasExplicitAuthParam ? authTypeOrCreds : 'oauth';
+      const encCreds = hasExplicitAuthParam ? credsOrEndpoint : authTypeOrCreds;
+      const endpointUrl = hasExplicitAuthParam ? endpointOrTools : credsOrEndpoint;
+      const toolsJson = hasExplicitAuthParam ? toolsOrCreated : endpointOrTools;
+      const created = hasExplicitAuthParam ? createdOrUpdated : toolsOrCreated;
+      const updated = hasExplicitAuthParam ? maybeUpdated : createdOrUpdated;
+
       const idx = this.db.connections.findIndex((c) => c.user_id === userId && c.provider_id === providerId);
       const row = {
         id: idx >= 0 ? this.db.connections[idx].id : id,
@@ -87,9 +96,18 @@ class MockD1PreparedStatement implements D1PreparedStatement {
       return { success: true, results: [] };
     }
 
-    // user_mcp_connections UPDATE
+    // user_mcp_connections UPDATE [Commented by: Google AI Studio at 22/11/2026 11:51]
     if (q.includes('UPDATE user_mcp_connections')) {
-      if (q.includes("status = 'error'")) {
+      if (q.includes('SET encrypted_credentials = ?')) {
+        const [encCreds, updated, userId, providerId] = this.params as string[];
+        const idx = this.db.connections.findIndex((c) => c.user_id === userId && c.provider_id === providerId);
+        if (idx >= 0) {
+          this.db.connections[idx].encrypted_credentials = encCreds;
+          this.db.connections[idx].status = 'connected';
+          this.db.connections[idx].error_message = null;
+          this.db.connections[idx].updated_at = updated;
+        }
+      } else if (q.includes("status = 'error'")) {
         const [errMsg, updated, userId, providerId] = this.params as string[];
         const idx = this.db.connections.findIndex((c) => c.user_id === userId && c.provider_id === providerId);
         if (idx >= 0) {
@@ -120,6 +138,61 @@ class MockD1PreparedStatement implements D1PreparedStatement {
       return { success: true, results: [] };
     }
 
+    // mcp_oauth_states table mock handlers [Commented by: Google AI Studio at 22/11/2026 11:51]
+    if (q.includes('INSERT INTO mcp_oauth_states')) {
+      const [
+        state,
+        user_id,
+        provider_id,
+        pkce_verifier,
+        redirect_uri,
+        return_origin,
+        token_endpoint,
+        client_id,
+        client_secret,
+        resource,
+        mcp_endpoint,
+        scopes,
+        expires_at,
+        created_at,
+      ] = this.params as any[];
+      this.db.oauthStates.push({
+        state,
+        user_id,
+        provider_id,
+        pkce_verifier,
+        redirect_uri,
+        return_origin,
+        token_endpoint,
+        client_id,
+        client_secret,
+        resource,
+        mcp_endpoint,
+        scopes,
+        expires_at,
+        created_at,
+      });
+      return { success: true, results: [] };
+    }
+
+    if (q.startsWith('SELECT') && q.includes('FROM mcp_oauth_states WHERE state = ?')) {
+      const [state] = this.params as [string];
+      const match = this.db.oauthStates.find((s) => s.state === state);
+      return { success: true, results: match ? ([match] as unknown as T[]) : [] };
+    }
+
+    if (q.startsWith('DELETE') && q.includes('FROM mcp_oauth_states WHERE state = ?')) {
+      const [state] = this.params as [string];
+      this.db.oauthStates = this.db.oauthStates.filter((s) => s.state !== state);
+      return { success: true, results: [] };
+    }
+
+    if (q.startsWith('DELETE') && q.includes('FROM mcp_oauth_states WHERE expires_at < ?')) {
+      const [cutoff] = this.params as [string];
+      this.db.oauthStates = this.db.oauthStates.filter((s) => s.expires_at >= cutoff);
+      return { success: true, results: [] };
+    }
+
     // conversations queries
     if (q.includes('FROM conversations WHERE user_id = ?')) {
       const [userId] = this.params as [string];
@@ -133,6 +206,7 @@ class MockD1PreparedStatement implements D1PreparedStatement {
 
 class MockD1Database implements D1Database {
   connections: any[] = [];
+  oauthStates: any[] = [];
   conversations: any[] = [
     {
       id: 'existing-chat-1',
@@ -217,10 +291,22 @@ async function runTestSuite() {
       return new Response('Invalid token', { status: 401 });
     }
 
-    // 2. Genuine Remote MCP Server endpoint (Cloudflare / Netlify)
-    if (urlStr === 'https://mcp.cloudflare.com/mcp' || urlStr === 'https://netlify-mcp.netlify.app/mcp') {
+    // 2. Genuine Remote MCP Server endpoint (Cloudflare / Netlify / Tavily OAuth MCP mock) [Commented by: Google AI Studio at 22/11/2026 11:51]
+    if (
+      urlStr === 'https://mcp.cloudflare.com/mcp' ||
+      urlStr === 'https://netlify-mcp.netlify.app/mcp' ||
+      urlStr === 'https://mcp.tavily.com/mcp/'
+    ) {
       const headers = new Headers(init?.headers);
       const auth = headers.get('Authorization') || '';
+      if (!auth) {
+        return new Response('Unauthorized', {
+          status: 401,
+          headers: {
+            'WWW-Authenticate': 'Bearer resource_metadata="https://mcp.tavily.com/.well-known/oauth-protected-resource", scope="search extract"',
+          },
+        });
+      }
       if (!auth.includes('valid')) {
         return new Response(JSON.stringify({ jsonrpc: '2.0', error: { code: -32000, message: 'Unauthorized token' }, id: 1 }), {
           status: 401,
@@ -236,7 +322,7 @@ async function runTestSuite() {
             id: body.id,
             result: {
               tools: [
-                { name: 'search', description: 'Search Cloudflare documentation and available API endpoints', inputSchema: { type: 'object' } },
+                { name: 'search', description: 'Search documentation and real-time endpoints', inputSchema: { type: 'object' } },
                 { name: 'execute', description: 'Execute authenticated API operation', inputSchema: { type: 'object' } },
                 { name: 'docs', description: 'Fetch technical reference documentation', inputSchema: { type: 'object' } },
               ],
@@ -259,6 +345,70 @@ async function runTestSuite() {
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         );
       }
+    }
+
+    // 2.b Mock RFC 9728 Protected Resource Metadata, RFC 8414 Authorization Server Metadata, and OAuth 2.1 Token Endpoint for Tavily MCP [Commented by: Google AI Studio at 22/11/2026 11:51]
+    if (urlStr === 'https://mcp.tavily.com/.well-known/oauth-protected-resource') {
+      return new Response(
+        JSON.stringify({
+          resource: 'https://mcp.tavily.com/mcp/',
+          authorization_servers: ['https://auth.tavily.com'],
+          scopes_supported: ['search', 'extract'],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (urlStr === 'https://auth.tavily.com/.well-known/oauth-authorization-server') {
+      return new Response(
+        JSON.stringify({
+          issuer: 'https://auth.tavily.com',
+          authorization_endpoint: 'https://auth.tavily.com/authorize',
+          token_endpoint: 'https://auth.tavily.com/oauth/token',
+          client_id_metadata_document_supported: true,
+          code_challenge_methods_supported: ['S256'],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (urlStr === 'https://auth.tavily.com/oauth/token') {
+      const formBody = new URLSearchParams(String(init?.body || ''));
+      const grantType = formBody.get('grant_type');
+      if (grantType === 'authorization_code' && formBody.get('code') === 'auth_code_tavily_123' && formBody.get('code_verifier')) {
+        return new Response(
+          JSON.stringify({
+            access_token: 'valid_tavily_oauth_access_1',
+            refresh_token: 'refresh_tavily_token_1',
+            expires_in: 3600,
+            token_type: 'Bearer',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      if (grantType === 'authorization_code' && formBody.get('code') === 'auth_code_tavily_expiring' && formBody.get('code_verifier')) {
+        return new Response(
+          JSON.stringify({
+            access_token: 'valid_tavily_oauth_expiring',
+            refresh_token: 'refresh_tavily_token_1',
+            expires_in: 10,
+            token_type: 'Bearer',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      if (grantType === 'refresh_token' && formBody.get('refresh_token') === 'refresh_tavily_token_1') {
+        return new Response(
+          JSON.stringify({
+            access_token: 'valid_tavily_oauth_refreshed_2',
+            refresh_token: 'refresh_tavily_token_2',
+            expires_in: 3600,
+            token_type: 'Bearer',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      return new Response(JSON.stringify({ error: 'invalid_grant' }), { status: 400 });
     }
 
     // 3. Provider REST Auth & Tool endpoints
@@ -714,6 +864,153 @@ async function runTestSuite() {
 
     // 5.4 Coexistence of Tavily Web Search and URL Scraping
     record('OpenRouter', 'Tavily Search & Web Scraping Protocol', 'PASS', 'Regex extraction (<Search>, <Scrap>) preserved with single-use lifecycle and source citation tracking.');
+
+    // =========================================================================
+    // SECTION 6: MCP 2026-07-28 OAUTH 2.1 + PKCE & CIMD BACKEND VERIFICATION [Commented by: Google AI Studio at 22/11/2026 11:51]
+    // =========================================================================
+    console.log('\n--- Section 6: MCP 2026-07-28 OAuth 2.1 + PKCE & Backend Token Management Tests ---');
+
+    // 6.1 Public CIMD Client ID Metadata Document endpoint
+    const cimdReq = new Request('https://nanobot.worker/oauth/client-metadata.json', { method: 'GET' });
+    const cimdRes = await worker.fetch(cimdReq, env);
+    const cimdData = (await cimdRes.json()) as any;
+    if (
+      cimdRes.status === 200 &&
+      cimdData.client_id === 'https://nanobot.worker/oauth/client-metadata.json' &&
+      Array.isArray(cimdData.redirect_uris) &&
+      cimdData.redirect_uris.includes('https://nanobot.worker/api/mcp/oauth/callback')
+    ) {
+      record('MCP OAuth 2026-07-28', 'CIMD Client Metadata Document (/oauth/client-metadata.json)', 'PASS', 'Advertises valid CIMD client_id URL and backend callback redirect_uri.');
+    } else {
+      record('MCP OAuth 2026-07-28', 'CIMD Client Metadata Document (/oauth/client-metadata.json)', 'FAILED', `Unexpected response: ${JSON.stringify(cimdData)}`);
+    }
+
+    // 6.2 POST /api/mcp/oauth/start (RFC 9728 -> RFC 8414 -> CIMD + PKCE S256)
+    const startOAuthReq = new Request('https://nanobot.worker/api/mcp/oauth/start', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer token_alice_valid',
+      },
+      body: JSON.stringify({
+        providerId: 'tavily',
+        returnOrigin: 'https://nanobot.app',
+      }),
+    });
+    const startOAuthRes = await worker.fetch(startOAuthReq, env);
+    const startOAuthData = (await startOAuthRes.json()) as any;
+    const authUrlObj = startOAuthData.authorizationUrl ? new URL(startOAuthData.authorizationUrl) : null;
+    if (
+      startOAuthRes.status === 200 &&
+      startOAuthData.success &&
+      authUrlObj &&
+      authUrlObj.searchParams.get('code_challenge_method') === 'S256' &&
+      authUrlObj.searchParams.get('client_id') === 'https://nanobot.worker/oauth/client-metadata.json' &&
+      authUrlObj.searchParams.get('resource') === 'https://mcp.tavily.com/mcp/' &&
+      startOAuthData.state
+    ) {
+      record('MCP OAuth 2026-07-28', 'Backend OAuth Discovery & PKCE Initiation (/api/mcp/oauth/start)', 'PASS', 'Discovered RFC 9728 + RFC 8414 + CIMD and generated PKCE S256 authorization URL.');
+    } else {
+      record('MCP OAuth 2026-07-28', 'Backend OAuth Discovery & PKCE Initiation (/api/mcp/oauth/start)', 'FAILED', `Unexpected response: ${JSON.stringify(startOAuthData)}`);
+    }
+
+    // 6.3 GET /api/mcp/oauth/callback (Backend PKCE code exchange + encrypted D1 persistence + replay protection)
+    const oauthState = String(startOAuthData.state || '');
+    const cbReq = new Request(`https://nanobot.worker/api/mcp/oauth/callback?code=auth_code_tavily_123&state=${encodeURIComponent(oauthState)}`, {
+      method: 'GET',
+    });
+    const cbRes = await worker.fetch(cbReq, env);
+    const cbHtml = await cbRes.text();
+    const tavilyConn = mockDb.connections.find((c) => c.user_id === USER_ALICE.id && c.provider_id === 'tavily');
+    if (
+      cbRes.status === 200 &&
+      cbHtml.includes('MCP_OAUTH_COMPLETE') &&
+      !cbHtml.includes('valid_tavily_oauth_access_1') &&
+      tavilyConn &&
+      tavilyConn.auth_type === 'oauth' &&
+      !tavilyConn.encrypted_credentials.includes('valid_tavily_oauth_access_1')
+    ) {
+      record('MCP OAuth 2026-07-28', 'Backend Code Exchange & Encrypted Storage (/api/mcp/oauth/callback)', 'PASS', 'Exchanged code on backend, encrypted tokens in D1, and notified UI without exposing tokens.');
+    } else {
+      record('MCP OAuth 2026-07-28', 'Backend Code Exchange & Encrypted Storage (/api/mcp/oauth/callback)', 'FAILED', `Status ${cbRes.status}, conn=${Boolean(tavilyConn)}`);
+    }
+
+    // 6.4 Single-use state replay rejection
+    const replayRes = await worker.fetch(cbReq, env);
+    if (replayRes.status === 400) {
+      record('MCP OAuth 2026-07-28', 'Single-Use State Replay Rejection', 'PASS', 'Rejected replayed OAuth callback state with HTTP 400.');
+    } else {
+      record('MCP OAuth 2026-07-28', 'Single-Use State Replay Rejection', 'FAILED', `Expected 400, got ${replayRes.status}`);
+    }
+
+    // 6.5 Remote MCP Tool Call Execution & Automatic Refresh on 401
+    // First mutate stored token in D1 via connect? No, test /api/mcp/call with connected Tavily OAuth session
+    const tavilyCallReq = new Request('https://nanobot.worker/api/mcp/call', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer token_alice_valid',
+      },
+      body: JSON.stringify({
+        providerId: 'tavily',
+        toolName: 'search',
+        arguments: { query: 'mcp 2026-07-28 spec' },
+      }),
+    });
+    const tavilyCallRes = await worker.fetch(tavilyCallReq, env);
+    const tavilyCallData = (await tavilyCallRes.json()) as any;
+    if (
+      tavilyCallRes.status === 200 &&
+      tavilyCallData.success &&
+      tavilyCallData.result?.content?.[0]?.text?.includes('MCP remote tool search executed successfully')
+    ) {
+      record('MCP OAuth 2026-07-28', 'Authenticated Streamable HTTP MCP Tool Execution', 'PASS', 'Executed remote MCP JSON-RPC tools/call using backend-encrypted OAuth access token.');
+    } else {
+      record('MCP OAuth 2026-07-28', 'Authenticated Streamable HTTP MCP Tool Execution', 'FAILED', `Response: ${JSON.stringify(tavilyCallData)}`);
+    }
+
+    // 6.6 Automatic Backend OAuth 2.1 Refresh Token Rotation
+    const startRefreshReq = new Request('https://nanobot.worker/api/mcp/oauth/start', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer token_alice_valid',
+      },
+      body: JSON.stringify({ providerId: 'tavily', returnOrigin: 'https://nanobot.app' }),
+    });
+    const startRefreshData = (await (await worker.fetch(startRefreshReq, env)).json()) as any;
+    const cbRefreshReq = new Request(
+      `https://nanobot.worker/api/mcp/oauth/callback?code=auth_code_tavily_expiring&state=${encodeURIComponent(String(startRefreshData.state || ''))}`,
+      { method: 'GET' }
+    );
+    await worker.fetch(cbRefreshReq, env);
+    const cipherBeforeRefresh = mockDb.connections.find((c) => c.user_id === USER_ALICE.id && c.provider_id === 'tavily')?.encrypted_credentials;
+
+    const refreshedCallReq = new Request('https://nanobot.worker/api/mcp/call', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer token_alice_valid',
+      },
+      body: JSON.stringify({
+        providerId: 'tavily',
+        toolName: 'search',
+        arguments: { query: 'refresh test' },
+      }),
+    });
+    const refreshedCallData = (await (await worker.fetch(refreshedCallReq, env)).json()) as any;
+    const cipherAfterRefresh = mockDb.connections.find((c) => c.user_id === USER_ALICE.id && c.provider_id === 'tavily')?.encrypted_credentials;
+
+    if (
+      refreshedCallData.success &&
+      cipherBeforeRefresh &&
+      cipherAfterRefresh &&
+      cipherBeforeRefresh !== cipherAfterRefresh
+    ) {
+      record('MCP OAuth 2026-07-28', 'Automatic Backend OAuth 2.1 Token Refresh', 'PASS', 'Proactively refreshed near-expiry OAuth access token on backend and re-encrypted rotated credentials in D1.');
+    } else {
+      record('MCP OAuth 2026-07-28', 'Automatic Backend OAuth 2.1 Token Refresh', 'FAILED', `Call=${JSON.stringify(refreshedCallData)}, rotated=${cipherBeforeRefresh !== cipherAfterRefresh}`);
+    }
 
   } finally {
     globalThis.fetch = originalFetch;

@@ -329,9 +329,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     Already have an account? <span className="underline font-medium">Sign In</span>
                   </button>
                 </div>
+                {/* Changed 'Help' to lowercase 'help' in signup help prompt [Commented by: Google AI Studio at 22/11/2026 12:13] */}
                 <div>
                   <span className="text-xs text-neutral-400">
-                    Need Help with creating account?{' '}
+                    Need help with creating account?{' '}
                     <a
                       href="https://tropical-chime-8c1.notion.site/How-to-set-up-nanobot-3fab104092f3801db298e6c12617a2be"
                       target="_blank"

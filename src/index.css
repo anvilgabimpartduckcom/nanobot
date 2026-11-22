@@ -104,3 +104,56 @@ html[data-theme="light"] pre code.hljs,
   border: 1px solid #e2e8f0;
 }
 
+/* Added green track and white circular thumb styles for the 3-stop OpenRouter Effort slider [Commented by: Google AI Studio at 22/11/2026 11:51] */
+input[type="range"].effort-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 9999px;
+  background: #10b981;
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"].effort-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: #10b981;
+}
+
+input[type="range"].effort-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 2px solid #047857;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  margin-top: -4.5px;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+
+input[type="range"].effort-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+}
+
+input[type="range"].effort-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: #10b981;
+}
+
+input[type="range"].effort-slider::-moz-range-thumb {
+  width: 15px;
+  height: 15px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 2px solid #047857;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+

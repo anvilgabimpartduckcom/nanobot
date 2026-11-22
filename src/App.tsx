@@ -227,6 +227,41 @@ export default function App() {
   const chatAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const plusMenuRef = useRef<HTMLDivElement>(null);
+
+  // Composer plus popup menu, Deep Research / Learn Step By Step modes, and OpenRouter reasoning Effort state [Commented by: Google AI Studio at 22/11/2026 11:51]
+  const [isPlusMenuOpen, setIsPlusMenuOpen] = useState(false);
+  const [composerMode, setComposerMode] = useState<'normal' | 'deep_research' | 'learn_step_by_step'>('normal');
+  const [isSuperDeepResearch, setIsSuperDeepResearch] = useState(false);
+  const [reasoningEffort, setReasoningEffort] = useState<'low' | 'medium' | 'high'>('medium');
+
+  useEffect(() => {
+    if (!isPlusMenuOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (plusMenuRef.current && !plusMenuRef.current.contains(event.target as Node)) {
+        setIsPlusMenuOpen(false);
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsPlusMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isPlusMenuOpen]);
+
+  // Reset signed-in-only composer controls when user signs out [Commented by: Google AI Studio at 22/11/2026 12:05]
+  useEffect(() => {
+    if (!currentUser) {
+      setIsPlusMenuOpen(false);
+      setComposerMode('normal');
+    }
+  }, [currentUser]);
 
   // Current Date/Time helper
   const getCurrentDateTime = () =>
@@ -977,7 +1012,7 @@ export default function App() {
       return;
     }
 
-    if (!orKey && !trimmedPrompt.startsWith('#')) {
+    if (!orKey && composerMode !== 'deep_research') {
       alert('Please Sign In or configure your OpenRouter API Key in Account Settings.');
       return;
     }
@@ -1167,12 +1202,12 @@ export default function App() {
     abortControllerRef.current = new AbortController();
     const signal = abortControllerRef.current.signal;
 
-    // Check for Deep Research triggers: # (mini) and ## (pro)
-    if (trimmedPrompt.startsWith('#')) {
-      const isPro = trimmedPrompt.startsWith('##');
-      const researchQuery = trimmedPrompt.replace(/^##?/, '').trim();
+    // Route messages via composer Deep Research toggle only for signed-in users (no # / ## prefix required) [Commented by: Google AI Studio at 22/11/2026 12:05]
+    if (currentUser && composerMode === 'deep_research') {
+      const isPro = isSuperDeepResearch;
+      const researchQuery = trimmedPrompt || promptSummary;
 
-      setCurrentStatus(`Deep Research (${isPro ? 'Pro' : 'Mini'})...`);
+      setCurrentStatus(`Deep Research (${isPro ? 'Super' : 'Standard'})...`);
 
       try {
         const researchResult = await runDeepResearch(
@@ -1217,8 +1252,12 @@ export default function App() {
       return;
     }
 
-    // Configured system prompt with real MCP server tool definitions, persona rules, and URL scraping capability [Commented by: Google AI Studio on 14/10/2026 10:35 PM]
+    // Configured system prompt with real MCP server tool definitions, Learn Step By Step tutor mode, persona rules, and URL scraping capability [Commented by: Google AI Studio at 22/11/2026 11:51]
     const customInstructions = currentUser?.ai_instructions || '';
+    const learnStepByStepPrompt =
+      currentUser && composerMode === 'learn_step_by_step'
+        ? `\n8. Learn Step By Step Mode (ACTIVE): Act as an encouraging, structured master tutor guiding the user step by step. Always organize explanations into clear, numbered progressive steps (Step 1, Step 2, Step 3, etc.). For each step: explain the intuition and "why" before technical details, provide a concrete worked example or analogy, point out common mistakes to avoid, and end with a brief comprehension check or next-step prompt so the user learns actively.`
+        : '';
     // Updated system identity to source available AI chat bot [Commented by: Google AI Studio on 29/10/2026 09:00 PM]
     const systemPrompt = `You are 'nanobot', a privacy first, source available AI chat bot. You can process text, images, and files seamlessly. Current Date/Time: ${getCurrentDateTime()}.
 Follow these guidelines strictly:
@@ -1230,7 +1269,7 @@ CRITICAL: After all the scraped results return, you will no longer be provided w
 4. When you receive search results or scraped webpage contents, analyze them carefully and provide a comprehensive final answer.
 5. Always cite your sources using inline citations in the format [1], [2], corresponding to the provided search results. Do not list the sources at the end of your response.
 6. If the user ever wants some help on personal stuff, you must reply as if you are an objective outsider on that matter.
-7. File Reading Protocol: When a user provides, uploads, or refers to any file (documents, PDFs, spreadsheets, datasets, code, or arbitrary files except images), you must write and display the exact code (e.g. Python code using pandas, pypdf, openpyxl, docx, json, csv, or standard libraries) to read, inspect, and parse that file. Present this reader script in a dedicated code block starting with \`\`\`python. Then, explain the output of executing that code, present the extracted contents and data findings, and thoroughly answer the user's questions based on the file.
+7. File Reading Protocol: When a user provides, uploads, or refers to any file (documents, PDFs, spreadsheets, datasets, code, or arbitrary files except images), you must write and display the exact code (e.g. Python code using pandas, pypdf, openpyxl, docx, json, csv, or standard libraries) to read, inspect, and parse that file. Present this reader script in a dedicated code block starting with \`\`\`python. Then, explain the output of executing that code, present the extracted contents and data findings, and thoroughly answer the user's questions based on the file.${learnStepByStepPrompt}
 ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
 
     // Configured 1,000,000 input token context window for nvidia/nemotron-3.5-super-vl:free, strictly omitting model reasoning and raw code outputs [Commented by: Google AI Studio on 29/10/2026 09:20 PM]
@@ -1312,12 +1351,19 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
       // Determine model training opt-out parameter (incognito or user toggle OFF)
       const optOutTraining = isIncognito || currentUser?.model_training === false;
 
-      // Configured reasoning and optional data_collection routing with plain-English error interpretation [Commented by: Google AI Studio on 30/10/2026 11:00 PM]
+      // Configured dynamic OpenRouter reasoning parameter from Effort slider (Low=no reasoning, Medium, High) [Commented by: Google AI Studio at 22/11/2026 11:51]
+      const reasoningConfig: Record<string, unknown> =
+        reasoningEffort === 'low'
+          ? { enabled: false }
+          : reasoningEffort === 'high'
+          ? { effort: 'high' }
+          : { effort: 'medium' };
+
       const bodyPayload: Record<string, unknown> = {
         model: 'nvidia/nemotron-3.5-super-vl:free',
         temperature: 0.0,
         stream: true,
-        reasoning: { effort: 'medium' },
+        reasoning: reasoningConfig,
         messages: messagesArr,
       };
 
@@ -1343,22 +1389,23 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         signal,
       });
 
-      // If the provider restriction or tools caused an HTTP 400, retry once cleanly without the restricted block
-      if (!res.ok && res.status === 400 && (bodyPayload.provider || bodyPayload.tools)) {
-        if (bodyPayload.provider) delete bodyPayload.provider;
-        res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${orKey}`,
-            'HTTP-Referer': window.location.origin,
-            'X-Title': 'nanobot',
-          },
-          body: JSON.stringify(bodyPayload),
-          signal,
-        });
+      // If provider/tools/reasoning parameter format triggers HTTP 400, gracefully fall back across OpenRouter syntax variants
+      if (!res.ok && res.status === 400) {
+        if (bodyPayload.provider) {
+          delete bodyPayload.provider;
+          res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${orKey}`,
+              'HTTP-Referer': window.location.origin,
+              'X-Title': 'nanobot',
+            },
+            body: JSON.stringify(bodyPayload),
+            signal,
+          });
+        }
 
-        // If tools specifically caused a model incompatibility error, retry without tools
         if (!res.ok && res.status === 400 && bodyPayload.tools) {
           delete bodyPayload.tools;
           delete bodyPayload.tool_choice;
@@ -1373,6 +1420,36 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
             body: JSON.stringify(bodyPayload),
             signal,
           });
+        }
+
+        if (!res.ok && res.status === 400 && reasoningEffort === 'low' && (bodyPayload.reasoning as any)?.enabled === false) {
+          bodyPayload.reasoning = { effort: 'none' };
+          res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${orKey}`,
+              'HTTP-Referer': window.location.origin,
+              'X-Title': 'nanobot',
+            },
+            body: JSON.stringify(bodyPayload),
+            signal,
+          });
+
+          if (!res.ok && res.status === 400) {
+            delete bodyPayload.reasoning;
+            res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${orKey}`,
+                'HTTP-Referer': window.location.origin,
+                'X-Title': 'nanobot',
+              },
+              body: JSON.stringify(bodyPayload),
+              signal,
+            });
+          }
         }
       }
 
@@ -2720,35 +2797,215 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
               }`}
             />
 
-            {/* Bottom Controls */}
-            <div className="flex items-center justify-between pt-1">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`p-1 text-[1.2rem] cursor-pointer transition-colors ${
-                    theme === 'Minimalist Light'
-                      ? 'text-neutral-600 hover:text-neutral-900'
-                      : 'text-neutral-400 hover:text-white'
-                  }`}
-                  title="Upload Image, PDF, Code, or any Data File"
-                >
-                  ➕
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
+            {/* Bottom Controls: Plus Popup Menu + Deep Research / Learn Step By Step + Effort Slider restricted to signed-in users; Send always visible [Commented by: Google AI Studio at 22/11/2026 12:05] */}
+            <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                {currentUser && (
+                  <>
+                    <div ref={plusMenuRef} className="relative flex items-center">
+                      <button
+                        type="button"
+                        onClick={() => setIsPlusMenuOpen((prev) => !prev)}
+                        aria-expanded={isPlusMenuOpen}
+                        aria-haspopup="menu"
+                        className={`p-1 text-[1.2rem] cursor-pointer transition-colors ${
+                          theme === 'Minimalist Light'
+                            ? 'text-neutral-600 hover:text-neutral-900'
+                            : 'text-neutral-400 hover:text-white'
+                        }`}
+                        title="Actions: Upload File, Deep Research, Learn Step By Step"
+                      >
+                        ➕
+                      </button>
+
+                      {isPlusMenuOpen && (
+                        <div
+                          role="menu"
+                          className="absolute bottom-full left-0 mb-2 w-52 bg-black text-white border border-[#2f2f2f] rounded-xl shadow-2xl p-1.5 z-40 flex flex-col gap-0.5"
+                        >
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setIsPlusMenuOpen(false);
+                              fileInputRef.current?.click();
+                            }}
+                            className="w-full text-left px-3 py-2 rounded-lg text-xs font-medium text-white hover:bg-[#1a1a1a] flex items-center gap-2.5 cursor-pointer transition-colors"
+                          >
+                            <span aria-hidden="true">📁</span>
+                            <span>Upload File</span>
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setComposerMode('deep_research');
+                              setIsPlusMenuOpen(false);
+                            }}
+                            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium text-white hover:bg-[#1a1a1a] flex items-center gap-2.5 cursor-pointer transition-colors ${
+                              composerMode === 'deep_research' ? 'bg-[#161616] text-emerald-400' : ''
+                            }`}
+                          >
+                            <span aria-hidden="true">🔬</span>
+                            <span>Deep Research</span>
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setComposerMode('learn_step_by_step');
+                              setIsPlusMenuOpen(false);
+                            }}
+                            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium text-white hover:bg-[#1a1a1a] flex items-center gap-2.5 cursor-pointer transition-colors ${
+                              composerMode === 'learn_step_by_step' ? 'bg-[#161616] text-emerald-400' : ''
+                            }`}
+                          >
+                            <span aria-hidden="true">🪜</span>
+                            <span>Learn Step By Step</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+
+                    {composerMode === 'deep_research' && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsSuperDeepResearch(false)}
+                          className={`text-xs cursor-pointer select-none ${
+                            !isSuperDeepResearch
+                              ? theme === 'Minimalist Light'
+                                ? 'text-neutral-900 font-semibold'
+                                : 'text-white font-semibold'
+                              : 'text-neutral-500'
+                          }`}
+                        >
+                          Deep Research
+                        </button>
+                        {/* Always-black toggle track with always-green slider knob (zero colourisation/decolourisation) */}
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={isSuperDeepResearch}
+                          aria-label="Toggle between Deep Research and Super Deep Research"
+                          onClick={() => setIsSuperDeepResearch((prev) => !prev)}
+                          className="w-11 h-6 rounded-full bg-black border border-[#333] p-0.5 flex items-center cursor-pointer shrink-0"
+                        >
+                          <span
+                            className={`w-[18px] h-[18px] rounded-full bg-emerald-500 transition-transform duration-150 ${
+                              isSuperDeepResearch ? 'translate-x-5' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsSuperDeepResearch(true)}
+                          className={`text-xs cursor-pointer select-none ${
+                            isSuperDeepResearch
+                              ? theme === 'Minimalist Light'
+                                ? 'text-neutral-900 font-semibold'
+                                : 'text-white font-semibold'
+                              : 'text-neutral-500'
+                          }`}
+                        >
+                          Super Deep Research
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setComposerMode('normal')}
+                          title="Exit Deep Research mode"
+                          aria-label="Exit Deep Research mode"
+                          className="text-xs text-neutral-400 hover:text-red-400 px-1 cursor-pointer"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
+
+                    {composerMode === 'learn_step_by_step' && (
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black border border-[#333] text-xs text-emerald-400 font-medium">
+                        <span aria-hidden="true">🪜</span>
+                        <span>Learn Step By Step</span>
+                        <button
+                          type="button"
+                          onClick={() => setComposerMode('normal')}
+                          title="Exit Learn Step By Step mode"
+                          aria-label="Exit Learn Step By Step mode"
+                          className="text-neutral-400 hover:text-red-400 ml-1 cursor-pointer"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3 ml-auto">
+                {/* Green 3-stop OpenRouter Reasoning Effort slider with white thumb (Low / Medium / High), signed-in users only */}
+                {currentUser && (
+                  <div className="flex flex-col items-center min-w-[136px] select-none">
+                    {/* Removed redundant current effort value text span above Effort slider [Commented by: Google AI Studio at 22/11/2026 12:02] */}
+                    <div className="w-full flex items-center justify-between text-[10px] font-semibold leading-none mb-1">
+                      <span className={theme === 'Minimalist Light' ? 'text-neutral-600' : 'text-neutral-400'}>
+                        Effort
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={2}
+                      step={1}
+                      value={reasoningEffort === 'low' ? 0 : reasoningEffort === 'medium' ? 1 : 2}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setReasoningEffort(val === 0 ? 'low' : val === 1 ? 'medium' : 'high');
+                      }}
+                      aria-label="Effort"
+                      className="effort-slider"
+                    />
+                    <div
+                      className={`w-full flex items-center justify-between text-[9.5px] leading-none mt-1 ${
+                        theme === 'Minimalist Light' ? 'text-neutral-600' : 'text-neutral-400'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setReasoningEffort('low')}
+                        className={`cursor-pointer ${reasoningEffort === 'low' ? 'text-emerald-400 font-semibold' : ''}`}
+                      >
+                        Low
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setReasoningEffort('medium')}
+                        className={`cursor-pointer ${reasoningEffort === 'medium' ? 'text-emerald-400 font-semibold' : ''}`}
+                      >
+                        Medium
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setReasoningEffort('high')}
+                        className={`cursor-pointer ${reasoningEffort === 'high' ? 'text-emerald-400 font-semibold' : ''}`}
+                      >
+                        High
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <button
                   type="button"
                   onClick={() => handleSend()}
-                  className={`w-[36px] h-[36px] rounded-full flex items-center justify-center font-bold text-[18px] transition-colors cursor-pointer ${
+                  className={`w-[36px] h-[36px] rounded-full flex items-center justify-center font-bold text-[18px] transition-colors cursor-pointer shrink-0 ${
                     isGenerating
                       ? 'bg-red-600 hover:bg-red-700 text-white font-mono text-sm'
                       : 'bg-[#000080] hover:bg-[#000066] text-white'

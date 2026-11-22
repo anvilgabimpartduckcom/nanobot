@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { UserProfile, supabase, isSupabaseConfigured, getLocalProfiles, saveLocalProfiles, deleteUserAccountFromSupabase } from '../lib/supabase';
 import { MCP_PLUGINS, PluginDefinition } from '../lib/plugins';
 import { deriveKeyFromPassword, encryptText, decryptText } from '../lib/crypto';
-import { workerClient, McpConnection, McpTool } from '../lib/workerClient';
+import { workerClient, WORKER_BASE_URL, McpConnection, McpTool } from '../lib/workerClient';
 
 
 // Added theme toggle support between Neon Black and Minimalist Light themes in SettingsModal [Commented by: Google AI Studio on 20/10/2026 11:28 PM]
@@ -97,6 +97,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [testResults, setTestResults] = useState<Record<string, { status: string; toolsCount?: number; error?: string | null }>>({});
 
   const [authorizingPlugin, setAuthorizingPlugin] = useState<PluginDefinition | null>(null);
+  const [installingPluginId, setInstallingPluginId] = useState<string | null>(null);
+  const [pendingOAuthFlow, setPendingOAuthFlow] = useState<{
+    plugin: PluginDefinition;
+    authorizationUrl: string;
+    prevUpdatedAt: string;
+  } | null>(null);
   const [isAuthorizing, setIsAuthorizing] = useState(false);
   const [authAccount, setAuthAccount] = useState('');
   const [showAuthToken, setShowAuthToken] = useState(false);
@@ -130,41 +136,74 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   }, [isOpen, activeTab]);
 
-  // Listen for OAuth success callbacks from popup windows [Commented by: Google AI Studio on 31/10/2026 10:53 PM]
+  // Listen for backend MCP OAuth callback completion (postMessage + polling fallback) [Commented by: Google AI Studio at 22/11/2026 11:51]
   useEffect(() => {
+    let workerOrigin = '';
+    try {
+      workerOrigin = new URL(WORKER_BASE_URL).origin;
+    } catch {
+      workerOrigin = '';
+    }
+
     const handleOAuthCallback = async (event: MessageEvent) => {
-      if (!authorizingPlugin) return;
-      if (event.data?.type === 'OAUTH_AUTH_SUCCESS' && event.data?.token) {
-        setAuthAccount(event.data.token);
-        setIsAuthorizing(true);
-        try {
-          const res = await workerClient.connectMcpProvider(
-            authorizingPlugin.id,
-            { token: event.data.token },
-            'oauth',
-            authorizingPlugin.mcpEndpoint || ''
-          );
-          if (res.success) {
-            const count = res.data?.tools?.length || 0;
-            setStatusMessage(`✓ ${authorizingPlugin.name} connected via OAuth! ${count} tools ready.`);
-            setTimeout(() => setStatusMessage(null), 5000);
-            setAuthorizingPlugin(null);
-            setAuthAccount('');
-            await fetchLiveMcpConnections();
-          } else {
-            setAuthError(res.error || 'Connection verification failed with received OAuth token.');
-          }
-        } catch (err: unknown) {
-          const e = err as Error;
-          setAuthError(`Connection error: ${e.message}`);
-        } finally {
-          setIsAuthorizing(false);
-        }
+      if (workerOrigin && event.origin !== workerOrigin) return;
+      if (event.data?.type !== 'MCP_OAUTH_COMPLETE') return;
+
+      const targetPlugin =
+        MCP_PLUGINS.find((p) => p.id === event.data.providerId) || pendingOAuthFlow?.plugin || authorizingPlugin;
+      const pluginLabel = targetPlugin?.name || String(event.data.providerId || 'Plugin');
+
+      setPendingOAuthFlow(null);
+      setInstallingPluginId(null);
+
+      if (event.data.success) {
+        const count = Number(event.data.toolsCount || 0);
+        setStatusMessage(`✓ ${pluginLabel} installed via MCP! ${count} tool${count === 1 ? '' : 's'} ready.`);
+        setTimeout(() => setStatusMessage(null), 5000);
+        setAuthorizingPlugin(null);
+        setAuthAccount('');
+        await fetchLiveMcpConnections();
+      } else {
+        setStatusMessage(`✗ ${pluginLabel} authorization failed: ${event.data.error || 'Access was denied or expired.'}`);
+        setTimeout(() => setStatusMessage(null), 6000);
       }
     };
+
     window.addEventListener('message', handleOAuthCallback);
     return () => window.removeEventListener('message', handleOAuthCallback);
-  }, [authorizingPlugin]);
+  }, [pendingOAuthFlow, authorizingPlugin]);
+
+  useEffect(() => {
+    if (!pendingOAuthFlow) return;
+    const { plugin, prevUpdatedAt } = pendingOAuthFlow;
+
+    const timer = window.setInterval(async () => {
+      try {
+        const res = await workerClient.getMcpTools();
+        if (res.success && res.data?.connections) {
+          const match = res.data.connections.find((c) => c.providerId === plugin.id);
+          if (match && match.status === 'connected' && match.updatedAt !== prevUpdatedAt) {
+            setPendingOAuthFlow(null);
+            setInstallingPluginId(null);
+            setAuthorizingPlugin(null);
+            const map: Record<string, McpConnection> = {};
+            res.data.connections.forEach((c) => {
+              map[c.providerId] = c;
+            });
+            setLiveMcpConnections(map);
+            setStatusMessage(
+              `✓ ${plugin.name} installed via MCP! ${match.tools.length} tool${match.tools.length === 1 ? '' : 's'} ready.`
+            );
+            setTimeout(() => setStatusMessage(null), 5000);
+          }
+        }
+      } catch {
+        // Ignore transient poll errors while waiting for authorization
+      }
+    }, 2000);
+
+    return () => window.clearInterval(timer);
+  }, [pendingOAuthFlow]);
 
 
   if (!isOpen) return null;
@@ -353,53 +392,39 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  // Open consumer-grade authorization modal with fixed provider configuration [Commented by: Google AI Studio on 31/10/2026 11:05 PM]
-  const handleOpenConnectModal = (plugin: PluginDefinition) => {
-    setAuthorizingPlugin(plugin);
-    setAuthAccount('');
+  // Start ChatGPT-style backend-managed MCP OAuth 2.1 + PKCE installation flow in a new tab [Commented by: Google AI Studio at 22/11/2026 11:51]
+  const handleInstallPlugin = async (plugin: PluginDefinition) => {
+    setInstallingPluginId(plugin.id);
     setAuthError(null);
-    setShowAuthToken(false);
-  };
+    setStatusMessage(null);
 
-  // Launch official OAuth popup for supported providers (Google Workspace, GitHub) [Commented by: Google AI Studio on 31/10/2026 10:53 PM]
-  const handleInitiateOAuth = () => {
-    if (!authorizingPlugin) return;
-    setAuthError(null);
-
-    const redirectUri = `${window.location.origin}/auth/callback`;
-
-    if (authorizingPlugin.oauthProvider === 'google') {
-      const googleClientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || '';
-      if (!googleClientId) {
-        setAuthError(
-          'Google 1-click Sign-In requires VITE_GOOGLE_CLIENT_ID configured in Netlify environment variables. You can connect securely below by entering your Google authorization token.'
-        );
+    try {
+      const res = await workerClient.startMcpOAuth(plugin.id, window.location.origin);
+      if (res.success && res.data?.authorizationUrl) {
+        const prevUpdatedAt = liveMcpConnections[plugin.id]?.updatedAt || '';
+        setAuthorizingPlugin(null);
+        setPendingOAuthFlow({
+          plugin,
+          authorizationUrl: res.data.authorizationUrl,
+          prevUpdatedAt,
+        });
+        window.open(res.data.authorizationUrl, '_blank');
         return;
       }
 
-      const scopes = (authorizingPlugin.oauthScopes || authorizingPlugin.scopes || []).join(' ');
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(googleClientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${encodeURIComponent(scopes)}&include_granted_scopes=true&prompt=consent`;
-
-      const popup = window.open(authUrl, 'google_oauth_popup', 'width=540,height=680');
-      if (!popup) {
-        setAuthError('Authorization popup was blocked by your browser. Please allow popups for this site to connect your Google Account.');
-      }
-    } else if (authorizingPlugin.oauthProvider === 'github') {
-      const githubClientId = (import.meta.env.VITE_GITHUB_CLIENT_ID as string) || '';
-      if (!githubClientId) {
-        setAuthError(
-          'GitHub 1-click OAuth requires VITE_GITHUB_CLIENT_ID configured in Netlify environment variables. You can connect securely below using a GitHub Personal Access Token.'
-        );
-        return;
-      }
-
-      const scopes = (authorizingPlugin.oauthScopes || ['repo', 'read:user', 'workflow']).join(' ');
-      const authUrl = `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(githubClientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}`;
-
-      const popup = window.open(authUrl, 'github_oauth_popup', 'width=540,height=680');
-      if (!popup) {
-        setAuthError('Authorization popup was blocked by your browser. Please allow popups for this site to connect your GitHub Account.');
-      }
+      // If remote provider does not expose DCR/CIMD and no static OAuth client is configured, offer guided token fallback
+      setInstallingPluginId(null);
+      setAuthorizingPlugin(plugin);
+      setAuthAccount('');
+      setShowAuthToken(false);
+      setAuthError(res.data?.error || res.error || null);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setInstallingPluginId(null);
+      setAuthorizingPlugin(plugin);
+      setAuthAccount('');
+      setShowAuthToken(false);
+      setAuthError(`Failed to start MCP OAuth flow: ${e.message}`);
     }
   };
 
@@ -1010,6 +1035,46 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 )}
 
+                {/* Pending backend OAuth authorization banner with direct new-tab fallback link [Commented by: Google AI Studio at 22/11/2026 11:51] */}
+                {pendingOAuthFlow && (
+                  <div className="bg-[#0e1711] border border-emerald-500/50 rounded-xl p-3.5 space-y-2.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-3 h-3 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin shrink-0"></span>
+                        <div>
+                          <div className="text-xs font-semibold text-white">
+                            Waiting for {pendingOAuthFlow.plugin.name} authorization...
+                          </div>
+                          <div className="text-[11px] text-neutral-400 mt-0.5">
+                            Complete authorization in the new tab. Token exchange and storage run securely on the backend.
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPendingOAuthFlow(null);
+                          setInstallingPluginId(null);
+                        }}
+                        className="text-xs text-neutral-400 hover:text-white px-2 py-1 rounded bg-[#181818] border border-[#2c2c2c] cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={pendingOAuthFlow.authorizationUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
+                      >
+                        <span>Open Authorization Window</span>
+                        <span>↗</span>
+                      </a>
+                    </div>
+                  </div>
+                )}
+
                 {/* Plugin Cards List */}
                 <div className="space-y-3 pt-1">
                   {displayedPlugins.map((plugin) => {
@@ -1140,18 +1205,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             ) : (
                               <button
                                 type="button"
-                                onClick={() => handleOpenConnectModal(plugin)}
-                                className={`px-3 py-1.5 rounded-lg font-semibold text-xs transition-colors cursor-pointer shadow-xs flex items-center gap-1.5 ${
+                                onClick={() => handleInstallPlugin(plugin)}
+                                disabled={installingPluginId === plugin.id}
+                                className={`px-3 py-1.5 rounded-lg font-semibold text-xs transition-colors cursor-pointer shadow-xs flex items-center gap-1.5 disabled:opacity-60 ${
                                   isError
                                     ? 'bg-rose-600 hover:bg-rose-500 text-white'
-                                    : plugin.authType === 'oauth' && plugin.oauthProvider === 'google'
+                                    : plugin.oauthProvider === 'google'
                                     ? 'bg-white hover:bg-neutral-100 text-neutral-900 font-bold'
                                     : 'bg-emerald-600 hover:bg-emerald-500 text-white'
                                 }`}
                               >
-                                {isError ? (
-                                  'Reconnect'
-                                ) : plugin.authType === 'oauth' && plugin.oauthProvider === 'google' ? (
+                                {installingPluginId === plugin.id ? (
+                                  <>
+                                    <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
+                                    <span>Authorizing...</span>
+                                  </>
+                                ) : isError ? (
+                                  'Reinstall Plugin'
+                                ) : plugin.oauthProvider === 'google' ? (
                                   <>
                                     <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
                                       <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -1159,10 +1230,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                       <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
                                       <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
                                     </svg>
-                                    <span>Connect</span>
+                                    <span>Install Plugin</span>
                                   </>
                                 ) : (
-                                  'Connect'
+                                  'Install Plugin'
                                 )}
                               </button>
                             )}
@@ -1179,7 +1250,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             <span>{isExpanded ? '▼ Hide' : '▶ View'} {activeTools.length} {isConnected ? 'active' : 'available'} capabilities</span>
                           </button>
                           <span className="text-neutral-500 text-[10.5px]">
-                            {plugin.authType === 'oauth' ? 'OAuth 2.0' : 'Secure API Token'}
+                            {plugin.oauthSupported ? 'MCP OAuth 2.1 + PKCE' : plugin.authType === 'oauth' ? 'OAuth 2.0' : 'Secure API Token'}
                           </span>
                         </div>
 
@@ -1253,40 +1324,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </div>
                       </div>
 
-                      {/* OAuth Provider Action (for Google Workspace & GitHub) */}
-                      {authorizingPlugin.authType === 'oauth' && (
+                      {/* Backend MCP OAuth Retry Button inside fallback modal [Commented by: Google AI Studio at 22/11/2026 11:51] */}
+                      {authorizingPlugin.oauthSupported && (
                         <div className="space-y-2.5">
                           <button
                             type="button"
-                            onClick={handleInitiateOAuth}
-                            disabled={isAuthorizing}
-                            className={`w-full py-2.5 px-4 rounded-xl font-bold text-sm transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm ${
-                              authorizingPlugin.oauthProvider === 'google'
-                                ? 'bg-white hover:bg-neutral-100 text-neutral-900 border border-neutral-300'
-                                : 'bg-[#24292e] hover:bg-[#2f363d] text-white border border-[#444]'
-                            }`}
+                            onClick={() => handleInstallPlugin(authorizingPlugin)}
+                            disabled={isAuthorizing || installingPluginId === authorizingPlugin.id}
+                            className="w-full py-2.5 px-4 rounded-xl font-bold text-sm transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm bg-[#1a1a1a] hover:bg-[#242424] text-white border border-[#3a3a3a]"
                           >
-                            {authorizingPlugin.oauthProvider === 'google' ? (
-                              <>
-                                <svg className="w-4 h-4" viewBox="0 0 24 24">
-                                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                                </svg>
-                                <span>Connect Google Account</span>
-                              </>
-                            ) : (
-                              <>
-                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                  <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
-                                </svg>
-                                <span>Connect with GitHub</span>
-                              </>
-                            )}
+                            <span>Authorize in New Tab (MCP OAuth)</span>
                           </button>
                           <div className="flex items-center gap-2 text-[11px] text-neutral-500 justify-center">
-                            <span>or connect with authorization token</span>
+                            <span>or connect directly with authorization token</span>
                           </div>
                         </div>
                       )}

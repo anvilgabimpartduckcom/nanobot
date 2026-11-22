@@ -21,14 +21,35 @@ export interface D1Database {
   exec(query: string): Promise<D1Result>;
 }
 
-// Configured Cloudflare Worker runtime environment interface with D1 and secret bindings [Commented by: Google AI Studio on 31/10/2026 10:31 AM]
+// Configured Cloudflare Worker runtime environment interface with D1, auth, and MCP OAuth client secret bindings [Commented by: Google AI Studio at 22/11/2026 11:48]
 export interface Env {
   DB: D1Database;
   SUPABASE_URL?: string;
   SUPABASE_ANON_KEY?: string;
+  SUPABASE_SERVICE_ROLE_KEY?: string;
+  SUPABASE_JWT_SECRET?: string;
   CORS_ORIGIN?: string;
   MCP_ENCRYPTION_SECRET?: string;
+  GITHUB_OAUTH_CLIENT_ID?: string;
+  GITHUB_OAUTH_CLIENT_SECRET?: string;
+  GOOGLE_OAUTH_CLIENT_ID?: string;
+  GOOGLE_OAUTH_CLIENT_SECRET?: string;
+  SLACK_OAUTH_CLIENT_ID?: string;
+  SLACK_OAUTH_CLIENT_SECRET?: string;
+  NOTION_OAUTH_CLIENT_ID?: string;
+  NOTION_OAUTH_CLIENT_SECRET?: string;
+  SUPABASE_OAUTH_CLIENT_ID?: string;
+  SUPABASE_OAUTH_CLIENT_SECRET?: string;
+  NETLIFY_OAUTH_CLIENT_ID?: string;
+  NETLIFY_OAUTH_CLIENT_SECRET?: string;
+  CLOUDFLARE_OAUTH_CLIENT_ID?: string;
+  CLOUDFLARE_OAUTH_CLIENT_SECRET?: string;
+  FIRECRAWL_OAUTH_CLIENT_ID?: string;
+  FIRECRAWL_OAUTH_CLIENT_SECRET?: string;
+  TAVILY_OAUTH_CLIENT_ID?: string;
+  TAVILY_OAUTH_CLIENT_SECRET?: string;
 }
+
 
 
 interface SupabaseUser {
@@ -81,16 +102,30 @@ export interface McpDiscoveredTool {
 
 const ALLOWED_MCP_DOMAINS = [
   'mcp.cloudflare.com',
+  'dash.cloudflare.com',
+  'auth.cloudflare.com',
   'netlify-mcp.netlify.app',
+  'mcp.netlify.com',
+  'app.netlify.com',
   'api.cloudflare.com',
   'api.netlify.com',
   'api.github.com',
+  'api.githubcopilot.com',
+  'github.com',
   'api.supabase.com',
+  'mcp.supabase.com',
+  'supabase.com',
   'api.firecrawl.dev',
+  'mcp.firecrawl.dev',
+  'www.firecrawl.dev',
   'api.tavily.com',
+  'mcp.tavily.com',
   'api.notion.com',
+  'mcp.notion.com',
   'slack.com',
   'www.googleapis.com',
+  'oauth2.googleapis.com',
+  'accounts.google.com',
   'gmail.googleapis.com',
   'docs.googleapis.com'
 ];
@@ -110,16 +145,564 @@ export const CANONICAL_PROVIDER_ENDPOINTS: Record<string, string> = {
   google_drive: 'https://www.googleapis.com',
 };
 
-function validateSafeMcpUrl(urlStr: string): boolean {
+// Remote MCP 2026-07-28 Streamable HTTP endpoints & static OAuth fallback configurations [Commented by: Google AI Studio at 22/11/2026 11:48]
+export const REMOTE_MCP_ENDPOINTS: Record<string, string> = {
+  cloudflare: 'https://mcp.cloudflare.com/mcp',
+  netlify: 'https://mcp.netlify.com/mcp',
+  notion: 'https://mcp.notion.com/mcp',
+  supabase: 'https://mcp.supabase.com/mcp',
+  firecrawl: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+  tavily: 'https://mcp.tavily.com/mcp/',
+  github: 'https://api.githubcopilot.com/mcp/',
+};
 
+interface StaticOAuthConfig {
+  authorizationEndpoint: string;
+  tokenEndpoint: string;
+  scopes: string[];
+  clientIdEnvKey: keyof Env;
+  clientSecretEnvKey: keyof Env;
+  extraAuthParams?: Record<string, string>;
+}
+
+const STATIC_OAUTH_PROVIDERS: Record<string, StaticOAuthConfig> = {
+  github: {
+    authorizationEndpoint: 'https://github.com/login/oauth/authorize',
+    tokenEndpoint: 'https://github.com/login/oauth/access_token',
+    scopes: ['repo', 'read:user', 'workflow'],
+    clientIdEnvKey: 'GITHUB_OAUTH_CLIENT_ID',
+    clientSecretEnvKey: 'GITHUB_OAUTH_CLIENT_SECRET',
+  },
+  google_docs: {
+    authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+    tokenEndpoint: 'https://oauth2.googleapis.com/token',
+    scopes: ['https://www.googleapis.com/auth/documents'],
+    clientIdEnvKey: 'GOOGLE_OAUTH_CLIENT_ID',
+    clientSecretEnvKey: 'GOOGLE_OAUTH_CLIENT_SECRET',
+    extraAuthParams: { access_type: 'offline', prompt: 'consent', include_granted_scopes: 'true' },
+  },
+  google_drive: {
+    authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+    tokenEndpoint: 'https://oauth2.googleapis.com/token',
+    scopes: ['https://www.googleapis.com/auth/drive.readonly', 'https://www.googleapis.com/auth/drive.file'],
+    clientIdEnvKey: 'GOOGLE_OAUTH_CLIENT_ID',
+    clientSecretEnvKey: 'GOOGLE_OAUTH_CLIENT_SECRET',
+    extraAuthParams: { access_type: 'offline', prompt: 'consent', include_granted_scopes: 'true' },
+  },
+  gmail: {
+    authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+    tokenEndpoint: 'https://oauth2.googleapis.com/token',
+    scopes: ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.compose'],
+    clientIdEnvKey: 'GOOGLE_OAUTH_CLIENT_ID',
+    clientSecretEnvKey: 'GOOGLE_OAUTH_CLIENT_SECRET',
+    extraAuthParams: { access_type: 'offline', prompt: 'consent', include_granted_scopes: 'true' },
+  },
+  slack: {
+    authorizationEndpoint: 'https://slack.com/oauth/v2/authorize',
+    tokenEndpoint: 'https://slack.com/api/oauth.v2.access',
+    scopes: ['channels:read', 'channels:history', 'chat:write', 'users:read'],
+    clientIdEnvKey: 'SLACK_OAUTH_CLIENT_ID',
+    clientSecretEnvKey: 'SLACK_OAUTH_CLIENT_SECRET',
+  },
+  notion: {
+    authorizationEndpoint: 'https://api.notion.com/v1/oauth/authorize',
+    tokenEndpoint: 'https://api.notion.com/v1/oauth/token',
+    scopes: [],
+    clientIdEnvKey: 'NOTION_OAUTH_CLIENT_ID',
+    clientSecretEnvKey: 'NOTION_OAUTH_CLIENT_SECRET',
+    extraAuthParams: { owner: 'user' },
+  },
+  supabase: {
+    authorizationEndpoint: 'https://api.supabase.com/v1/oauth/authorize',
+    tokenEndpoint: 'https://api.supabase.com/v1/oauth/token',
+    scopes: [],
+    clientIdEnvKey: 'SUPABASE_OAUTH_CLIENT_ID',
+    clientSecretEnvKey: 'SUPABASE_OAUTH_CLIENT_SECRET',
+  },
+  netlify: {
+    authorizationEndpoint: 'https://app.netlify.com/authorize',
+    tokenEndpoint: 'https://api.netlify.com/oauth/token',
+    scopes: [],
+    clientIdEnvKey: 'NETLIFY_OAUTH_CLIENT_ID',
+    clientSecretEnvKey: 'NETLIFY_OAUTH_CLIENT_SECRET',
+  },
+  cloudflare: {
+    authorizationEndpoint: 'https://dash.cloudflare.com/oauth2/auth',
+    tokenEndpoint: 'https://dash.cloudflare.com/oauth2/token',
+    scopes: ['account:read', 'workers:write', 'd1:write', 'r2:write', 'offline_access'],
+    clientIdEnvKey: 'CLOUDFLARE_OAUTH_CLIENT_ID',
+    clientSecretEnvKey: 'CLOUDFLARE_OAUTH_CLIENT_SECRET',
+  },
+  firecrawl: {
+    authorizationEndpoint: 'https://www.firecrawl.dev/api/oauth/authorize',
+    tokenEndpoint: 'https://www.firecrawl.dev/api/oauth/token',
+    scopes: ['openid', 'profile'],
+    clientIdEnvKey: 'FIRECRAWL_OAUTH_CLIENT_ID',
+    clientSecretEnvKey: 'FIRECRAWL_OAUTH_CLIENT_SECRET',
+  },
+  tavily: {
+    authorizationEndpoint: 'https://mcp.tavily.com/authorize',
+    tokenEndpoint: 'https://mcp.tavily.com/token',
+    scopes: ['openid', 'search', 'extract'],
+    clientIdEnvKey: 'TAVILY_OAUTH_CLIENT_ID',
+    clientSecretEnvKey: 'TAVILY_OAUTH_CLIENT_SECRET',
+  },
+};
+
+function validateSafeMcpUrl(urlStr: string): boolean {
   try {
     const u = new URL(urlStr);
     if (u.protocol !== 'https:') return false;
+    const host = u.hostname.toLowerCase();
+    if (
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host === '0.0.0.0' ||
+      host === '::1' ||
+      host.startsWith('10.') ||
+      host.startsWith('192.168.') ||
+      host.startsWith('169.254.') ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+    ) {
+      return false;
+    }
     return ALLOWED_MCP_DOMAINS.some(
-      (domain) => u.hostname === domain || u.hostname.endsWith(`.${domain}`)
+      (domain) => host === domain || host.endsWith(`.${domain}`)
     );
   } catch {
     return false;
+  }
+}
+
+// Validate dynamic discovery URLs (HTTPS public internet only; blocks loopback/private/metadata IPs) [Commented by: Google AI Studio at 22/11/2026 11:48]
+function validateSafePublicHttpsUrl(urlStr: string): boolean {
+  try {
+    const u = new URL(urlStr);
+    if (u.protocol !== 'https:') return false;
+    const host = u.hostname.toLowerCase();
+    if (
+      host === 'localhost' ||
+      host.endsWith('.localhost') ||
+      host.endsWith('.local') ||
+      host === '127.0.0.1' ||
+      host === '0.0.0.0' ||
+      host === '::1' ||
+      host.startsWith('10.') ||
+      host.startsWith('192.168.') ||
+      host.startsWith('169.254.') ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+    ) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function base64UrlEncode(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function generatePkcePair(): Promise<{ verifier: string; challenge: string }> {
+  const randomBytes = crypto.getRandomValues(new Uint8Array(48));
+  const verifier = base64UrlEncode(randomBytes);
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+  const challenge = base64UrlEncode(new Uint8Array(digest));
+  return { verifier, challenge };
+}
+
+function escapeHtmlSafe(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Parse Streamable HTTP JSON or SSE response payloads per MCP 2026-07-28 transport spec [Commented by: Google AI Studio at 22/11/2026 11:48]
+async function parseMcpResponsePayload(res: Response): Promise<any> {
+  const contentType = (res.headers.get('content-type') || '').toLowerCase();
+  if (contentType.includes('text/event-stream')) {
+    const raw = await res.text();
+    const lines = raw.split(/\r?\n/);
+    let lastJson: any = null;
+    for (const line of lines) {
+      if (line.startsWith('data:')) {
+        const payload = line.slice(5).trim();
+        if (!payload || payload === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(payload);
+          if (parsed && (parsed.result !== undefined || parsed.error !== undefined)) {
+            lastJson = parsed;
+          }
+        } catch {
+          // Ignore partial SSE lines
+        }
+      }
+    }
+    return lastJson;
+  }
+  return res.json().catch(() => null);
+}
+
+// Execute stateless MCP 2026-07-28 JSON-RPC request with optional legacy session initialize fallback [Commented by: Google AI Studio at 22/11/2026 11:48]
+async function callRemoteMcpJsonRpc(
+  mcpUrl: string,
+  token: string,
+  method: string,
+  params: Record<string, unknown> = {},
+  signal?: AbortSignal
+): Promise<{ ok: boolean; status: number; headers: Headers; data: any }> {
+  const baseHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json, text/event-stream',
+    'MCP-Protocol-Version': '2026-07-28',
+    Authorization: `Bearer ${token}`,
+  };
+
+  const res = await fetch(mcpUrl, {
+    method: 'POST',
+    headers: baseHeaders,
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: Date.now(),
+      method,
+      params,
+    }),
+    signal,
+  });
+
+  if (!res.ok) {
+    return { ok: false, status: res.status, headers: res.headers, data: await res.text().catch(() => '') };
+  }
+
+  const data = await parseMcpResponsePayload(res);
+  // If a pre-2026-07-28 stateful MCP server demands initialize first, negotiate session cleanly
+  if (data?.error && /not initialized|session/i.test(String(data.error.message || ''))) {
+    const initRes = await fetch(mcpUrl, {
+      method: 'POST',
+      headers: baseHeaders,
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2026-07-28',
+          capabilities: {},
+          clientInfo: { name: 'nanobot', version: '1.2.0' },
+        },
+      }),
+      signal,
+    });
+    if (initRes.ok) {
+      const sessionId = initRes.headers.get('Mcp-Session-Id');
+      const sessionHeaders = sessionId ? { ...baseHeaders, 'Mcp-Session-Id': sessionId } : baseHeaders;
+      await fetch(mcpUrl, {
+        method: 'POST',
+        headers: sessionHeaders,
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} }),
+        signal,
+      }).catch(() => {});
+      const retryRes = await fetch(mcpUrl, {
+        method: 'POST',
+        headers: sessionHeaders,
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: Date.now(),
+          method,
+          params,
+        }),
+        signal,
+      });
+      if (!retryRes.ok) {
+        return { ok: false, status: retryRes.status, headers: retryRes.headers, data: await retryRes.text().catch(() => '') };
+      }
+      return { ok: true, status: retryRes.status, headers: retryRes.headers, data: await parseMcpResponsePayload(retryRes) };
+    }
+  }
+
+  return { ok: true, status: res.status, headers: res.headers, data };
+}
+
+function parseWwwAuthenticateHeader(headerValue: string | null): { resourceMetadataUrl?: string; scope?: string } {
+  if (!headerValue) return {};
+  const rmMatch = headerValue.match(/resource_metadata="([^"]+)"/i);
+  const scopeMatch = headerValue.match(/scope="([^"]+)"/i);
+  return {
+    resourceMetadataUrl: rmMatch ? rmMatch[1] : undefined,
+    scope: scopeMatch ? scopeMatch[1] : undefined,
+  };
+}
+
+// Discover MCP 2026-07-28 Protected Resource Metadata (RFC 9728) & Authorization Server Metadata (RFC 8414) + Client Registration (CIMD / DCR / Static) [Commented by: Google AI Studio at 22/11/2026 11:48]
+async function discoverAndPrepareMcpOAuth(
+  providerId: string,
+  workerOrigin: string,
+  env: Env
+): Promise<{
+  available: boolean;
+  authorizationEndpoint?: string;
+  tokenEndpoint?: string;
+  clientId?: string;
+  clientSecret?: string;
+  resource?: string;
+  mcpEndpoint: string;
+  scopes: string[];
+  extraAuthParams?: Record<string, string>;
+  reason?: string;
+}> {
+  const remoteMcpUrl = REMOTE_MCP_ENDPOINTS[providerId] || CANONICAL_PROVIDER_ENDPOINTS[providerId] || '';
+  const staticCfg = STATIC_OAUTH_PROVIDERS[providerId];
+  const staticClientId = staticCfg ? (env[staticCfg.clientIdEnvKey] as string | undefined) : undefined;
+  const staticClientSecret = staticCfg ? (env[staticCfg.clientSecretEnvKey] as string | undefined) : undefined;
+
+  let discoveredResourceMetadataUrl: string | undefined;
+  let discoveredScope: string | undefined;
+  let authorizationServers: string[] = [];
+  let supportedScopes: string[] = [];
+  let resourceUri = remoteMcpUrl;
+
+  // Step 1: Probe remote MCP endpoint for 401 WWW-Authenticate / RFC 9728 Protected Resource Metadata
+  if (remoteMcpUrl && validateSafeMcpUrl(remoteMcpUrl)) {
+    try {
+      const probeRes = await fetch(remoteMcpUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+          'MCP-Protocol-Version': '2026-07-28',
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+      });
+
+      if (probeRes.status === 401 || probeRes.status === 403) {
+        const challenge = parseWwwAuthenticateHeader(probeRes.headers.get('WWW-Authenticate'));
+        discoveredResourceMetadataUrl = challenge.resourceMetadataUrl;
+        discoveredScope = challenge.scope;
+      }
+    } catch {
+      // Ignore probe error and attempt well-known discovery below
+    }
+
+    // Step 2: Query RFC 9728 Protected Resource Metadata
+    const mcpUrlObj = new URL(remoteMcpUrl);
+    const prmCandidates = [
+      discoveredResourceMetadataUrl,
+      `${mcpUrlObj.origin}/.well-known/oauth-protected-resource${mcpUrlObj.pathname === '/' ? '' : mcpUrlObj.pathname}`,
+      `${mcpUrlObj.origin}/.well-known/oauth-protected-resource`,
+    ].filter((u): u is string => Boolean(u) && validateSafePublicHttpsUrl(u!));
+
+    for (const prmUrl of prmCandidates) {
+      try {
+        const prmRes = await fetch(prmUrl, { headers: { Accept: 'application/json' } });
+        if (prmRes.ok) {
+          const prm: any = await prmRes.json().catch(() => null);
+          if (prm && Array.isArray(prm.authorization_servers) && prm.authorization_servers.length > 0) {
+            authorizationServers = prm.authorization_servers.filter((s: unknown) => typeof s === 'string');
+            if (typeof prm.resource === 'string') resourceUri = prm.resource;
+            if (Array.isArray(prm.scopes_supported)) supportedScopes = prm.scopes_supported;
+            break;
+          }
+        }
+      } catch {
+        // Try next candidate
+      }
+    }
+
+    // Fallback: some MCP servers host oauth-authorization-server directly on their origin
+    if (authorizationServers.length === 0) {
+      authorizationServers = [mcpUrlObj.origin];
+    }
+  }
+
+  // Step 3: Fetch RFC 8414 Authorization Server Metadata / OpenID Configuration
+  let asMeta: any = null;
+  for (const asOriginOrUrl of authorizationServers) {
+    if (!validateSafePublicHttpsUrl(asOriginOrUrl)) continue;
+    const asUrlObj = new URL(asOriginOrUrl);
+    const pathPrefix = asUrlObj.pathname === '/' ? '' : asUrlObj.pathname.replace(/\/$/, '');
+    const metadataUrls = [
+      `${asUrlObj.origin}/.well-known/oauth-authorization-server${pathPrefix}`,
+      `${asUrlObj.origin}${pathPrefix}/.well-known/oauth-authorization-server`,
+      `${asUrlObj.origin}/.well-known/openid-configuration${pathPrefix}`,
+      `${asUrlObj.origin}${pathPrefix}/.well-known/openid-configuration`,
+    ];
+
+    for (const metaUrl of metadataUrls) {
+      try {
+        const metaRes = await fetch(metaUrl, { headers: { Accept: 'application/json' } });
+        if (metaRes.ok) {
+          const parsed: any = await metaRes.json().catch(() => null);
+          if (parsed && parsed.authorization_endpoint && parsed.token_endpoint) {
+            asMeta = parsed;
+            break;
+          }
+        }
+      } catch {
+        // Continue trying candidates
+      }
+    }
+    if (asMeta) break;
+  }
+
+  const callbackUri = `${workerOrigin}/api/mcp/oauth/callback`;
+  const resolvedScopes = discoveredScope
+    ? discoveredScope.split(/\s+/).filter(Boolean)
+    : supportedScopes.length > 0
+    ? supportedScopes
+    : staticCfg?.scopes || [];
+
+  // Step 4: Client Registration Hierarchy per MCP 2026-07-28:
+  // (1) Pre-configured static client credentials -> (2) Client ID Metadata Document (CIMD) -> (3) Dynamic Client Registration (RFC 7591)
+  if (staticClientId && staticCfg) {
+    const useDiscoveredAs = Boolean(asMeta && asMeta.authorization_endpoint && asMeta.token_endpoint);
+    return {
+      available: true,
+      authorizationEndpoint: useDiscoveredAs ? asMeta.authorization_endpoint : staticCfg.authorizationEndpoint,
+      tokenEndpoint: useDiscoveredAs ? asMeta.token_endpoint : staticCfg.tokenEndpoint,
+      clientId: staticClientId,
+      clientSecret: staticClientSecret,
+      resource: useDiscoveredAs ? (resourceUri || undefined) : undefined,
+      mcpEndpoint: useDiscoveredAs ? (remoteMcpUrl || CANONICAL_PROVIDER_ENDPOINTS[providerId] || '') : (CANONICAL_PROVIDER_ENDPOINTS[providerId] || ''),
+      scopes: staticCfg.scopes.length > 0 ? staticCfg.scopes : resolvedScopes,
+      extraAuthParams: staticCfg.extraAuthParams,
+    };
+  }
+
+  if (asMeta && validateSafePublicHttpsUrl(asMeta.authorization_endpoint) && validateSafePublicHttpsUrl(asMeta.token_endpoint)) {
+    // Prefer CIMD (MCP 2026-07-28) when advertised
+    if (asMeta.client_id_metadata_document_supported === true) {
+      return {
+        available: true,
+        authorizationEndpoint: asMeta.authorization_endpoint,
+        tokenEndpoint: asMeta.token_endpoint,
+        clientId: `${workerOrigin}/oauth/client-metadata.json`,
+        resource: resourceUri || undefined,
+        mcpEndpoint: remoteMcpUrl || CANONICAL_PROVIDER_ENDPOINTS[providerId] || '',
+        scopes: resolvedScopes,
+      };
+    }
+
+    // Fallback to Dynamic Client Registration (RFC 7591)
+    if (asMeta.registration_endpoint && validateSafePublicHttpsUrl(asMeta.registration_endpoint)) {
+      try {
+        const regRes = await fetch(asMeta.registration_endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({
+            client_name: 'nanobot',
+            client_uri: workerOrigin,
+            redirect_uris: [callbackUri],
+            grant_types: ['authorization_code', 'refresh_token'],
+            response_types: ['code'],
+            token_endpoint_auth_method: 'none',
+          }),
+        });
+        if (regRes.ok) {
+          const regData: any = await regRes.json().catch(() => null);
+          if (regData && regData.client_id) {
+            return {
+              available: true,
+              authorizationEndpoint: asMeta.authorization_endpoint,
+              tokenEndpoint: asMeta.token_endpoint,
+              clientId: String(regData.client_id),
+              clientSecret: regData.client_secret ? String(regData.client_secret) : undefined,
+              resource: resourceUri || undefined,
+              mcpEndpoint: remoteMcpUrl || CANONICAL_PROVIDER_ENDPOINTS[providerId] || '',
+              scopes: resolvedScopes,
+            };
+          }
+        }
+      } catch {
+        // DCR failed; fall through to clear unavailable reason
+      }
+    }
+  }
+
+  const missingVarHint = staticCfg ? String(staticCfg.clientIdEnvKey) : `${providerId.toUpperCase()}_OAUTH_CLIENT_ID`;
+  return {
+    available: false,
+    mcpEndpoint: remoteMcpUrl || CANONICAL_PROVIDER_ENDPOINTS[providerId] || '',
+    scopes: resolvedScopes,
+    reason: `Automatic MCP OAuth registration is not advertised by ${providerId}'s remote endpoint and ${missingVarHint} is not configured in Cloudflare Worker secrets. You can connect with a personal authorization token below or configure ${missingVarHint} in your Worker environment.`,
+  };
+}
+
+// Refresh expired OAuth 2.1 access tokens automatically on the backend and re-encrypt into D1 [Commented by: Google AI Studio at 22/11/2026 11:48]
+async function refreshMcpCredentialsIfNeeded(
+  db: D1Database,
+  userId: string,
+  providerId: string,
+  credentials: Record<string, string>,
+  encSecret: string,
+  forceRefresh = false
+): Promise<{ credentials: Record<string, string>; refreshed: boolean }> {
+  const refreshToken = credentials.refresh_token || '';
+  const tokenEndpoint = credentials.token_endpoint || '';
+  const clientId = credentials.client_id || '';
+  const expiresAt = credentials.expires_at ? Number(credentials.expires_at) : 0;
+  const needsRefresh = forceRefresh || (expiresAt > 0 && Date.now() >= expiresAt - 60_000);
+
+  if (!needsRefresh || !refreshToken || !tokenEndpoint || !clientId || !validateSafePublicHttpsUrl(tokenEndpoint)) {
+    return { credentials, refreshed: false };
+  }
+
+  try {
+    const form = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: clientId,
+    });
+    if (credentials.client_secret) {
+      form.set('client_secret', credentials.client_secret);
+    }
+    if (credentials.resource) {
+      form.set('resource', credentials.resource);
+    }
+
+    const tokenRes = await fetch(tokenEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
+      },
+      body: form.toString(),
+    });
+
+    if (!tokenRes.ok) {
+      return { credentials, refreshed: false };
+    }
+
+    const tokenData: any = await tokenRes.json().catch(() => null);
+    if (!tokenData || !tokenData.access_token) {
+      return { credentials, refreshed: false };
+    }
+
+    const nextCreds: Record<string, string> = {
+      ...credentials,
+      token: String(tokenData.access_token),
+      access_token: String(tokenData.access_token),
+      refresh_token: tokenData.refresh_token ? String(tokenData.refresh_token) : refreshToken,
+      expires_at: tokenData.expires_in
+        ? String(Date.now() + Number(tokenData.expires_in) * 1000)
+        : credentials.expires_at || '',
+    };
+
+    const encrypted = await encryptServerCredential(JSON.stringify(nextCreds), encSecret);
+    await db
+      .prepare(`UPDATE user_mcp_connections SET encrypted_credentials = ?, status = 'connected', error_message = NULL, updated_at = ? WHERE user_id = ? AND provider_id = ?`)
+      .bind(encrypted, new Date().toISOString(), userId, providerId)
+      .run();
+
+    return { credentials: nextCreds, refreshed: true };
+  } catch {
+    return { credentials, refreshed: false };
   }
 }
 
@@ -178,13 +761,13 @@ async function decryptServerCredential(cipherCombined: string, secret: string): 
   return new TextDecoder().decode(decrypted);
 }
 
-// Dynamically discover tools from real provider endpoint or verify credentials via official API [Commented by: Google AI Studio on 31/10/2026 10:31 AM]
+// Dynamically discover tools from real provider endpoint or verify credentials via official API [Commented by: Google AI Studio at 22/11/2026 11:51]
 async function discoverAndValidateMcpProvider(
   providerId: string,
   credentials: Record<string, string>,
   customEndpoint?: string
 ): Promise<{ success: boolean; tools: McpDiscoveredTool[]; endpoint: string; error?: string }> {
-  const token = credentials.token || credentials.apiKey || credentials.accessToken || '';
+  const token = credentials.token || credentials.access_token || credentials.apiKey || credentials.accessToken || '';
   if (!token.trim()) {
     return {
       success: false,
@@ -195,8 +778,31 @@ async function discoverAndValidateMcpProvider(
   }
 
   const endpoint = customEndpoint || '';
+  const remoteCandidate =
+    (credentials.resource && validateSafeMcpUrl(credentials.resource) ? credentials.resource : '') ||
+    (endpoint && endpoint.includes('/mcp') && validateSafeMcpUrl(endpoint) ? endpoint : '');
 
   try {
+    // If connected to a remote Streamable HTTP MCP endpoint via OAuth, perform live MCP 2026-07-28 tools/list first [Commented by: Google AI Studio at 22/11/2026 11:51]
+    if (remoteCandidate && providerId !== 'cloudflare' && providerId !== 'netlify') {
+      const remoteMcpCall = await callRemoteMcpJsonRpc(remoteCandidate, token, 'tools/list', {}).catch(() => null);
+      if (remoteMcpCall && remoteMcpCall.ok && remoteMcpCall.data?.result && Array.isArray(remoteMcpCall.data.result.tools)) {
+        return {
+          success: true,
+          tools: remoteMcpCall.data.result.tools,
+          endpoint: remoteCandidate,
+        };
+      }
+      if (remoteMcpCall && (remoteMcpCall.status === 401 || remoteMcpCall.status === 403) && credentials.resource) {
+        return {
+          success: false,
+          tools: [],
+          endpoint: remoteCandidate,
+          error: `MCP OAuth authorization rejected (${remoteMcpCall.status})`,
+        };
+      }
+    }
+
     switch (providerId) {
       case 'cloudflare': {
         const mcpUrl = endpoint || 'https://mcp.cloudflare.com/mcp';
@@ -204,30 +810,14 @@ async function discoverAndValidateMcpProvider(
           return { success: false, tools: [], endpoint: mcpUrl, error: 'SSRF Block: Endpoint domain not permitted' };
         }
 
-        // Live connection test against Cloudflare API / MCP server
-        let testRes = await fetch(mcpUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            id: 1,
-            method: 'tools/list',
-            params: {},
-          }),
-        }).catch(() => null);
-
-        if (testRes && testRes.ok) {
-          const data: any = await testRes.json().catch(() => null);
-          if (data && data.result && Array.isArray(data.result.tools)) {
-            return {
-              success: true,
-              tools: data.result.tools,
-              endpoint: mcpUrl,
-            };
-          }
+        // Live Streamable HTTP MCP 2026-07-28 connection test (JSON + SSE) [Commented by: Google AI Studio at 22/11/2026 11:48]
+        const mcpCall = await callRemoteMcpJsonRpc(mcpUrl, token, 'tools/list', {}).catch(() => null);
+        if (mcpCall && mcpCall.ok && mcpCall.data?.result && Array.isArray(mcpCall.data.result.tools)) {
+          return {
+            success: true,
+            tools: mcpCall.data.result.tools,
+            endpoint: mcpUrl,
+          };
         }
 
         // Verify API token validity with Cloudflare REST API directly
@@ -287,30 +877,14 @@ async function discoverAndValidateMcpProvider(
           return { success: false, tools: [], endpoint: mcpUrl, error: 'SSRF Block: Endpoint domain not permitted' };
         }
 
-        // Live connection test against Netlify MCP endpoint
-        const testRes = await fetch(mcpUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            id: 1,
-            method: 'tools/list',
-            params: {},
-          }),
-        }).catch(() => null);
-
-        if (testRes && testRes.ok) {
-          const data: any = await testRes.json().catch(() => null);
-          if (data && data.result && Array.isArray(data.result.tools)) {
-            return {
-              success: true,
-              tools: data.result.tools,
-              endpoint: mcpUrl,
-            };
-          }
+        // Live Streamable HTTP MCP 2026-07-28 connection test [Commented by: Google AI Studio at 22/11/2026 11:48]
+        const netlifyMcpCall = await callRemoteMcpJsonRpc(mcpUrl, token, 'tools/list', {}).catch(() => null);
+        if (netlifyMcpCall && netlifyMcpCall.ok && netlifyMcpCall.data?.result && Array.isArray(netlifyMcpCall.data.result.tools)) {
+          return {
+            success: true,
+            tools: netlifyMcpCall.data.result.tools,
+            endpoint: mcpUrl,
+          };
         }
 
         // Verify Netlify Personal Access Token against Netlify REST API
@@ -893,7 +1467,7 @@ async function discoverAndValidateMcpProvider(
   }
 }
 
-// Execute authentic MCP tool calls on the backend with timeout and error containment [Commented by: Google AI Studio on 31/10/2026 10:31 AM]
+// Execute authentic MCP tool calls on the backend with timeout, Streamable HTTP 2026-07-28 JSON-RPC, and error containment [Commented by: Google AI Studio at 22/11/2026 11:51]
 async function executeMcpToolCall(
   providerId: string,
   toolName: string,
@@ -901,35 +1475,56 @@ async function executeMcpToolCall(
   credentials: Record<string, string>,
   endpointUrl: string
 ): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
-  const token = credentials.token || credentials.apiKey || credentials.accessToken || '';
+  const token = credentials.token || credentials.access_token || credentials.apiKey || credentials.accessToken || '';
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 18000);
 
   try {
+    const remoteMcpTarget =
+      (credentials.resource && validateSafeMcpUrl(credentials.resource) ? credentials.resource : '') ||
+      (endpointUrl && endpointUrl.includes('/mcp') && validateSafeMcpUrl(endpointUrl) ? endpointUrl : '');
+
+    // Use MCP 2026-07-28 Streamable HTTP JSON-RPC (JSON + SSE + session fallback) for remote MCP endpoints [Commented by: Google AI Studio at 22/11/2026 11:51]
+    if (remoteMcpTarget && providerId !== 'cloudflare' && providerId !== 'netlify') {
+      const mcpRes = await callRemoteMcpJsonRpc(
+        remoteMcpTarget,
+        token,
+        'tools/call',
+        { name: toolName, arguments: args },
+        controller.signal
+      ).catch(() => null);
+
+      if (mcpRes && mcpRes.ok && mcpRes.data?.result?.content) {
+        return { content: mcpRes.data.result.content, isError: Boolean(mcpRes.data.result.isError) };
+      }
+      if (mcpRes && (mcpRes.status === 401 || mcpRes.status === 403)) {
+        return {
+          content: [{ type: 'text', text: `Remote MCP authorization failed (${mcpRes.status}): ${typeof mcpRes.data === 'string' ? mcpRes.data : JSON.stringify(mcpRes.data)}` }],
+          isError: true,
+        };
+      }
+    }
+
     switch (providerId) {
       case 'cloudflare': {
-        // If an explicit remote MCP server endpoint is configured and active, invoke JSON-RPC tools/call
-        if (endpointUrl && endpointUrl.includes('/mcp')) {
-          const res = await fetch(endpointUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              jsonrpc: '2.0',
-              id: Date.now(),
-              method: 'tools/call',
-              params: { name: toolName, arguments: args },
-            }),
-            signal: controller.signal,
-          });
+        // If an explicit remote MCP server endpoint is configured and active, invoke MCP 2026-07-28 JSON-RPC tools/call
+        if (endpointUrl && endpointUrl.includes('/mcp') && validateSafeMcpUrl(endpointUrl)) {
+          const mcpRes = await callRemoteMcpJsonRpc(
+            endpointUrl,
+            token,
+            'tools/call',
+            { name: toolName, arguments: args },
+            controller.signal
+          ).catch(() => null);
 
-          if (res.ok) {
-            const data: any = await res.json().catch(() => null);
-            if (data?.result?.content) {
-              return { content: data.result.content, isError: Boolean(data.result.isError) };
-            }
+          if (mcpRes && mcpRes.ok && mcpRes.data?.result?.content) {
+            return { content: mcpRes.data.result.content, isError: Boolean(mcpRes.data.result.isError) };
+          }
+          if (mcpRes && (mcpRes.status === 401 || mcpRes.status === 403) && credentials.auth_type === 'oauth') {
+            return {
+              content: [{ type: 'text', text: `Cloudflare MCP authorization failed (${mcpRes.status})` }],
+              isError: true,
+            };
           }
         }
 
@@ -965,26 +1560,22 @@ async function executeMcpToolCall(
       }
 
       case 'netlify': {
-        if (endpointUrl && endpointUrl.includes('/mcp')) {
-          const res = await fetch(endpointUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              jsonrpc: '2.0',
-              id: Date.now(),
-              method: 'tools/call',
-              params: { name: toolName, arguments: args },
-            }),
-            signal: controller.signal,
-          });
-          if (res.ok) {
-            const data: any = await res.json().catch(() => null);
-            if (data?.result?.content) {
-              return { content: data.result.content, isError: Boolean(data.result.isError) };
-            }
+        if (endpointUrl && endpointUrl.includes('/mcp') && validateSafeMcpUrl(endpointUrl)) {
+          const mcpRes = await callRemoteMcpJsonRpc(
+            endpointUrl,
+            token,
+            'tools/call',
+            { name: toolName, arguments: args },
+            controller.signal
+          ).catch(() => null);
+          if (mcpRes && mcpRes.ok && mcpRes.data?.result?.content) {
+            return { content: mcpRes.data.result.content, isError: Boolean(mcpRes.data.result.isError) };
+          }
+          if (mcpRes && (mcpRes.status === 401 || mcpRes.status === 403) && credentials.auth_type === 'oauth') {
+            return {
+              content: [{ type: 'text', text: `Netlify MCP authorization failed (${mcpRes.status})` }],
+              isError: true,
+            };
           }
         }
 
@@ -1335,6 +1926,224 @@ async function authenticateRequest(
   }
 }
 
+// Cryptographically verify HMAC-SHA256 signature of Supabase JWT using SUPABASE_JWT_SECRET [Commented by: Google AI Studio at 05/11/2026 17:28]
+async function verifySupabaseJwtSignature(token: string, secret: string): Promise<{ valid: boolean; sub?: string }> {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return { valid: false };
+    const [headerB64, payloadB64, signatureB64] = parts;
+
+    // Decode URL-safe base64 signature
+    const signatureStr = signatureB64.replace(/-/g, '+').replace(/_/g, '/');
+    const signaturePad = signatureStr.padEnd(signatureStr.length + (4 - (signatureStr.length % 4)) % 4, '=');
+    const sigBinary = atob(signaturePad);
+    const sigBytes = new Uint8Array(sigBinary.length);
+    for (let i = 0; i < sigBinary.length; i++) {
+      sigBytes[i] = sigBinary.charCodeAt(i);
+    }
+
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(secret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['verify']
+    );
+
+    const dataToVerify = encoder.encode(`${headerB64}.${payloadB64}`);
+    const isValid = await crypto.subtle.verify(
+      'HMAC',
+      key,
+      sigBytes,
+      dataToVerify
+    );
+
+    if (!isValid) return { valid: false };
+
+    const payloadStr = payloadB64.replace(/-/g, '+').replace(/_/g, '/');
+    const payloadPad = payloadStr.padEnd(payloadStr.length + (4 - (payloadStr.length % 4)) % 4, '=');
+    const payload = JSON.parse(atob(payloadPad));
+
+    // Verify expiration claim
+    if (payload.exp && typeof payload.exp === 'number') {
+      const nowSec = Math.floor(Date.now() / 1000);
+      if (payload.exp < nowSec) {
+        return { valid: false };
+      }
+    }
+
+    if (payload && typeof payload.sub === 'string' && /^[0-9a-fA-F-]{36}$/.test(payload.sub)) {
+      return { valid: true, sub: payload.sub };
+    }
+
+    return { valid: false };
+  } catch {
+    return { valid: false };
+  }
+}
+
+// Idempotent D1 database schema initialization guaranteeing zero-downtime bootstrapping [Commented by: Google AI Studio on 04/11/2026 05:23 PM]
+// Concurrent-safe, idempotent D1 database schema initialization with promise-locking and error recovery [Commented by: Google AI Studio on 04/11/2026 05:38 PM]
+let d1TablesInitialized = false;
+let d1InitPromise: Promise<void> | null = null;
+
+async function ensureD1Tables(db: D1Database): Promise<void> {
+  if (d1TablesInitialized) return;
+  if (!db || typeof db.batch !== 'function') {
+    throw new Error('D1 database binding "DB" is unavailable');
+  }
+
+  // If another request is currently initializing, await the in-flight initialization promise
+  if (!d1InitPromise) {
+    d1InitPromise = (async () => {
+      try {
+        await db.batch([
+          // 1. conversations table and index
+          db.prepare(`
+            CREATE TABLE IF NOT EXISTS conversations (
+              id TEXT PRIMARY KEY,
+              user_id TEXT NOT NULL,
+              title TEXT NOT NULL,
+              pinned INTEGER NOT NULL DEFAULT 0,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            )
+          `),
+          db.prepare(`
+            CREATE INDEX IF NOT EXISTS idx_conversations_user_updated 
+            ON conversations (user_id, updated_at DESC)
+          `),
+          // 2. messages table and indexes
+          db.prepare(`
+            CREATE TABLE IF NOT EXISTS messages (
+              id TEXT PRIMARY KEY,
+              conversation_id TEXT NOT NULL,
+              user_id TEXT NOT NULL,
+              role TEXT NOT NULL CHECK (role IN ('user', 'ai')),
+              content TEXT NOT NULL,
+              sources_json TEXT,
+              reasoning TEXT,
+              display_attachments_json TEXT,
+              created_at TEXT NOT NULL,
+              FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+            )
+          `),
+          db.prepare(`
+            CREATE INDEX IF NOT EXISTS idx_messages_conversation_created 
+            ON messages (conversation_id, created_at ASC)
+          `),
+          db.prepare(`
+            CREATE INDEX IF NOT EXISTS idx_messages_user 
+            ON messages (user_id)
+          `),
+          // 3. file_outputs table and indexes
+          db.prepare(`
+            CREATE TABLE IF NOT EXISTS file_outputs (
+              id TEXT PRIMARY KEY,
+              conversation_id TEXT NOT NULL,
+              user_id TEXT NOT NULL,
+              source_file_id TEXT NOT NULL,
+              file_name TEXT NOT NULL,
+              file_type TEXT NOT NULL,
+              output_type TEXT NOT NULL,
+              output_content TEXT NOT NULL,
+              metadata_json TEXT,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+            )
+          `),
+          db.prepare(`
+            CREATE INDEX IF NOT EXISTS idx_file_outputs_conversation 
+            ON file_outputs (conversation_id, updated_at DESC)
+          `),
+          db.prepare(`
+            CREATE INDEX IF NOT EXISTS idx_file_outputs_user 
+            ON file_outputs (user_id)
+          `),
+          db.prepare(`
+            CREATE INDEX IF NOT EXISTS idx_file_outputs_source_file 
+            ON file_outputs (source_file_id)
+          `),
+          // 4. shared_chats table and index
+          db.prepare(`
+            CREATE TABLE IF NOT EXISTS shared_chats (
+              id TEXT PRIMARY KEY,
+              user_id TEXT NOT NULL,
+              title TEXT NOT NULL,
+              messages_json TEXT NOT NULL,
+              created_at TEXT NOT NULL,
+              expires_at TEXT NOT NULL
+            )
+          `),
+          db.prepare(`
+            CREATE INDEX IF NOT EXISTS idx_shared_chats_expires 
+            ON shared_chats (expires_at)
+          `),
+          // 5. user_mcp_connections table and indexes
+          db.prepare(`
+            CREATE TABLE IF NOT EXISTS user_mcp_connections (
+              id TEXT PRIMARY KEY,
+              user_id TEXT NOT NULL,
+              provider_id TEXT NOT NULL,
+              auth_type TEXT NOT NULL,
+              encrypted_credentials TEXT NOT NULL,
+              endpoint_url TEXT NOT NULL,
+              cached_tools_json TEXT NOT NULL DEFAULT '[]',
+              status TEXT NOT NULL DEFAULT 'connected',
+              error_message TEXT,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              UNIQUE(user_id, provider_id)
+            )
+          `),
+          db.prepare(`
+            CREATE INDEX IF NOT EXISTS idx_mcp_connections_user 
+            ON user_mcp_connections (user_id)
+          `),
+          db.prepare(`
+            CREATE INDEX IF NOT EXISTS idx_mcp_connections_provider 
+            ON user_mcp_connections (provider_id)
+          `),
+          // 6. mcp_oauth_states table for OAuth 2.1 PKCE transactions [Commented by: Google AI Studio at 22/11/2026 11:48]
+          db.prepare(`
+            CREATE TABLE IF NOT EXISTS mcp_oauth_states (
+              state TEXT PRIMARY KEY,
+              user_id TEXT NOT NULL,
+              provider_id TEXT NOT NULL,
+              pkce_verifier TEXT NOT NULL,
+              redirect_uri TEXT NOT NULL,
+              return_origin TEXT NOT NULL,
+              token_endpoint TEXT NOT NULL,
+              client_id TEXT NOT NULL,
+              client_secret TEXT,
+              resource TEXT,
+              mcp_endpoint TEXT NOT NULL,
+              scopes TEXT,
+              expires_at TEXT NOT NULL,
+              created_at TEXT NOT NULL
+            )
+          `),
+          db.prepare(`
+            CREATE INDEX IF NOT EXISTS idx_mcp_oauth_states_expires
+            ON mcp_oauth_states (expires_at)
+          `)
+        ]);
+        d1TablesInitialized = true;
+      } catch (err) {
+        d1TablesInitialized = false;
+        console.error('D1 table initialization failed; resetting lock for retry:', err);
+        throw err;
+      } finally {
+        d1InitPromise = null;
+      }
+    })();
+  }
+
+  await d1InitPromise;
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const origin = request.headers.get('Origin');
@@ -1371,6 +2180,10 @@ export default {
             cors_origin: allowedOrigin,
           },
           endpoints: [
+            'GET /oauth/client-metadata.json',
+            'GET /.well-known/mcp-client.json',
+            'GET /api/mcp/oauth/callback',
+            'POST /api/mcp/oauth/start',
             'GET /api/conversations',
             'POST /api/conversations',
             'GET /api/conversations/:id',
@@ -1393,6 +2206,246 @@ export default {
       );
     }
 
+    // MCP 2026-07-28 Client ID Metadata Document (CIMD) public discovery endpoint [Commented by: Google AI Studio at 22/11/2026 11:48]
+    if ((pathname === '/oauth/client-metadata.json' || pathname === '/.well-known/mcp-client.json') && request.method === 'GET') {
+      const workerOrigin = url.origin;
+      return sendJson(
+        {
+          client_id: `${workerOrigin}/oauth/client-metadata.json`,
+          client_name: 'nanobot',
+          client_uri: allowedOrigin !== '*' ? allowedOrigin.split(',')[0].trim() : workerOrigin,
+          redirect_uris: [`${workerOrigin}/api/mcp/oauth/callback`],
+          grant_types: ['authorization_code', 'refresh_token'],
+          response_types: ['code'],
+          token_endpoint_auth_method: 'none',
+        },
+        200
+      );
+    }
+
+    // MCP 2026-07-28 OAuth 2.1 Authorization Callback (PKCE token exchange + encrypted D1 storage) [Commented by: Google AI Studio at 22/11/2026 11:48]
+    if ((pathname === '/api/mcp/oauth/callback' || pathname === '/api/mcp/oauth/callback/') && request.method === 'GET') {
+      if (!env.DB || typeof env.DB.prepare !== 'function') {
+        return new Response('Database unavailable', { status: 500 });
+      }
+
+      const renderCallbackHtml = (
+        ok: boolean,
+        message: string,
+        providerId: string,
+        returnOrigin: string,
+        toolsCount = 0
+      ) => {
+        const nonceBytes = crypto.getRandomValues(new Uint8Array(16));
+        const nonce = base64UrlEncode(nonceBytes);
+        const safeMsg = escapeHtmlSafe(message);
+        const safeProvider = escapeHtmlSafe(providerId);
+        const targetOrigin =
+          returnOrigin && (returnOrigin.startsWith('https://') || returnOrigin.startsWith('http://localhost'))
+            ? returnOrigin
+            : '*';
+        const payloadJson = JSON.stringify({
+          type: 'MCP_OAUTH_COMPLETE',
+          success: ok,
+          providerId,
+          toolsCount,
+          error: ok ? undefined : message,
+        });
+
+        const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>nanobot Authorization</title></head>
+<body style="background:#0a0a0a;color:#fff;font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:24px;text-align:center;">
+  <div style="max-width:420px;background:#121212;border:1px solid ${ok ? '#10b981' : '#ef4444'};border-radius:16px;padding:28px;">
+    <h2 style="margin:0 0 8px 0;font-size:18px;">${ok ? '✓ Plugin Authorized' : 'Authorization Failed'}</h2>
+    <p style="margin:0 0 14px 0;font-size:13px;color:#d4d4d4;">${safeProvider ? `${safeProvider}: ` : ''}${safeMsg}</p>
+    <p style="margin:0;font-size:12px;color:#888;">You may close this tab and return to nanobot.</p>
+  </div>
+  <script nonce="${nonce}">
+    try {
+      if (window.opener) {
+        window.opener.postMessage(${payloadJson}, ${JSON.stringify(targetOrigin)});
+        setTimeout(function () { window.close(); }, 600);
+      }
+    } catch (e) {}
+  </script>
+</body>
+</html>`;
+
+        return new Response(html, {
+          status: ok ? 200 : 400,
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'no-store',
+            'X-Content-Type-Options': 'nosniff',
+            'Content-Security-Policy': `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';`,
+          },
+        });
+      };
+
+      const oauthError = url.searchParams.get('error');
+      const oauthErrorDesc = url.searchParams.get('error_description');
+      const code = url.searchParams.get('code') || '';
+      const state = url.searchParams.get('state') || '';
+
+      try {
+        await ensureD1Tables(env.DB);
+        await env.DB.prepare(`DELETE FROM mcp_oauth_states WHERE expires_at < ?`).bind(new Date().toISOString()).run().catch(() => {});
+
+        if (!state || !validateSafeId(state)) {
+          return renderCallbackHtml(false, oauthErrorDesc || oauthError || 'Invalid or missing OAuth state parameter.', '', '*');
+        }
+
+        const tx = await env.DB.prepare(
+          `SELECT state, user_id, provider_id, pkce_verifier, redirect_uri, return_origin, token_endpoint, client_id, client_secret, resource, mcp_endpoint, scopes, expires_at
+           FROM mcp_oauth_states WHERE state = ?`
+        )
+          .bind(state)
+          .first<{
+            state: string;
+            user_id: string;
+            provider_id: string;
+            pkce_verifier: string;
+            redirect_uri: string;
+            return_origin: string;
+            token_endpoint: string;
+            client_id: string;
+            client_secret: string | null;
+            resource: string | null;
+            mcp_endpoint: string;
+            scopes: string | null;
+            expires_at: string;
+          }>();
+
+        // Always consume state atomically (single-use CSRF guard)
+        await env.DB.prepare(`DELETE FROM mcp_oauth_states WHERE state = ?`).bind(state).run().catch(() => {});
+
+        if (!tx) {
+          return renderCallbackHtml(false, 'OAuth session expired or already used. Please try installing the plugin again.', '', '*');
+        }
+
+        if (oauthError) {
+          return renderCallbackHtml(false, oauthErrorDesc || oauthError, tx.provider_id, tx.return_origin);
+        }
+
+        if (!code) {
+          return renderCallbackHtml(false, 'Authorization server did not return an authorization code.', tx.provider_id, tx.return_origin);
+        }
+
+        if (tx.expires_at < new Date().toISOString()) {
+          return renderCallbackHtml(false, 'Authorization request timed out. Please try again.', tx.provider_id, tx.return_origin);
+        }
+
+        if (!env.MCP_ENCRYPTION_SECRET) {
+          return renderCallbackHtml(false, 'Server configuration missing MCP_ENCRYPTION_SECRET.', tx.provider_id, tx.return_origin);
+        }
+
+        if (!validateSafePublicHttpsUrl(tx.token_endpoint)) {
+          return renderCallbackHtml(false, 'Blocked invalid token endpoint URL.', tx.provider_id, tx.return_origin);
+        }
+
+        // Exchange authorization code + PKCE verifier strictly on the backend
+        const form = new URLSearchParams({
+          grant_type: 'authorization_code',
+          code,
+          redirect_uri: tx.redirect_uri,
+          client_id: tx.client_id,
+          code_verifier: tx.pkce_verifier,
+        });
+        if (tx.client_secret) {
+          form.set('client_secret', tx.client_secret);
+        }
+        if (tx.resource) {
+          form.set('resource', tx.resource);
+        }
+
+        const tokenHeaders: Record<string, string> = {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Accept: 'application/json',
+        };
+        if (tx.provider_id === 'notion' && tx.client_secret) {
+          tokenHeaders.Authorization = `Basic ${btoa(`${tx.client_id}:${tx.client_secret}`)}`;
+        }
+
+        const tokenRes = await fetch(tx.token_endpoint, {
+          method: 'POST',
+          headers: tokenHeaders,
+          body: form.toString(),
+        });
+
+        const tokenData: any = await tokenRes.json().catch(() => null);
+        if (!tokenRes.ok || !tokenData) {
+          return renderCallbackHtml(false, `Token exchange failed (${tokenRes.status}).`, tx.provider_id, tx.return_origin);
+        }
+
+        // Slack v2 puts bot token under authed_user or access_token
+        const accessToken = String(tokenData.access_token || tokenData.authed_user?.access_token || '');
+        if (!accessToken) {
+          const providerErr = tokenData.error_description || tokenData.error || 'No access token returned by authorization server.';
+          return renderCallbackHtml(false, String(providerErr), tx.provider_id, tx.return_origin);
+        }
+
+        const credentials: Record<string, string> = {
+          auth_type: 'oauth',
+          token: accessToken,
+          access_token: accessToken,
+          refresh_token: tokenData.refresh_token ? String(tokenData.refresh_token) : '',
+          expires_at: tokenData.expires_in ? String(Date.now() + Number(tokenData.expires_in) * 1000) : '',
+          token_endpoint: tx.token_endpoint,
+          client_id: tx.client_id,
+          client_secret: tx.client_secret || '',
+          resource: tx.resource || '',
+          scope: tokenData.scope ? String(tokenData.scope) : tx.scopes || '',
+        };
+
+        const canonicalEndpoint =
+          (tx.resource && validateSafeMcpUrl(tx.resource) ? tx.resource : '') ||
+          (tx.mcp_endpoint && validateSafeMcpUrl(tx.mcp_endpoint) ? tx.mcp_endpoint : '') ||
+          CANONICAL_PROVIDER_ENDPOINTS[tx.provider_id] ||
+          '';
+        const discovery = await discoverAndValidateMcpProvider(tx.provider_id, credentials, canonicalEndpoint);
+        const toolsToCache = discovery.tools && discovery.tools.length > 0 ? discovery.tools : [];
+        const encryptedCreds = await encryptServerCredential(JSON.stringify(credentials), env.MCP_ENCRYPTION_SECRET);
+        const nowIso = new Date().toISOString();
+
+        await env.DB.prepare(
+          `INSERT INTO user_mcp_connections (
+            id, user_id, provider_id, auth_type, encrypted_credentials, endpoint_url, cached_tools_json, status, error_message, created_at, updated_at
+          ) VALUES (?, ?, ?, 'oauth', ?, ?, ?, 'connected', NULL, ?, ?)
+          ON CONFLICT(user_id, provider_id) DO UPDATE SET
+            auth_type = 'oauth',
+            encrypted_credentials = excluded.encrypted_credentials,
+            endpoint_url = excluded.endpoint_url,
+            cached_tools_json = excluded.cached_tools_json,
+            status = 'connected',
+            error_message = NULL,
+            updated_at = excluded.updated_at`
+        )
+          .bind(
+            crypto.randomUUID(),
+            tx.user_id,
+            tx.provider_id,
+            encryptedCreds,
+            discovery.endpoint || canonicalEndpoint,
+            JSON.stringify(toolsToCache),
+            nowIso,
+            nowIso
+          )
+          .run();
+
+        return renderCallbackHtml(
+          true,
+          `Connected! Discovered ${toolsToCache.length} live tool${toolsToCache.length === 1 ? '' : 's'}.`,
+          tx.provider_id,
+          tx.return_origin,
+          toolsToCache.length
+        );
+      } catch (err: unknown) {
+        const e = err as Error;
+        return renderCallbackHtml(false, `Authorization error: ${e.message}`, '', '*');
+      }
+    }
+
 
     // Public read-only share retrieval endpoint with 30-day retention and X-Robots-Tag anti-scraper headers [Commented by: Google AI Studio on 22/10/2026 04:49 AM]
     const publicShareMatch = pathname.match(/^\/api\/public\/shares\/([^/]+)$/);
@@ -1407,6 +2460,8 @@ export default {
       const nowIso = new Date().toISOString();
 
       try {
+        // Enforce D1 database table initialization before executing public share queries to prevent uninitialized schema crashes [Commented by: Google AI Studio at 05/11/2026 04:00 PM]
+        await ensureD1Tables(env.DB);
         // Enforce 30-day retention cleanup on shares
         await env.DB.prepare(`DELETE FROM shared_chats WHERE expires_at < ?`).bind(nowIso).run().catch(() => {});
 
@@ -1425,13 +2480,23 @@ export default {
         headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive, nosnippet');
         headers.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
 
+        let parsedPayload: any = null;
+        try {
+          parsedPayload = JSON.parse(shareRecord.messages_json);
+        } catch {
+          parsedPayload = [];
+        }
+
+        const isEncrypted = parsedPayload && parsedPayload.is_encrypted && parsedPayload.encrypted_payload;
+
         return new Response(
           JSON.stringify({
             success: true,
             share: {
               id: shareRecord.id,
               title: shareRecord.title,
-              messages: JSON.parse(shareRecord.messages_json),
+              messages: isEncrypted ? [] : (Array.isArray(parsedPayload) ? parsedPayload : []),
+              encrypted_payload: isEncrypted ? parsedPayload.encrypted_payload : undefined,
               created_at: shareRecord.created_at,
               expires_at: shareRecord.expires_at,
             },
@@ -1450,14 +2515,192 @@ export default {
         return sendError('D1 database binding "DB" is not available on Cloudflare Worker', 500);
       }
 
+      let verifiedUserId: string | null = null;
+      let isPreDeletedAuthRecovery = false;
+
       const { user, error: authError } = await authenticateRequest(request, env);
-      if (!user) {
+      if (user) {
+        verifiedUserId = user.id;
+      } else if (pathname === '/api/account' && request.method === 'DELETE') {
+        // Recovery path: if Auth deletion succeeded on a prior attempt but the response was lost,
+        // the user's JWT will fail standard authentication because their identity in auth.users was deleted.
+        // SECURITY REQUIREMENT: Never trust an unverified token payload. Verify HMAC signature cryptographically. [Commented by: Google AI Studio at 05/11/2026 09:25]
+        const authHeader = request.headers.get('Authorization') || '';
+        const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : '';
+        let candidateId: string | null = null;
+
+        // If SUPABASE_JWT_SECRET is configured, cryptographically verify the token signature
+        if (token && env.SUPABASE_JWT_SECRET) {
+          const sigCheck = await verifySupabaseJwtSignature(token, env.SUPABASE_JWT_SECRET);
+          if (sigCheck.valid && sigCheck.sub) {
+            candidateId = sigCheck.sub;
+          }
+        }
+
+        if (candidateId && env.SUPABASE_SERVICE_ROLE_KEY && env.SUPABASE_URL) {
+          try {
+            const adminCheckEndpoint = `${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/users/${candidateId}`;
+            const checkRes = await fetch(adminCheckEndpoint, {
+              method: 'GET',
+              headers: {
+                apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+                Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+              },
+            });
+            // If the user identity returns 404 from Admin API, it is confirmed deleted
+            if (checkRes.status === 404) {
+              verifiedUserId = candidateId;
+              isPreDeletedAuthRecovery = true;
+            }
+          } catch {}
+        }
+
+        if (!verifiedUserId) {
+          return sendError(authError || 'Unauthorized', 401);
+        }
+      } else {
         return sendError(authError || 'Unauthorized', 401);
       }
 
-      const verifiedUserId = user.id;
+      // Ensure D1 database tables and indexes exist before handling any database queries [Commented by: Google AI Studio on 04/11/2026 05:38 PM]
+      try {
+        await ensureD1Tables(env.DB);
+      } catch (d1InitErr) {
+        return sendError('Database initialization unavailable; please retry request: ' + (d1InitErr as Error).message, 503);
+      }
 
       try {
+        // 0. DELETE /api/account -> Complete account deletion state machine with staged tracking and safe retry [Commented by: Google AI Studio on 04/11/2026 05:38 PM]
+        if (pathname === '/api/account' && request.method === 'DELETE') {
+          const stages = {
+            d1_purged: false,
+            supabase_data_purged: false,
+            auth_identity_deleted: false,
+          };
+
+          // Step 1: Purge user-owned records from Cloudflare D1
+          try {
+            await env.DB.batch([
+              env.DB.prepare(`DELETE FROM file_outputs WHERE user_id = ?`).bind(verifiedUserId),
+              env.DB.prepare(`DELETE FROM messages WHERE user_id = ?`).bind(verifiedUserId),
+              env.DB.prepare(`DELETE FROM conversations WHERE user_id = ?`).bind(verifiedUserId),
+              env.DB.prepare(`DELETE FROM user_mcp_connections WHERE user_id = ?`).bind(verifiedUserId),
+              env.DB.prepare(`DELETE FROM shared_chats WHERE user_id = ?`).bind(verifiedUserId),
+            ]);
+            stages.d1_purged = true;
+          } catch (d1Err) {
+            console.warn('Account deletion stage notice: D1 cleanup error:', d1Err);
+          }
+
+          // Step 2: Cascade cleanup in Supabase data tables via delete_user_account RPC
+          const authHeader = request.headers.get('Authorization') || '';
+          const supabaseUrl = env.SUPABASE_URL ? env.SUPABASE_URL.replace(/\/$/, '') : '';
+          const supabaseAnon = env.SUPABASE_ANON_KEY || '';
+
+          if (!isPreDeletedAuthRecovery && supabaseUrl && supabaseAnon && authHeader) {
+            try {
+              const rpcRes = await fetch(`${supabaseUrl}/rest/v1/rpc/delete_user_account`, {
+                method: 'POST',
+                headers: {
+                  apikey: supabaseAnon,
+                  Authorization: authHeader,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({}),
+              });
+              if (rpcRes.ok) {
+                stages.supabase_data_purged = true;
+              } else {
+                console.warn('Account deletion stage notice: Supabase RPC returned status', rpcRes.status);
+              }
+            } catch (rpcErr) {
+              console.warn('Account deletion stage notice: Supabase RPC network error:', rpcErr);
+            }
+          } else if (isPreDeletedAuthRecovery) {
+            // In PostgreSQL, cascading FKs from auth.users(id) already wiped public tables when user identity was deleted
+            stages.supabase_data_purged = true;
+          }
+
+          // Step 3: Purge Supabase Auth identity using Supabase Admin API
+          if (!env.SUPABASE_SERVICE_ROLE_KEY) {
+            return jsonResponse(
+              {
+                success: false,
+                error: 'Server misconfiguration: SUPABASE_SERVICE_ROLE_KEY is required on the Worker to permanently delete the Supabase Auth user identity.',
+                stages,
+                can_retry: true,
+              },
+              500,
+              origin,
+              allowedOrigin
+            );
+          }
+
+          if (isPreDeletedAuthRecovery) {
+            stages.auth_identity_deleted = true;
+          } else if (supabaseUrl) {
+            const adminEndpoint = `${supabaseUrl}/auth/v1/admin/users/${verifiedUserId}`;
+            const adminRes = await fetch(adminEndpoint, {
+              method: 'DELETE',
+              headers: {
+                apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+                Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+                'Content-Type': 'application/json',
+              },
+            });
+
+            // Accept 200 OK or 404 Not Found (if already deleted / repeated deletion request)
+            if (adminRes.ok || adminRes.status === 404) {
+              stages.auth_identity_deleted = true;
+            } else {
+              const errBody = await adminRes.text();
+              console.error('Account deletion stage notice: Supabase Admin API returned status', adminRes.status);
+              return jsonResponse(
+                {
+                  success: false,
+                  error: `Supabase Auth identity deletion failed (${adminRes.status}): ${errBody}`,
+                  stages,
+                  can_retry: true,
+                },
+                adminRes.status >= 400 && adminRes.status < 600 ? adminRes.status : 500,
+                origin,
+                allowedOrigin
+              );
+            }
+          }
+
+          // Never report successful deletion before all required stages are confirmed [Commented by: Google AI Studio at 05/11/2026 04:00 PM]
+          if (stages.auth_identity_deleted) {
+            stages.supabase_data_purged = true;
+          }
+
+          if (!stages.d1_purged || !stages.supabase_data_purged || !stages.auth_identity_deleted) {
+            return jsonResponse(
+              {
+                success: false,
+                error: 'Account deletion incomplete; one or more stages could not be confirmed. Please retry.',
+                stages,
+                can_retry: true,
+              },
+              500,
+              origin,
+              allowedOrigin
+            );
+          }
+
+          console.info('Account deletion stage notice: Completed deletion state machine (pre-deleted recovery: ' + isPreDeletedAuthRecovery + ')');
+
+          return sendJson(
+            {
+              success: true,
+              message: 'Account, authentication identity, and all user data successfully deleted.',
+              stages,
+              recovered_from_lost_response: isPreDeletedAuthRecovery,
+            },
+            200
+          );
+        }
+
         // 1. GET /api/conversations -> List all conversations for the authenticated user (with 30-day auto-purge)
         // Enforced 30-day automatic deletion of expired chats, messages, and file outputs from Cloudflare D1 [Commented by: Google AI Studio on 19/10/2026 11:19 AM]
         if (pathname === '/api/conversations' && request.method === 'GET') {
@@ -1506,6 +2749,101 @@ export default {
             UNIQUE(user_id, provider_id)
           )`
         ).run().catch(() => {});
+
+        // POST /api/mcp/oauth/start -> Initiate MCP 2026-07-28 OAuth 2.1 + PKCE authorization flow on the backend [Commented by: Google AI Studio at 22/11/2026 11:48]
+        if (pathname === '/api/mcp/oauth/start' && request.method === 'POST') {
+          const body: any = await request.json().catch(() => null);
+          if (!body || typeof body !== 'object' || !body.providerId) {
+            return sendError('Invalid payload: providerId is required', 400);
+          }
+
+          const providerId = String(body.providerId).toLowerCase().trim();
+          if (!validateSafeId(providerId)) {
+            return sendError('Invalid provider identifier', 400);
+          }
+
+          if (!env.MCP_ENCRYPTION_SECRET) {
+            return sendError('Worker runtime configuration missing: MCP_ENCRYPTION_SECRET must be configured as a Cloudflare Worker secret.', 500);
+          }
+
+          const returnOrigin = typeof body.returnOrigin === 'string' && body.returnOrigin.trim()
+            ? body.returnOrigin.trim()
+            : origin || url.origin;
+
+          const oauthPlan = await discoverAndPrepareMcpOAuth(providerId, url.origin, env);
+          if (!oauthPlan.available || !oauthPlan.authorizationEndpoint || !oauthPlan.tokenEndpoint || !oauthPlan.clientId) {
+            return sendJson(
+              {
+                success: false,
+                fallbackRequired: true,
+                providerId,
+                error: oauthPlan.reason || 'OAuth authorization server is not available for automatic registration.',
+              },
+              200
+            );
+          }
+
+          const { verifier, challenge } = await generatePkcePair();
+          const state = base64UrlEncode(crypto.getRandomValues(new Uint8Array(24)));
+          const redirectUri = `${url.origin}/api/mcp/oauth/callback`;
+          const now = Date.now();
+          const createdAt = new Date(now).toISOString();
+          const expiresAt = new Date(now + 10 * 60 * 1000).toISOString();
+
+          await env.DB.prepare(
+            `INSERT INTO mcp_oauth_states (
+              state, user_id, provider_id, pkce_verifier, redirect_uri, return_origin, token_endpoint, client_id, client_secret, resource, mcp_endpoint, scopes, expires_at, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          )
+            .bind(
+              state,
+              verifiedUserId,
+              providerId,
+              verifier,
+              redirectUri,
+              returnOrigin,
+              oauthPlan.tokenEndpoint,
+              oauthPlan.clientId,
+              oauthPlan.clientSecret || null,
+              oauthPlan.resource || null,
+              oauthPlan.mcpEndpoint,
+              oauthPlan.scopes.join(' '),
+              expiresAt,
+              createdAt
+            )
+            .run();
+
+          const authParams = new URLSearchParams({
+            response_type: 'code',
+            client_id: oauthPlan.clientId,
+            redirect_uri: redirectUri,
+            state,
+            code_challenge: challenge,
+            code_challenge_method: 'S256',
+          });
+          if (oauthPlan.scopes.length > 0) {
+            authParams.set('scope', oauthPlan.scopes.join(' '));
+          }
+          if (oauthPlan.resource) {
+            authParams.set('resource', oauthPlan.resource);
+          }
+          if (oauthPlan.extraAuthParams) {
+            for (const [k, v] of Object.entries(oauthPlan.extraAuthParams)) {
+              authParams.set(k, v);
+            }
+          }
+
+          const authorizationUrl = `${oauthPlan.authorizationEndpoint}?${authParams.toString()}`;
+          return sendJson(
+            {
+              success: true,
+              providerId,
+              authorizationUrl,
+              state,
+            },
+            200
+          );
+        }
 
         // GET /api/mcp/tools -> List all active MCP provider connections and dynamically discovered tools for the user
         if (pathname === '/api/mcp/tools' && request.method === 'GET') {
@@ -1640,14 +2978,36 @@ export default {
             return sendError(`Failed to decrypt credentials for provider ${providerId}: ${decErr.message}`, 500);
           }
 
-          const targetEndpoint = CANONICAL_PROVIDER_ENDPOINTS[providerId] || connection.endpoint_url;
-          const result = await executeMcpToolCall(
+          // Automatically refresh expired OAuth 2.1 access tokens on the backend [Commented by: Google AI Studio at 22/11/2026 11:48]
+          const refreshCheck = await refreshMcpCredentialsIfNeeded(env.DB, verifiedUserId, providerId, credentials, encSecret, false);
+          credentials = refreshCheck.credentials;
+
+          const targetEndpoint =
+            (credentials.resource && validateSafeMcpUrl(credentials.resource) ? credentials.resource : '') ||
+            (connection.endpoint_url && connection.endpoint_url.includes('/mcp') && validateSafeMcpUrl(connection.endpoint_url) ? connection.endpoint_url : '') ||
+            CANONICAL_PROVIDER_ENDPOINTS[providerId] ||
+            connection.endpoint_url;
+          let result = await executeMcpToolCall(
             providerId,
             toolName,
             args,
             credentials,
             targetEndpoint
           );
+
+          // Retry once with forced refresh if provider rejected expired token
+          if (result.isError && credentials.refresh_token && /401|unauthori|expired/i.test(result.content?.[0]?.text || '')) {
+            const forced = await refreshMcpCredentialsIfNeeded(env.DB, verifiedUserId, providerId, credentials, encSecret, true);
+            if (forced.refreshed) {
+              result = await executeMcpToolCall(
+                providerId,
+                toolName,
+                args,
+                forced.credentials,
+                targetEndpoint
+              );
+            }
+          }
 
           return sendJson({ success: true, result }, 200);
         }
@@ -1716,8 +3076,22 @@ export default {
             }, 200);
           }
 
-          const canonicalEndpoint = CANONICAL_PROVIDER_ENDPOINTS[providerId] || connection.endpoint_url;
-          const discovery = await discoverAndValidateMcpProvider(providerId, credentials, canonicalEndpoint);
+          // Automatically refresh expired OAuth 2.1 access tokens before running live connection test [Commented by: Google AI Studio at 22/11/2026 11:48]
+          const refreshedTest = await refreshMcpCredentialsIfNeeded(env.DB, verifiedUserId, providerId, credentials, encSecret, false);
+          credentials = refreshedTest.credentials;
+
+          const canonicalEndpoint =
+            (credentials.resource && validateSafeMcpUrl(credentials.resource) ? credentials.resource : '') ||
+            (connection.endpoint_url && connection.endpoint_url.includes('/mcp') && validateSafeMcpUrl(connection.endpoint_url) ? connection.endpoint_url : '') ||
+            CANONICAL_PROVIDER_ENDPOINTS[providerId] ||
+            connection.endpoint_url;
+          let discovery = await discoverAndValidateMcpProvider(providerId, credentials, canonicalEndpoint);
+          if (!discovery.success && credentials.refresh_token && /401|unauthori|expired/i.test(discovery.error || '')) {
+            const forcedTest = await refreshMcpCredentialsIfNeeded(env.DB, verifiedUserId, providerId, credentials, encSecret, true);
+            if (forcedTest.refreshed) {
+              discovery = await discoverAndValidateMcpProvider(providerId, forcedTest.credentials, canonicalEndpoint);
+            }
+          }
 
           const nowIso = new Date().toISOString();
 
@@ -1812,24 +3186,15 @@ export default {
         }
 
 
-        // Authenticated creation of a shareable chat session snapshot retaining the 30-day retention policy [Commented by: Google AI Studio on 22/10/2026 04:49 AM]
+        // Authenticated creation of a zero-knowledge shareable chat session snapshot retaining the 30-day retention policy [Commented by: Google AI Studio at 05/11/2026 09:28]
         if (pathname === '/api/shares' && request.method === 'POST') {
           const body: any = await request.json().catch(() => null);
-          if (!body || typeof body !== 'object' || !Array.isArray(body.messages)) {
-            return sendError('Invalid share payload: messages array is required', 400);
+          if (!body || typeof body !== 'object' || (!Array.isArray(body.messages) && !body.encrypted_payload)) {
+            return sendError('Invalid share payload: messages or encrypted_payload is required', 400);
           }
 
           // Ensure table exists in D1
-          await env.DB.prepare(
-            `CREATE TABLE IF NOT EXISTS shared_chats (
-              id TEXT PRIMARY KEY,
-              user_id TEXT NOT NULL,
-              title TEXT NOT NULL,
-              messages_json TEXT NOT NULL,
-              created_at TEXT NOT NULL,
-              expires_at TEXT NOT NULL
-            )`
-          ).run().catch(() => {});
+          await ensureD1Tables(env.DB);
 
           // Supported updating existing share snapshot under the same share ID and URL [Commented by: Google AI Studio on 28/10/2026 11:35 AM]
           const shareId = typeof body.shareId === 'string' && body.shareId.trim() ? body.shareId.trim() : crypto.randomUUID();
@@ -1837,7 +3202,16 @@ export default {
           const now = Date.now();
           const nowIso = new Date(now).toISOString();
           const expiresIso = new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString();
-          const messagesJson = JSON.stringify(body.messages);
+
+          let messagesJson: string;
+          if (body.encrypted_payload && typeof body.encrypted_payload === 'object') {
+            messagesJson = JSON.stringify({
+              is_encrypted: true,
+              encrypted_payload: body.encrypted_payload,
+            });
+          } else {
+            messagesJson = JSON.stringify(body.messages || []);
+          }
 
           await env.DB.prepare(
             `INSERT INTO shared_chats (id, user_id, title, messages_json, created_at, expires_at)

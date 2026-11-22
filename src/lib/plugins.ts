@@ -6,6 +6,7 @@ export interface MCPToolDefinition {
   parameters?: Record<string, unknown>;
 }
 
+// Added MCP 2026-07-28 remote Streamable HTTP endpoint and OAuth 2.1 metadata fields [Commented by: Google AI Studio at 22/11/2026 11:51]
 export interface PluginDefinition {
   id: string;
   name: string;
@@ -13,6 +14,8 @@ export interface PluginDefinition {
   description: string;
   mcpServerName: string;
   mcpEndpoint?: string;
+  remoteMcpUrl?: string;
+  oauthSupported?: boolean;
   authType: 'oauth' | 'api_key';
   oauthProvider?: 'google' | 'github';
   oauthScopes?: string[];
@@ -34,7 +37,9 @@ export const MCP_PLUGINS: PluginDefinition[] = [
     description: 'Execute D1 database queries, manage Workers scripts, update DNS records, and manipulate Cloudflare R2 object storage.',
     mcpServerName: 'cloudflare-mcp',
     mcpEndpoint: 'https://mcp.cloudflare.com/mcp',
-    authType: 'api_key',
+    remoteMcpUrl: 'https://mcp.cloudflare.com/mcp',
+    oauthSupported: true,
+    authType: 'oauth',
     credentialLabel: 'Cloudflare API Token',
     credentialPlaceholder: 'Paste your Cloudflare API token',
     helpUrl: 'https://dash.cloudflare.com/profile/api-tokens',
@@ -59,6 +64,8 @@ export const MCP_PLUGINS: PluginDefinition[] = [
     description: 'Search code repositories, read files, commit code updates, create issues, and open pull requests directly through nanobot.',
     mcpServerName: 'github-mcp',
     mcpEndpoint: 'https://api.github.com',
+    remoteMcpUrl: 'https://api.githubcopilot.com/mcp/',
+    oauthSupported: true,
     authType: 'oauth',
     oauthProvider: 'github',
     oauthScopes: ['repo', 'read:user', 'workflow'],
@@ -90,7 +97,9 @@ export const MCP_PLUGINS: PluginDefinition[] = [
     description: 'Inspect deployed sites, trigger new deploy builds, check build logs, and manage environment variables directly through nanobot.',
     mcpServerName: 'netlify-mcp',
     mcpEndpoint: 'https://netlify-mcp.netlify.app/mcp',
-    authType: 'api_key',
+    remoteMcpUrl: 'https://mcp.netlify.com/mcp',
+    oauthSupported: true,
+    authType: 'oauth',
     credentialLabel: 'Netlify Personal Access Token',
     credentialPlaceholder: 'Paste your Netlify token (nfp_...)',
     helpUrl: 'https://app.netlify.com/user/applications#personal-access-tokens',
@@ -118,7 +127,9 @@ export const MCP_PLUGINS: PluginDefinition[] = [
     description: 'List Supabase projects, inspect database tables, execute SQL queries, and monitor database health.',
     mcpServerName: 'supabase-mcp',
     mcpEndpoint: 'https://api.supabase.com',
-    authType: 'api_key',
+    remoteMcpUrl: 'https://mcp.supabase.com/mcp',
+    oauthSupported: true,
+    authType: 'oauth',
     credentialLabel: 'Supabase Personal Access Token',
     credentialPlaceholder: 'Paste your Supabase token (sbp_...)',
     helpUrl: 'https://supabase.com/dashboard/account/tokens',
@@ -144,6 +155,7 @@ export const MCP_PLUGINS: PluginDefinition[] = [
     description: 'Create new documents, read their contents, format paragraphs, and append text or meeting notes directly through nanobot.',
     mcpServerName: 'gdocs-mcp',
     mcpEndpoint: 'https://docs.googleapis.com',
+    oauthSupported: true,
     authType: 'oauth',
     oauthProvider: 'google',
     oauthScopes: ['https://www.googleapis.com/auth/documents'],
@@ -171,6 +183,7 @@ export const MCP_PLUGINS: PluginDefinition[] = [
     description: 'Search files and folders in your Google Drive, read document contents, and organize files directly through nanobot.',
     mcpServerName: 'gdrive-mcp',
     mcpEndpoint: 'https://www.googleapis.com',
+    oauthSupported: true,
     authType: 'oauth',
     oauthProvider: 'google',
     oauthScopes: ['https://www.googleapis.com/auth/drive.readonly', 'https://www.googleapis.com/auth/drive.file'],
@@ -198,6 +211,7 @@ export const MCP_PLUGINS: PluginDefinition[] = [
     description: 'Search email threads, read messages in your inbox, compose drafts, and send emails directly through nanobot.',
     mcpServerName: 'gmail-mcp',
     mcpEndpoint: 'https://gmail.googleapis.com',
+    oauthSupported: true,
     authType: 'oauth',
     oauthProvider: 'google',
     oauthScopes: ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.compose'],
@@ -225,7 +239,9 @@ export const MCP_PLUGINS: PluginDefinition[] = [
     description: 'Turn entire websites into clean Markdown, crawl subpages, and map site sitemaps for deep AI analysis.',
     mcpServerName: 'firecrawl-mcp',
     mcpEndpoint: 'https://api.firecrawl.dev',
-    authType: 'api_key',
+    remoteMcpUrl: 'https://mcp.firecrawl.dev/v2/mcp-oauth',
+    oauthSupported: true,
+    authType: 'oauth',
     credentialLabel: 'Firecrawl API Key',
     credentialPlaceholder: 'Paste your Firecrawl API Key (fc-...)',
     helpUrl: 'https://www.firecrawl.dev/app/api-keys',
@@ -250,7 +266,9 @@ export const MCP_PLUGINS: PluginDefinition[] = [
     description: 'Execute deep real-time web searches, query intelligence, and scrape full webpage Markdown content.',
     mcpServerName: 'tavily-mcp',
     mcpEndpoint: 'https://api.tavily.com',
-    authType: 'api_key',
+    remoteMcpUrl: 'https://mcp.tavily.com/mcp/',
+    oauthSupported: true,
+    authType: 'oauth',
     credentialLabel: 'Tavily API Key',
     credentialPlaceholder: 'Paste your Tavily API Key (tvly-...)',
     helpUrl: 'https://app.tavily.com/home',
@@ -273,7 +291,9 @@ export const MCP_PLUGINS: PluginDefinition[] = [
     description: 'Read and update workspace pages, query databases, create project trackers, and append content in Notion.',
     mcpServerName: 'notion-mcp',
     mcpEndpoint: 'https://api.notion.com',
-    authType: 'api_key',
+    remoteMcpUrl: 'https://mcp.notion.com/mcp',
+    oauthSupported: true,
+    authType: 'oauth',
     credentialLabel: 'Notion Integration Secret',
     credentialPlaceholder: 'Paste your Notion token (secret_...)',
     helpUrl: 'https://www.notion.so/my-integrations',
@@ -299,7 +319,8 @@ export const MCP_PLUGINS: PluginDefinition[] = [
     description: 'Read and send channel messages, reply in threads, upload snippets, and manage channels via Slack.',
     mcpServerName: 'slack-mcp',
     mcpEndpoint: 'https://slack.com',
-    authType: 'api_key',
+    oauthSupported: true,
+    authType: 'oauth',
     credentialLabel: 'Slack Bot User Token',
     credentialPlaceholder: 'Paste your Slack Bot Token (xoxb-...)',
     helpUrl: 'https://api.slack.com/apps',

@@ -6,3 +6,5 @@ coverage/
 *.log
 .env*
 !.env.example
+# Ignore container bun lockfile [Commented by: Google AI Studio on 03/11/2026 09:48 PM]
+bun.lock

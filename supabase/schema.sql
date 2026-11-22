@@ -22,16 +22,39 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Safe migration for existing deployments: drop legacy email column if previously present [Commented by: Google AI Studio on 01/11/2026 01:50 PM]
+-- Safe migration for existing deployments: non-destructively preserve legacy email column while dropping NOT NULL and uniqueness constraints [Commented by: Google AI Studio on 04/11/2026 05:38 PM]
 DO $$
 BEGIN
     IF EXISTS (
         SELECT 1 FROM information_schema.columns 
         WHERE table_schema = 'public' AND table_name = 'user_profiles' AND column_name = 'email'
     ) THEN
-        ALTER TABLE public.user_profiles DROP COLUMN email CASCADE;
+        ALTER TABLE public.user_profiles ALTER COLUMN email DROP NOT NULL;
+    END IF;
+    IF EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'user_profiles_email_key'
+    ) THEN
+        ALTER TABLE public.user_profiles DROP CONSTRAINT user_profiles_email_key;
     END IF;
 END $$;
+
+-- Ensure salt and theme columns exist on existing deployments [Commented by: Google AI Studio on 04/11/2026 05:23 PM]
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS salt TEXT NOT NULL DEFAULT '';
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS theme TEXT DEFAULT 'Neon Black';
+
+-- Safely drop legacy unique constraints on openrouter_key and tavily_key if present [Commented by: Google AI Studio on 04/11/2026 05:23 PM]
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'user_profiles_openrouter_key_key') THEN
+        ALTER TABLE public.user_profiles DROP CONSTRAINT user_profiles_openrouter_key_key;
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'user_profiles_tavily_key_key') THEN
+        ALTER TABLE public.user_profiles DROP CONSTRAINT user_profiles_tavily_key_key;
+    END IF;
+END $$;
+
+-- Database-level case-insensitive unique index preventing username collisions [Commented by: Google AI Studio on 03/11/2026 09:48 PM]
+CREATE UNIQUE INDEX IF NOT EXISTS uq_user_profiles_lower_username ON public.user_profiles (lower(username));
 
 -- Row Level Security for user_profiles: strictly isolated to the authenticated user's own UID
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
@@ -270,6 +293,11 @@ BEGIN
         RAISE EXCEPTION 'Authentication required for account deletion';
     END IF;
 
+    -- Clean up legacy chats if table exists [Commented by: Google AI Studio on 04/11/2026 05:23 PM]
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'chats') THEN
+        DELETE FROM public.chats WHERE user_id = v_user_id;
+    END IF;
+
     DELETE FROM public.file_code_outputs WHERE user_id = v_user_id;
     DELETE FROM public.messages WHERE user_id = v_user_id;
     DELETE FROM public.conversations WHERE user_id = v_user_id;
@@ -317,3 +345,17 @@ CREATE INDEX IF NOT EXISTS idx_file_code_outputs_conversation
     ON public.file_code_outputs (conversation_id, created_at DESC);
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.file_code_outputs TO authenticated, service_role;
+
+-- 6. Legacy public.chats Table Protection & RLS [Commented by: Google AI Studio on 04/11/2026 05:23 PM]
+-- Preserves legacy chats table non-destructively and enforces RLS for owner isolation
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'chats') THEN
+        ALTER TABLE public.chats ENABLE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS "Users can view own chats" ON public.chats;
+        DROP POLICY IF EXISTS "Users can delete own chats" ON public.chats;
+        CREATE POLICY "Users can view own chats" ON public.chats FOR SELECT TO authenticated USING (auth.uid() = user_id);
+        CREATE POLICY "Users can delete own chats" ON public.chats FOR DELETE TO authenticated USING (auth.uid() = user_id);
+        GRANT SELECT, DELETE ON TABLE public.chats TO authenticated, service_role;
+    END IF;
+END $$;

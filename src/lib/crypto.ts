@@ -145,3 +145,72 @@ export async function decryptText(encryptedText: string, key: CryptoKey): Promis
   const ciphertext = parts.slice(2).join(':');
   return await decryptData(ciphertext, iv, key);
 }
+
+// Zero-knowledge symmetric key generation and snapshot encryption for Cloudflare shared chats [Commented by: Google AI Studio at 05/11/2026 09:15]
+export function generateShareKey(): string {
+  if (!webCrypto) throw new Error('Web Crypto API is not available');
+  const rawKey = webCrypto.getRandomValues(new Uint8Array(32)); // 256-bit symmetric key
+  // Return URL-safe base64 string
+  return bufferToBase64(rawKey).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+export async function importRawShareKey(keyString: string): Promise<CryptoKey> {
+  if (!webCrypto || !webCrypto.subtle) throw new Error('Web Crypto Subtle API is not available');
+  let standardBase64 = keyString.replace(/-/g, '+').replace(/_/g, '/');
+  while (standardBase64.length % 4 !== 0) {
+    standardBase64 += '=';
+  }
+  const keyBuffer = base64ToBuffer(standardBase64);
+  return await webCrypto.subtle.importKey(
+    'raw',
+    keyBuffer as unknown as ArrayBuffer,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+export async function encryptShareSnapshot(
+  snapshotPayload: unknown,
+  shareKeyString: string
+): Promise<{ ciphertext: string; iv: string }> {
+  if (!webCrypto || !webCrypto.subtle) throw new Error('Web Crypto Subtle API is not available');
+  const cryptoKey = await importRawShareKey(shareKeyString);
+  const jsonStr = JSON.stringify(snapshotPayload);
+  const encoder = new TextEncoder();
+  const encodedData = encoder.encode(jsonStr);
+  const iv = webCrypto.getRandomValues(new Uint8Array(12));
+
+  const encryptedBuffer = await webCrypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    cryptoKey,
+    encodedData
+  );
+
+  return {
+    ciphertext: bufferToBase64(encryptedBuffer),
+    iv: bufferToBase64(iv),
+  };
+}
+
+export async function decryptShareSnapshot(
+  ciphertextBase64: string,
+  ivBase64: string,
+  shareKeyString: string
+): Promise<any> {
+  if (!webCrypto || !webCrypto.subtle) throw new Error('Web Crypto Subtle API is not available');
+  const cryptoKey = await importRawShareKey(shareKeyString);
+  const ciphertext = base64ToBuffer(ciphertextBase64);
+  const iv = base64ToBuffer(ivBase64);
+
+  const decryptedBuffer = await webCrypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: iv as unknown as ArrayBuffer },
+    cryptoKey,
+    ciphertext as unknown as ArrayBuffer
+  );
+
+  const decoder = new TextDecoder();
+  const jsonStr = decoder.decode(decryptedBuffer);
+  return JSON.parse(jsonStr);
+}
+

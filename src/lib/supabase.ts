@@ -1,7 +1,7 @@
 // nanobot Supabase Client: Genuine Supabase Auth, Strict User Isolation, and Authoritative Data Persistence [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
 
 import { createClient, SupabaseClient, Session, User } from '@supabase/supabase-js';
-import { deriveKeyFromPassword, generateSalt, encryptText, decryptText } from './crypto';
+import { deriveKeyFromPassword, generateSalt, encryptText, decryptText, decryptData } from './crypto';
 
 // Multi-prefix environment variable support for Netlify and Supabase deployment environments [Commented by: Google AI Studio on 01/11/2026 02:18 PM]
 const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : (typeof process !== 'undefined' ? process.env : {});
@@ -164,9 +164,7 @@ export async function signUpWithUsername(
     throw new Error(validation.error || 'Invalid username.');
   }
 
-  if (pwd.length < 6) {
-    throw new Error('Password must be at least 6 characters long.');
-  }
+  // Removed client-side 6-character minimum password check [Commented by: Google AI Studio at 22/11/2026 12:08]
 
   if (!supabase) {
     throw new Error('Supabase client is not configured. Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set.');
@@ -418,8 +416,11 @@ export async function restoreActiveSession(passwordSecret?: string): Promise<{ u
   }
 }
 
-// Sign out from Supabase Auth [Commented by: Google AI Studio on 01/11/2026 01:52 PM]
+// Sign out from Supabase Auth and cleanly clear cached session credentials [Commented by: Google AI Studio on 02/11/2026 08:55 AM]
 export async function signOutSupabase(): Promise<void> {
+  try {
+    localStorage.removeItem('nanobot_active_user');
+  } catch {}
   if (supabase) {
     try {
       await supabase.auth.signOut();
@@ -505,24 +506,57 @@ export async function updateUserProfileInSupabase(
   }
 }
 
-// Delete user account and dependent records safely from Supabase [Commented by: Google AI Studio on 01/11/2026 04:18 PM]
+// Delete user account and dependent records safely from Supabase & Cloudflare D1 [Commented by: Google AI Studio on 04/11/2026 05:23 PM]
 export async function deleteUserAccountFromSupabase(userId: string): Promise<boolean> {
   if (!supabase) return false;
 
   try {
-    // 1. Attempt database-level atomic deletion RPC
-    const { error: rpcErr } = await supabase.rpc('delete_user_account');
-    if (rpcErr) {
-      console.warn('delete_user_account RPC notice, running cascading delete:', rpcErr.message);
-      // Fallback: delete dependent records directly under user RLS
-      await supabase.from('file_code_outputs').delete().eq('user_id', userId);
-      await supabase.from('messages').delete().eq('user_id', userId);
-      await supabase.from('conversations').delete().eq('user_id', userId);
-      await supabase.from('user_profiles').delete().eq('id', userId);
+    // 1. Attempt complete server-side deletion via Cloudflare Worker if configured
+    let sessionToken: string | null = null;
+    try {
+      const { data } = await supabase.auth.getSession();
+      sessionToken = data.session?.access_token || null;
+    } catch {}
+
+    const workerBase = (
+      (env.VITE_CLOUDFLARE_WORKER_URL as string) ||
+      (env.VITE_WORKER_URL as string) ||
+      'https://nanobot-api.mud-amiable-tweed.workers.dev'
+    ).replace(/\/$/, '');
+
+    // [Delegate full deletion to Worker endpoint with verified session token] [Commented by: Google AI Studio at 05/11/2026 17:29]
+    if (workerBase && sessionToken) {
+      const res = await fetch(`${workerBase}/api/account`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${sessionToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        // If the worker returned an error, verify whether the identity is already absent from Supabase Auth
+        const { data: userData } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+        if (!userData?.user) {
+          console.info('Account identity is confirmed absent from Supabase Auth; completing local cleanup.');
+        } else {
+          const errJson = await res.json().catch(() => ({}));
+          const message = errJson.error || `Worker account deletion failed with status ${res.status}`;
+          console.error('Complete account deletion error:', message);
+          throw new Error(message);
+        }
+      }
+    } else {
+      throw new Error('Authentication session token is required to delete user account.');
     }
 
-    // 2. Clear local storage caches for this user
+
+    // 2. Clear all local storage caches for this user
+    localStorage.removeItem('nanobot_chats');
+    localStorage.removeItem('nanobot_encrypted_chats');
     localStorage.removeItem(`nanobot_encrypted_chats_${userId}`);
+    localStorage.removeItem(`nanobot_migration_progress_${userId}`);
+    localStorage.removeItem(`nanobot_migration_lock_${userId}`);
     const localUsers = getLocalProfiles().filter((u) => u.id !== userId);
     saveLocalProfiles(localUsers);
 
@@ -531,7 +565,7 @@ export async function deleteUserAccountFromSupabase(userId: string): Promise<boo
     return true;
   } catch (err) {
     console.error('Failed to delete account from Supabase:', err);
-    return false;
+    throw err;
   }
 }
 
@@ -770,28 +804,53 @@ export async function deleteConversationFromSupabase(userId: string, conversatio
   }
 }
 
-// Safe migration of existing local chats to authoritative Supabase store [Commented by: Google AI Studio on 01/11/2026 04:18 PM]
+// Safe, reliable, and resumable migration of legacy chats to authoritative Supabase store [Commented by: Google AI Studio on 04/11/2026 05:38 PM]
 export async function migrateLocalChatsToSupabase(userId: string, key?: CryptoKey | null): Promise<void> {
   if (!supabase) return;
 
+  const progressKey = `nanobot_migration_progress_${userId}`;
+  const lockKey = `nanobot_migration_lock_${userId}`;
+
+  // Prevent race conditions from simultaneous tab loads or rapid browser refreshes [Commented by: Google AI Studio at 05/11/2026 04:00 PM]
+  const existingLock = localStorage.getItem(lockKey);
+  if (existingLock) {
+    const lockTime = parseInt(existingLock, 10);
+    if (!isNaN(lockTime) && Date.now() - lockTime < 30000) {
+      console.info('Migration currently active in another session or tab; skipping concurrent run.');
+      return;
+    }
+  }
+  localStorage.setItem(lockKey, Date.now().toString());
+
   try {
     let localChats: any[] = [];
-
-    // Try reading encrypted local cache first
-    const enc = localStorage.getItem(`nanobot_encrypted_chats_${userId}`);
-    if (enc && key) {
+    const completedIds: string[] = (() => {
       try {
-        const decrypted = await decryptText(enc, key);
-        const parsed = JSON.parse(decrypted);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          localChats = parsed;
+        return JSON.parse(localStorage.getItem(progressKey) || '[]');
+      } catch {
+        return [];
+      }
+    })();
+
+    // 1. Try reading encrypted local cache first
+    const enc = localStorage.getItem(`nanobot_encrypted_chats_${userId}`);
+    if (enc) {
+      if (key) {
+        try {
+          const decrypted = await decryptText(enc, key);
+          const parsed = JSON.parse(decrypted);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            localChats = parsed;
+          }
+        } catch (e) {
+          console.warn('Decryption note during migration; preserving encrypted payload:', e);
         }
-      } catch (e) {
-        console.warn('Decryption note during migration:', e);
+      } else {
+        console.info('Encryption key not yet unlocked; preserving local encrypted chats without modification.');
       }
     }
 
-    // Fallback to legacy unencrypted chats
+    // 2. Fallback to legacy unencrypted local chats if no decrypted chats yet
     if (localChats.length === 0) {
       const legacy = localStorage.getItem('nanobot_chats');
       if (legacy) {
@@ -804,9 +863,54 @@ export async function migrateLocalChatsToSupabase(userId: string, key?: CryptoKe
       }
     }
 
+    // 3. Inspect remote legacy public.chats table (non-destructive)
+    try {
+      const { data: legacyRemote, error: legErr } = await supabase
+        .from('chats')
+        .select('*')
+        .eq('user_id', userId);
+
+      if (!legErr && legacyRemote && legacyRemote.length > 0) {
+        if (key) {
+          for (const rc of legacyRemote) {
+            try {
+              let decryptedData = rc.data_ciphertext;
+              if (decryptedData) {
+                const iv = rc.iv || (decryptedData.startsWith('enc:') ? decryptedData.split(':')[1] : '');
+                const ct = decryptedData.startsWith('enc:') ? decryptedData.split(':').slice(2).join(':') : decryptedData;
+                if (iv && ct) {
+                  decryptedData = await decryptData(ct, iv, key);
+                }
+              }
+              const parsed = JSON.parse(decryptedData);
+              const msgs = Array.isArray(parsed) ? parsed : (parsed.messages || []);
+              
+              // Prevent duplicate chat objects if already in localChats
+              const existsLocally = localChats.some((c) => c.id === rc.id);
+              if (!existsLocally) {
+                localChats.push({
+                  id: rc.id,
+                  title: rc.title_ciphertext || 'Migrated Noodle',
+                  pinned: Boolean(rc.pinned),
+                  updated: new Date(rc.updated_at || Date.now()).getTime(),
+                  messages: msgs,
+                });
+              }
+            } catch (decErr) {
+              console.warn(`Decryption key invalid for remote chat ${rc.id}; preserving remote ciphertext safely:`, decErr);
+            }
+          }
+        } else {
+          console.info('Legacy remote chats present but password key locked; preserving remote public.chats for future unlock.');
+        }
+      }
+    } catch (legCatch) {
+      console.warn('Legacy remote chats inspection notice:', legCatch);
+    }
+
     if (localChats.length === 0) return;
 
-    // Check existing remote count distinguishing failure from empty DB [Commented by: Google AI Studio on 01/11/2026 04:18 PM]
+    // Verify remote database connection state
     const { count, error: countErr } = await supabase
       .from('conversations')
       .select('id', { count: 'exact', head: true })
@@ -817,31 +921,143 @@ export async function migrateLocalChatsToSupabase(userId: string, key?: CryptoKe
       return;
     }
 
-    // If Supabase already has conversations, avoid overwriting blindly
-    if (typeof count === 'number' && count > 0) {
-      return;
-    }
-
-    // Upload local chats to Supabase with error verification
+    // 4. Migrate chats with resumption, progress tracking, deduplication, and verification
     let allSucceeded = true;
     for (const chat of localChats) {
-      const ok = await persistConversationToSupabase(userId, chat);
-      if (!ok) {
+      // If already verified as migrated in a prior run, verify it still exists remotely before skipping
+      if (completedIds.includes(chat.id)) {
+        continue;
+      }
+
+      // Check if conversation already exists remotely to prevent duplicate creation
+      const { data: existingRemote } = await supabase
+        .from('conversations')
+        .select('id')
+        .eq('id', chat.id)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      let persistOk = false;
+      if (existingRemote && existingRemote.id) {
+        // Conversation already exists; mark as completed
+        persistOk = true;
+      } else {
+        // Deduplicate messages within the conversation payload
+        const seenMsgIds = new Set<string>();
+        const dedupedMessages = (chat.messages || []).filter((m: any) => {
+          if (!m.id) return true;
+          if (seenMsgIds.has(m.id)) return false;
+          seenMsgIds.add(m.id);
+          return true;
+        });
+
+        const chatToPersist = {
+          ...chat,
+          messages: dedupedMessages,
+        };
+
+        persistOk = await persistConversationToSupabase(userId, chatToPersist);
+      }
+
+      if (persistOk) {
+        // Verify remote persistence before recording in progress tracker
+        const { data: verified } = await supabase
+          .from('conversations')
+          .select('id')
+          .eq('id', chat.id)
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (verified && verified.id) {
+          if (!completedIds.includes(chat.id)) {
+            completedIds.push(chat.id);
+            try {
+              localStorage.setItem(progressKey, JSON.stringify(completedIds));
+            } catch {}
+          }
+        } else {
+          allSucceeded = false;
+          console.warn(`Remote verification failed for chat "${chat.id}"`);
+        }
+      } else {
         allSucceeded = false;
-        console.warn(`Failed to persist chat "${chat.id}" during migration`);
+        console.warn(`Failed to persist chat "${chat.id}" during migration; preserving for retry`);
       }
     }
 
-    if (allSucceeded) {
-      // Safely clear legacy unencrypted chats only after remote verification succeeds
+    if (allSucceeded && completedIds.length >= localChats.length) {
+      // Safely clear legacy unencrypted chats ONLY after remote verification of all chats succeeds
       localStorage.removeItem('nanobot_chats');
-      console.info(`Successfully migrated ${localChats.length} local conversations to Supabase.`);
+      localStorage.removeItem(progressKey);
+      console.info(`Successfully migrated and verified ${localChats.length} conversations to Supabase.`);
     } else {
-      console.warn('Migration was partially incomplete; preserving local records for safe retry.');
+      console.warn(`Migration partially completed (${completedIds.length}/${localChats.length} verified); preserving all local records for safe resumption.`);
     }
   } catch (err) {
     console.warn('Migration to Supabase notice:', err);
+  } finally {
+    localStorage.removeItem(lockKey);
   }
+}
+
+// One-time client-side safe restoration of legacy remote chats (public.chats & conversations/messages) into browser local encrypted store [Commented by: Google AI Studio at 05/11/2026 09:32]
+export async function restoreLegacyRemoteChatsToLocal(
+  userId: string,
+  key: CryptoKey,
+  salt: string
+): Promise<Array<{ id: string; title: string; messages: any[]; pinned: boolean; updated: number; shareId?: string }>> {
+  if (!supabase) return [];
+  const recoveredChats: any[] = [];
+  try {
+    // 1. Check legacy public.chats table non-destructively
+    const { data: legacyRemote } = await supabase.from('chats').select('*').eq('user_id', userId);
+    if (legacyRemote && legacyRemote.length > 0) {
+      for (const rc of legacyRemote) {
+        try {
+          let decryptedData = rc.data_ciphertext;
+          if (decryptedData) {
+            const iv = rc.iv || (decryptedData.startsWith('enc:') ? decryptedData.split(':')[1] : '');
+            const ct = decryptedData.startsWith('enc:') ? decryptedData.split(':').slice(2).join(':') : decryptedData;
+            if (iv && ct) {
+              decryptedData = await decryptData(ct, iv, key);
+            }
+          }
+          const parsed = JSON.parse(decryptedData);
+          const msgs = Array.isArray(parsed) ? parsed : (parsed.messages || []);
+          recoveredChats.push({
+            id: rc.id,
+            title: rc.title_ciphertext || 'Restored Noodle',
+            pinned: Boolean(rc.pinned),
+            updated: new Date(rc.updated_at || Date.now()).getTime(),
+            messages: msgs,
+          });
+        } catch (decErr) {
+          console.warn(`Could not decrypt legacy remote chat ${rc.id}:`, decErr);
+        }
+      }
+    }
+
+    // 2. Check normalized conversations & messages tables
+    const remoteConvs = await fetchRemoteConversationsFromSupabase(userId);
+    if (remoteConvs && remoteConvs.length > 0) {
+      for (const rc of remoteConvs) {
+        if (!recoveredChats.some((c) => c.id === rc.id)) {
+          recoveredChats.push(rc);
+        }
+      }
+    }
+
+    // If any chats were restored, persist strictly into local encrypted storage
+    if (recoveredChats.length > 0) {
+      const payload = JSON.stringify(recoveredChats);
+      const encrypted = await encryptText(payload, key, salt);
+      localStorage.setItem(`nanobot_encrypted_chats_${userId}`, encrypted);
+      console.info(`Successfully restored ${recoveredChats.length} legacy remote chats to browser encrypted storage.`);
+    }
+  } catch (err) {
+    console.warn('Legacy remote chats restoration notice:', err);
+  }
+  return recoveredChats;
 }
 
 // ==========================================

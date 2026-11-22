@@ -1,4 +1,4 @@
-# GitHub Actions workflow deploying nanobot-api Cloudflare Worker using Wrangler with secure credentials [Commented by: Google AI Studio on 15/10/2026 10:16 AM]
+# GitHub Actions workflow deploying nanobot-api Cloudflare Worker using Wrangler with secure credentials [Commented by: Google AI Studio on 15/10/2026 10:16 PM]
 
 name: Deploy Cloudflare Worker Backend
 
@@ -27,19 +27,21 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # Configured Node.js 24 LTS setup for Cloudflare Worker deployment [Commented by: Google AI Studio on 22/10/2026 06:25 AM]
+      # Configured Node.js 24 LTS setup with worker lockfile caching [Commented by: Google AI Studio on 02/11/2026 08:38 AM]
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: 'npm'
-          cache-dependency-path: 'worker/package.json'
+          cache-dependency-path: 'worker/package-lock.json'
 
       - name: Install Worker Dependencies
         working-directory: worker
         run: |
-          if [ -f package.json ]; then
-            npm ci || npm install
+          if [ -f package-lock.json ]; then
+            npm ci
+          elif [ -f package.json ]; then
+            npm install
           fi
 
       # Direct Cloudflare Worker deployment with verified D1 database_id from wrangler.toml [Commented by: Google AI Studio on 17/10/2026 02:43 AM]
