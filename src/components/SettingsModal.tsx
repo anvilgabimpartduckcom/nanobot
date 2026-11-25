@@ -1476,7 +1476,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <h2 className="text-xl font-bold font-serif text-white">About nanobot</h2>
                 {/* Updated description to state 'source available AI chatbot' [Commented by: Google AI Studio on 29/10/2026 09:00 PM] */}
                 <p className="text-sm leading-relaxed">
-                  Everyone should get to use AI, and that too without giving away their data. So we created nanobot, a source available AI chatbot which respects your privacy, and is free to use. Users bring their own API keys, which helps in further keeping nanobot completely free to use.
+                  Everyone should get to use AI, and that too without giving away their data. So I created nanobot, a source available AI chatbot which respects your privacy, and is free to use. Users bring their own API keys, which helps in further keeping nanobot completely free to use.
                   <br />
                   <a
                     href="https://github.com/anvilgabimpartduckcom/nanobot/blob/main/LICENSE"
@@ -1541,7 +1541,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 <div className="border-t border-neutral-800 pt-4 mt-2 space-y-2 text-xs text-neutral-400 leading-relaxed">
                   <p>
-                    Special thanks to {sortedServices.join(', ')}. The features from these services have enabled and assisted us in coding, developing, hosting, creating backend and maintaining nanobot.
+                    Special thanks to {sortedServices.join(', ')}. The features provided by these services have helped me code, develop, host, build the backend for, and maintain nanobot.
                   </p>
                   <p className="text-[11px] text-neutral-500">
                     All terms and conditions are under these services.
