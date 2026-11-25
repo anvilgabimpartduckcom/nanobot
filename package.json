@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@google/genai": "^3.3.0",
-    "@supabase/supabase-js": "^2.117.3",
+    "@supabase/supabase-js": "^2.119.2",
     "@tailwindcss/vite": "^4.3.5",
     "@vitejs/plugin-react": "^6.1.1",
     "dompurify": "^3.4.18",
