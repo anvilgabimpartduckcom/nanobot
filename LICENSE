@@ -28,6 +28,10 @@ All rights reserved.
 
 1.11. "Written Permission" means explicit permission granted in a written form by the Licensor, including email or another recorded written communication.
 
+1.12. "Internal Use" means installing, running, maintaining, modifying, or integrating the Work solely within an organisation's own systems, infrastructure, and internal operations, without making the Work or a Modified Work available to external customers, clients, or other third parties.
+
+1.13. "Authorised Personnel" means an organisation's employees and contractors who are authorised by that organisation to access the Work solely as necessary for its Internal Use. Contractors must be acting on the organisation's behalf and must be subject to confidentiality and use restrictions sufficient to protect the Work.
+
 2. OWNERSHIP AND COPYRIGHT
 
 2.1. The Work and all associated intellectual property rights remain the property of the Licensor or their respective rights holders.
@@ -52,11 +56,27 @@ All rights reserved.
 
 3.1.6. Modify the Work for private, personal, and non-commercial purposes.
 
-3.2. These permissions do not include the right to sell, commercially use, publish, share, distribute, or sublicense the Work or any Modified Work.
+3.2. The permissions in Sections 3.1.1 through 3.1.6 do not include the right to sell, commercially use, publish, share, distribute, or sublicense the Work or any Modified Work.
+
+3.3. In addition to the permissions in Section 3.1, where You are an organisation, the Licensor grants You a limited, non-exclusive, non-transferable, non-sublicensable, terminable permission to use the Work for Internal Use. This permission includes:
+
+3.3.1. Installing, executing, and operating the Work on systems and infrastructure controlled by or operated for Your organisation.
+
+3.3.2. Modifying the Work for Your organisation's internal operational requirements.
+
+3.3.3. Integrating the Work with Your organisation's internal applications, services, and infrastructure.
+
+3.3.4. Maintaining private internal copies, backups, development branches, and repositories.
+
+3.3.5. Allowing Your Authorised Personnel to access and use the Work solely for Your organisation's Internal Use.
+
+3.4. Authorised Personnel receive no independent licence or right to use, sell, distribute, publish, sublicense, or otherwise exploit the Work. You are responsible for ensuring that they comply with this License. Their access must end when they are no longer authorised or when their work for Your organisation ends.
+
+3.5. Internal Use does not include providing access to the Work or a Modified Work to external customers, clients, members of the public, or other third parties, or offering the Work as an externally accessible service. Those activities require Written Permission.
 
 4. NO SELLING OR RESALE
 
-4.1. You may not sell, resell, rent, lease, license, sublicense, or otherwise exchange the Work or any part of it for money or other commercial consideration without Written Permission from the Licensor.
+4.1. You may not sell, resell, rent, lease, license, sublicense, or otherwise exchange the Work or any part of it for money or other commercial consideration without Written Permission from the Licensor. The permission for Internal Use in Section 3.3 does not permit any such sale, resale, licensing, sublicensing, or exchange.
 
 4.2. This restriction applies to:
 
@@ -74,7 +94,7 @@ All rights reserved.
 
 5. NO COMMERCIAL USE
 
-5.1. You may not use the Work or any Modified Work for Commercial Use without Written Permission from the Licensor.
+5.1. You may not use the Work or any Modified Work for Commercial Use without Written Permission from the Licensor, except for Internal Use expressly permitted under Section 3.3.
 
 5.2. Commercial Use includes, but is not limited to:
 
@@ -84,7 +104,7 @@ All rights reserved.
 
 5.2.3. Incorporating the Work into a product or service that generates revenue.
 
-5.2.4. Using the Work in a business or commercial organization.
+5.2.4. Using the Work to provide products or services to customers or other third parties, or otherwise exploiting it commercially. For clarity, Internal Use permitted under Section 3.3 within a business or commercial organisation is not prohibited by this subsection.
 
 5.2.5. Monetizing the Work through advertisements, subscriptions, paid access, or other revenue-generating methods.
 
@@ -92,7 +112,7 @@ All rights reserved.
 
 6. NO UNAUTHORIZED DISTRIBUTION
 
-6.1. You may not distribute, publish, upload, mirror, share, transfer, or otherwise make the Work or any Modified Work available to another person or entity without Written Permission from the Licensor.
+6.1. You may not distribute, publish, upload, mirror, share, transfer, or otherwise make the Work or any Modified Work available to another person or entity without Written Permission from the Licensor, except for access by Your Authorised Personnel strictly for Internal Use as permitted under Section 3.3.
 
 6.2. This restriction applies to both public and private distribution, including:
 
@@ -112,23 +132,23 @@ All rights reserved.
 
 6.2.8. Messaging platforms and file-transfer services.
 
-6.3. Making the Work available to another person through a private link, invitation, shared account, or restricted-access repository also counts as Distribution.
+6.3. Making the Work available to another person through a private link, invitation, shared account, or restricted-access repository counts as Distribution, except where access is provided to Authorised Personnel strictly for Internal Use under Section 3.3.
 
 6.4. The fact that the Licensor makes the Work publicly accessible through an official website or repository does not grant You permission to redistribute it.
 
-6.5. Section 3 permits You to make and keep Private Copies for Your own use. Such copies do not grant You permission to share or distribute the Work.
+6.5. Sections 3.1 and 8 permit private personal copies, while Section 3.3 separately permits internal organisational copies and access by Authorised Personnel. Neither permission authorises external Distribution or access by persons who are not Authorised Personnel.
 
 6.6. Distribution is prohibited unless the Licensor grants Written Permission, except where applicable law independently grants You a right that cannot legally be restricted by this License.
 
 7. MODIFICATIONS AND DERIVATIVE WORKS
 
-7.1. You may modify the Work for private, personal, and non-commercial purposes.
+7.1. You may modify the Work for private, personal, and non-commercial purposes. An organisation may also modify the Work for Internal Use as expressly permitted under Section 3.3.
 
 7.2. However:
 
-7.2.1. You may not sell or commercially use a Modified Work without Written Permission.
+7.2.1. You may not sell or commercially use a Modified Work without Written Permission, except for Internal Use permitted under Section 3.3.
 
-7.2.2. You may not distribute or publish a Modified Work without Written Permission.
+7.2.2. You may not distribute or publish a Modified Work without Written Permission. Access by Authorised Personnel strictly for Internal Use is permitted under Section 3.3 and does not authorise external Distribution.
 
 7.2.3. You may not claim ownership of the original Work.
 
@@ -140,7 +160,7 @@ All rights reserved.
 
 8. PRIVATE COPIES, FORKS, AND REPOSITORIES
 
-8.1. You may create and maintain Private Copies of the Work for Your own private, personal, and non-commercial use.
+8.1. You may create and maintain Private Copies of the Work for Your own private, personal, and non-commercial use. An organisation may also create and maintain internal copies, backups, development branches, and repositories solely for Internal Use as permitted under Section 3.3.
 
 8.2. Permitted Private Copies include:
 
@@ -156,9 +176,9 @@ All rights reserved.
 
 8.3. You may create a local working copy or local development branch for Your own use, provided that it is not shared with another person.
 
-8.4. A copy is not considered private if another person can access, download, view, or obtain it through a shared repository, shared storage account, public link, or other distribution method.
+8.4. A personal copy is not considered private if another person can access, download, view, or obtain it through a shared repository, shared storage account, public link, or other distribution method. This does not prevent an organisation from maintaining internal repositories and storage accessible only to its Authorised Personnel as permitted under Section 3.3.
 
-8.5. You may not create, publish, maintain, or distribute a public or private hosted repository containing the Work or a Modified Work if that repository makes the material accessible to another person, unless You have Written Permission.
+8.5. You may not create, publish, maintain, or distribute a public or externally accessible hosted repository containing the Work or a Modified Work unless You have Written Permission. An organisation may maintain a private internal repository accessible only to its Authorised Personnel for Internal Use under Section 3.3.
 
 8.6. You may not use Private Copies as a way to bypass the Distribution restrictions in this License.
 
@@ -208,13 +228,13 @@ All rights reserved.
 
 13.2.1. Sell the Work.
 
-13.2.2. Use the Work commercially.
+13.2.2. Use the Work commercially, except for Internal Use expressly permitted under Section 3.3.
 
-13.2.3. Distribute the Work publicly or privately.
+13.2.3. Distribute the Work publicly or externally, or make it available to persons other than Authorised Personnel for Internal Use permitted under Section 3.3.
 
-13.2.4. Publish forks or Modified Works.
+13.2.4. Publish forks or Modified Works, or make them available outside the Internal Use permission in Section 3.3.
 
-13.2.5. Sublicense the Work.
+13.2.5. Sublicense the Work or grant independent rights in it to another person or entity. Access by Authorised Personnel under Section 3.3 is not a sublicense.
 
 13.2.6. Claim ownership of the Work.
 
@@ -248,31 +268,29 @@ All rights reserved.
 
 15.5. The Licensor may restore permission through Written Permission.
 
-17. LIMITATION OF LIABILITY
+16. LIMITATION OF LIABILITY
 
-17.1. TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE LICENSOR SHALL NOT BE LIABLE FOR ANY DAMAGES ARISING FROM OR RELATED TO THE USE OR INABILITY TO USE THE WORK.
+16.1. TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE LICENSOR SHALL NOT BE LIABLE FOR ANY DAMAGES ARISING FROM OR RELATED TO THE USE OR INABILITY TO USE THE WORK.
 
-17.2. THIS INCLUDES DIRECT, INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR OTHER DAMAGES, EVEN IF THE LICENSOR HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+16.2. THIS INCLUDES DIRECT, INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR OTHER DAMAGES, EVEN IF THE LICENSOR HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
 
-17.3. NOTHING IN THIS SECTION EXCLUDES LIABILITY THAT CANNOT LEGALLY BE EXCLUDED OR LIMITED UNDER APPLICABLE LAW.
+16.3. NOTHING IN THIS SECTION EXCLUDES LIABILITY THAT CANNOT LEGALLY BE EXCLUDED OR LIMITED UNDER APPLICABLE LAW.
 
-18. CHANGES AND VERSIONS
+17. FINAL TERMS, GOVERNING LAW, AND JURISDICTION
 
-18.1. The Licensor may publish updated versions of this License.
+17.1. If any provision of this License is found to be invalid or unenforceable, the remaining provisions will continue to apply to the extent permitted by applicable law.
 
-18.2. Unless expressly stated otherwise in writing, a new version of this License does not automatically change the terms governing versions of the Work released under an earlier version.
+17.2. A failure by the Licensor to enforce any provision does not constitute a permanent waiver of that provision.
 
-18.3. Each release of the Work may identify the specific terms of this License that apply to it.
+17.3. This License constitutes the terms governing Your use of the Work, subject to any separate written agreement between You and the Licensor.
 
-19. FINAL TERMS
+17.4. By accessing, using, modifying, or otherwise exercising permissions under this License, You acknowledge that You have read and agree to its terms.
 
-19.1. If any provision of this License is found to be invalid or unenforceable, the remaining provisions will continue to apply to the extent permitted by applicable law.
+17.5. This License shall be governed by and interpreted in accordance with the laws of India.
 
-19.2. A failure by the Licensor to enforce any provision does not constitute a permanent waiver of that provision.
+17.6. Any dispute arising out of or relating to this License shall be brought before a court of competent jurisdiction in accordance with applicable Indian law.
 
-19.3. This License constitutes the terms governing Your use of the Work, subject to any separate written agreement between You and the Licensor.
-
-19.4. By accessing, using, modifying, or otherwise exercising permissions under this License, You acknowledge that You have read and agree to its terms.
+17.7. Nothing in this section shall confer jurisdiction upon a court that would not otherwise possess such jurisdiction.
 
 Copyright © 2026 Sonic (anvilgabimpartduckcom).
 All rights reserved.
