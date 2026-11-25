@@ -14,7 +14,7 @@
     "test": "npm run test:auth && npm run test:mcp"
   },
   "dependencies": {
-    "@google/genai": "^3.3.0",
+    "@google/genai": "^3.6.1",
     "@supabase/supabase-js": "^2.117.3",
     "@tailwindcss/vite": "^4.3.5",
     "@vitejs/plugin-react": "^6.1.1",
