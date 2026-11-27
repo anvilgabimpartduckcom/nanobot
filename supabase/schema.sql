@@ -6,11 +6,13 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- Schema usage grants for PostgREST Data API
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 
--- 2. User Profiles Table (Strictly NO email column)
+-- 2. User Profiles Table (Strictly NO personal email column; auth_email holds internal randomized @nanobot.internal lookup identifier)
 -- Foreign-keyed directly to Supabase Auth auth.users(id) with ON DELETE CASCADE
 CREATE TABLE IF NOT EXISTS public.user_profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     username TEXT UNIQUE NOT NULL,
+    -- Added auth_email column for randomized @nanobot.internal account mapping [Commented by: Google AI Studio at 22/11/2026 14:32]
+    auth_email TEXT,
     openrouter_key TEXT NOT NULL,
     tavily_key TEXT NOT NULL,
     ai_instructions TEXT DEFAULT '',
@@ -38,9 +40,10 @@ BEGIN
     END IF;
 END $$;
 
--- Ensure salt and theme columns exist on existing deployments [Commented by: Google AI Studio on 04/11/2026 05:23 PM]
+-- Ensure salt, theme, and auth_email columns exist on existing deployments [Commented by: Google AI Studio at 22/11/2026 14:32]
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS salt TEXT NOT NULL DEFAULT '';
 ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS theme TEXT DEFAULT 'Neon Black';
+ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS auth_email TEXT;
 
 -- Safely drop legacy unique constraints on openrouter_key and tavily_key if present [Commented by: Google AI Studio on 04/11/2026 05:23 PM]
 DO $$
@@ -53,8 +56,9 @@ BEGIN
     END IF;
 END $$;
 
--- Database-level case-insensitive unique index preventing username collisions [Commented by: Google AI Studio on 03/11/2026 09:48 PM]
+-- Database-level case-insensitive unique indexes preventing username and auth_email collisions [Commented by: Google AI Studio at 22/11/2026 14:32]
 CREATE UNIQUE INDEX IF NOT EXISTS uq_user_profiles_lower_username ON public.user_profiles (lower(username));
+CREATE UNIQUE INDEX IF NOT EXISTS uq_user_profiles_lower_auth_email ON public.user_profiles (lower(auth_email)) WHERE auth_email IS NOT NULL;
 
 -- Row Level Security for user_profiles: strictly isolated to the authenticated user's own UID
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
@@ -105,6 +109,24 @@ $$;
 
 REVOKE ALL ON FUNCTION public.check_username_available(TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.check_username_available(TEXT) TO anon, authenticated;
+
+-- Secure RPC function to resolve the internal auth email for a username without exposing user profile rows or credentials [Commented by: Google AI Studio at 22/11/2026 14:32]
+CREATE OR REPLACE FUNCTION public.get_auth_email_for_username(username_to_lookup TEXT)
+RETURNS TEXT
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, auth
+STABLE
+AS $$
+    SELECT COALESCE(au.email, NULLIF(trim(up.auth_email), ''))
+    FROM public.user_profiles up
+    LEFT JOIN auth.users au ON au.id = up.id
+    WHERE lower(up.username) = lower(trim(username_to_lookup))
+    LIMIT 1;
+$$;
+
+REVOKE ALL ON FUNCTION public.get_auth_email_for_username(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.get_auth_email_for_username(TEXT) TO anon, authenticated;
 
 -- Grants for user_profiles: PostgREST access strictly for authenticated users and service_role
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.user_profiles TO authenticated, service_role;

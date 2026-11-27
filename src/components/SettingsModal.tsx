@@ -1,10 +1,20 @@
 // Created two-column SettingsModal with Account, AI Configuration, live MCP Add-ons, and About nanobot [Commented by: Google AI Studio on 31/10/2026 10:31 PM]
 
 import React, { useState, useEffect } from 'react';
-import { UserProfile, supabase, isSupabaseConfigured, getLocalProfiles, saveLocalProfiles, deleteUserAccountFromSupabase } from '../lib/supabase';
+// Replaced localStorage profile cache helpers with legacy cache cleanup and encrypted Supabase updates; added signOutSupabase import [Commented by: Google AI Studio at 23/11/2026 22:53]
+import {
+  UserProfile,
+  supabase,
+  isSupabaseConfigured,
+  clearLegacyLocalProfileCache,
+  signOutSupabase,
+  deleteUserAccountFromSupabase,
+  updateAccountPasswordInSupabase,
+  updateUserProfileInSupabase
+} from '../lib/supabase';
 import { MCP_PLUGINS, PluginDefinition } from '../lib/plugins';
 import { deriveKeyFromPassword, encryptText, decryptText } from '../lib/crypto';
-import { workerClient, WORKER_BASE_URL, McpConnection, McpTool } from '../lib/workerClient';
+import { workerClient, WORKER_BASE_URL, McpConnection, McpTool, AdminUserRecord } from '../lib/workerClient';
 
 
 // Added theme toggle support between Neon Black and Minimalist Light themes in SettingsModal [Commented by: Google AI Studio on 20/10/2026 11:28 PM]
@@ -16,12 +26,14 @@ interface SettingsModalProps {
   user: UserProfile;
   currentPasswordSecret: string;
   onUpdateUser: (updatedUser: UserProfile, newPasswordSecret?: string) => void;
+  // Added onLogout callback prop for clean session termination [Commented by: Google AI Studio at 23/11/2026 22:53]
+  onLogout: () => void;
   onDeleteAccount: () => void;
   theme?: AppTheme;
   onThemeChange?: (theme: AppTheme) => void;
 }
 
-type TabType = 'account' | 'ai_config' | 'plugins' | 'about';
+type TabType = 'account' | 'ai_config' | 'plugins' | 'admin' | 'about';
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
@@ -29,6 +41,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   user,
   currentPasswordSecret,
   onUpdateUser,
+  onLogout,
   onDeleteAccount,
   theme,
   onThemeChange
@@ -111,6 +124,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [filterTab, setFilterTab] = useState<'all' | 'connected' | 'available'>('all');
 
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  // Server-verified administrator session state (never cached in localStorage or UserProfile) [Commented by: Google AI Studio at 27/11/2026 21:10]
+  const [isVerifiedAdmin, setIsVerifiedAdmin] = useState(false);
+  const [adminUsers, setAdminUsers] = useState<AdminUserRecord[]>([]);
+  const [adminTotalCount, setAdminTotalCount] = useState<number>(0);
+  const [isLoadingAdminUsers, setIsLoadingAdminUsers] = useState(false);
+  const [adminSearchQuery, setAdminSearchQuery] = useState('');
+  const [adminError, setAdminError] = useState<string | null>(null);
+  const [adminSuccessMessage, setAdminSuccessMessage] = useState<string | null>(null);
+  const [pendingDeleteTarget, setPendingDeleteTarget] = useState<AdminUserRecord | null>(null);
+  const [isDeletingAdminUser, setIsDeletingAdminUser] = useState(false);
+  const [deleteTargetError, setDeleteTargetError] = useState<string | null>(null);
 
   const fetchLiveMcpConnections = async () => {
     setIsLoadingMcp(true);
@@ -130,41 +156,154 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
+  // Clear stale admin list and status banners on fetch error or refresh [Commented by: Google AI Studio at 27/11/2026 21:17]
+  const fetchAdminUsers = async (searchOverride?: string) => {
+    setIsLoadingAdminUsers(true);
+    setAdminError(null);
+    setAdminSuccessMessage(null);
+    try {
+      const res = await workerClient.listAdminUsers(searchOverride);
+      if (res.success && res.data) {
+        setAdminUsers(Array.isArray(res.data.users) ? res.data.users : []);
+        setAdminTotalCount(typeof res.data.total === 'number' ? res.data.total : 0);
+      } else {
+        setAdminUsers([]);
+        setAdminTotalCount(0);
+        setAdminError(res.error || 'Unable to load registered users.');
+      }
+    } catch (e: unknown) {
+      const err = e as Error;
+      setAdminUsers([]);
+      setAdminTotalCount(0);
+      setAdminError(err.message || 'Failed to retrieve registered users.');
+    } finally {
+      setIsLoadingAdminUsers(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen || !user?.id) {
+      setIsVerifiedAdmin(false);
+      setAdminUsers([]);
+      setAdminTotalCount(0);
+      setAdminSearchQuery('');
+      setAdminError(null);
+      setAdminSuccessMessage(null);
+      setPendingDeleteTarget(null);
+      setDeleteTargetError(null);
+      setActiveTab((prev) => (prev === 'admin' ? 'account' : prev));
+      return;
+    }
+
+    let cancelled = false;
+    workerClient
+      .checkAdminStatus()
+      .then((res) => {
+        if (cancelled) return;
+        const verified = Boolean(res.success && res.data?.isAdmin === true);
+        setIsVerifiedAdmin(verified);
+        if (!verified) {
+          setActiveTab((prev) => (prev === 'admin' ? 'account' : prev));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setIsVerifiedAdmin(false);
+          setActiveTab((prev) => (prev === 'admin' ? 'account' : prev));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, user?.id]);
+
+  useEffect(() => {
+    if (isOpen && isVerifiedAdmin && activeTab === 'admin') {
+      void fetchAdminUsers();
+    }
+  }, [isOpen, isVerifiedAdmin, activeTab]);
+
   useEffect(() => {
     if (isOpen && activeTab === 'plugins') {
       fetchLiveMcpConnections();
     }
   }, [isOpen, activeTab]);
 
-  // Listen for backend MCP OAuth callback completion (postMessage + polling fallback) [Commented by: Google AI Studio at 22/11/2026 11:51]
+  // Listen for backend MCP OAuth callback completion with fail-closed origin and payload validation [Commented by: Google AI Studio at 23/11/2026 23:06]
   useEffect(() => {
-    let workerOrigin = '';
+    let expectedWorkerOrigin = '';
     try {
-      workerOrigin = new URL(WORKER_BASE_URL).origin;
+      if (WORKER_BASE_URL) {
+        const parsedWorkerUrl = new URL(WORKER_BASE_URL);
+        const isLocalHttp =
+          parsedWorkerUrl.protocol === 'http:' &&
+          (parsedWorkerUrl.hostname === 'localhost' || parsedWorkerUrl.hostname === '127.0.0.1');
+        if ((parsedWorkerUrl.protocol === 'https:' || isLocalHttp) && parsedWorkerUrl.origin !== 'null') {
+          expectedWorkerOrigin = parsedWorkerUrl.origin;
+        }
+      }
     } catch {
-      workerOrigin = '';
+      expectedWorkerOrigin = '';
+    }
+
+    // Never register a message listener when the expected Worker origin cannot be established
+    if (!expectedWorkerOrigin) {
+      return;
     }
 
     const handleOAuthCallback = async (event: MessageEvent) => {
-      if (workerOrigin && event.origin !== workerOrigin) return;
-      if (event.data?.type !== 'MCP_OAUTH_COMPLETE') return;
+      if (!event.origin || event.origin === 'null' || event.origin !== expectedWorkerOrigin) {
+        return;
+      }
+
+      const payload = event.data as Record<string, unknown> | null;
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        return;
+      }
+      if (payload.type !== 'MCP_OAUTH_COMPLETE' || typeof payload.success !== 'boolean') {
+        return;
+      }
+      if (typeof payload.providerId !== 'string') {
+        return;
+      }
+
+      const providerId = payload.providerId.trim();
+      if (providerId !== '' && !MCP_PLUGINS.some((p) => p.id === providerId)) {
+        return;
+      }
+      if (pendingOAuthFlow && providerId !== '' && providerId !== pendingOAuthFlow.plugin.id) {
+        return;
+      }
+      if (
+        payload.toolsCount !== undefined &&
+        (typeof payload.toolsCount !== 'number' || !Number.isFinite(payload.toolsCount) || payload.toolsCount < 0)
+      ) {
+        return;
+      }
+      if (payload.error !== undefined && typeof payload.error !== 'string') {
+        return;
+      }
 
       const targetPlugin =
-        MCP_PLUGINS.find((p) => p.id === event.data.providerId) || pendingOAuthFlow?.plugin || authorizingPlugin;
-      const pluginLabel = targetPlugin?.name || String(event.data.providerId || 'Plugin');
+        MCP_PLUGINS.find((p) => p.id === providerId) || pendingOAuthFlow?.plugin || authorizingPlugin;
+      const pluginLabel = targetPlugin?.name || (providerId || 'Plugin');
 
       setPendingOAuthFlow(null);
       setInstallingPluginId(null);
 
-      if (event.data.success) {
-        const count = Number(event.data.toolsCount || 0);
+      if (payload.success) {
+        const count = typeof payload.toolsCount === 'number' ? payload.toolsCount : 0;
         setStatusMessage(`✓ ${pluginLabel} installed via MCP! ${count} tool${count === 1 ? '' : 's'} ready.`);
         setTimeout(() => setStatusMessage(null), 5000);
         setAuthorizingPlugin(null);
         setAuthAccount('');
         await fetchLiveMcpConnections();
       } else {
-        setStatusMessage(`✗ ${pluginLabel} authorization failed: ${event.data.error || 'Access was denied or expired.'}`);
+        const errorMessage = typeof payload.error === 'string' && payload.error.trim()
+          ? payload.error.trim()
+          : 'Access was denied or expired.';
+        setStatusMessage(`✗ ${pluginLabel} authorization failed: ${errorMessage}`);
         setTimeout(() => setStatusMessage(null), 6000);
       }
     };
@@ -247,16 +386,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         }
       }
 
+      // Preserve in-memory decrypted credentials while sending only encrypted values to Supabase [Commented by: Google AI Studio at 23/11/2026 22:30]
       const updated: UserProfile = {
         ...user,
         username: username.trim(),
-        openrouter_key: encryptedOr,
-        tavily_key: encryptedTv,
+        openrouter_key: openrouterKey.trim(),
+        tavily_key: tavilyKey.trim(),
         model_training: modelTraining,
-        ai_instructions: encryptedInst,
+        ai_instructions: customInstructions.trim(),
         plugins_connected: connectedPlugins as UserProfile['plugins_connected'],
         theme: currentTheme
       };
+
+      // Update Supabase Auth password only when explicitly changed during an unlocked session, never touching internal auth_email [Commented by: Google AI Studio at 22/11/2026 14:33]
+      if (
+        isSupabaseConfigured &&
+        supabase &&
+        currentPasswordSecret &&
+        password.trim() &&
+        password.trim() !== currentPasswordSecret
+      ) {
+        await updateAccountPasswordInSupabase(password.trim());
+      }
 
       // Update Supabase if configured (encrypt secrets so developer cannot see them)
       if (isSupabaseConfigured && supabase) {
@@ -281,12 +432,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         }
       }
 
-      // Update local storage
-      const profiles = getLocalProfiles();
-      const idx = profiles.findIndex((p) => p.id === user.id);
-      if (idx >= 0) profiles[idx] = updated;
-      saveLocalProfiles(profiles);
-
+      clearLegacyLocalProfileCache();
       onUpdateUser(updated, secretToUse);
       setStatusMessage('✓ Account settings saved securely.');
       setTimeout(() => setStatusMessage(null), 3000);
@@ -306,14 +452,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     onClose();
   };
 
+  // Sign out of Supabase Auth, purge legacy cache, and clear in-memory session state [Commented by: Google AI Studio at 23/11/2026 22:53]
+  const handleLogout = async () => {
+    if (isSigningOut) return;
+    setIsSigningOut(true);
+    setStatusMessage(null);
+    try {
+      await signOutSupabase();
+      clearLegacyLocalProfileCache();
+      onLogout();
+      onClose();
+    } catch (err: unknown) {
+      const e = err as Error;
+      setStatusMessage(`Failed to sign out: ${e.message}`);
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
+
   // Handle Delete Account safely with database cleanup [Commented by: Google AI Studio on 01/11/2026 04:18 PM]
   const handleDeleteAccount = async () => {
     try {
       if (isSupabaseConfigured && supabase) {
         await deleteUserAccountFromSupabase(user.id);
       } else {
-        const profiles = getLocalProfiles().filter((p) => p.id !== user.id);
-        saveLocalProfiles(profiles);
+        clearLegacyLocalProfileCache();
       }
 
       onDeleteAccount();
@@ -324,34 +487,84 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  // Handle Instructions Enter Key saving
-  const handleInstructionsKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  // Confirm and execute admin-triggered deletion of another user's account via protected Worker endpoint [Commented by: Google AI Studio at 27/11/2026 21:10]
+  const handleConfirmDeleteAdminUser = async () => {
+    if (!pendingDeleteTarget || isDeletingAdminUser) return;
+
+    if (pendingDeleteTarget.isCurrentAdmin || pendingDeleteTarget.id === user.id) {
+      setDeleteTargetError('You cannot delete your own administrator account from User Management.');
+      return;
+    }
+
+    setIsDeletingAdminUser(true);
+    setDeleteTargetError(null);
+    setAdminSuccessMessage(null);
+
+    try {
+      const res = await workerClient.deleteAdminUser(pendingDeleteTarget.id);
+      if (res.success && res.data) {
+        const removedId = pendingDeleteTarget.id;
+        const removedName = pendingDeleteTarget.username;
+        setAdminUsers((prev) => prev.filter((u) => u.id !== removedId));
+        setAdminTotalCount((prev) => Math.max(0, prev - 1));
+        setPendingDeleteTarget(null);
+        setAdminSuccessMessage(
+          res.data.message || `Deleted account "${removedName}" and all associated user data.`
+        );
+      } else {
+        setDeleteTargetError(
+          res.error || 'Account deletion failed. No confirmation was received from the server.'
+        );
+      }
+    } catch (err: unknown) {
+      const e = err as Error;
+      setDeleteTargetError(e.message || 'Network error while deleting user account.');
+    } finally {
+      setIsDeletingAdminUser(false);
+    }
+  };
+
+  // Keep custom instructions in memory and encrypt before persisting to Supabase, never writing to localStorage [Commented by: Google AI Studio at 23/11/2026 22:30]
+  const handleInstructionsKeyDown = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      // Save instructions
+      const secretToUse = password.trim() || currentPasswordSecret;
+      if (customInstructions.trim() !== '' && !customInstructions.trim().startsWith('enc:') && !secretToUse) {
+        setStatusMessage('Error: Password is required to encrypt your custom instructions before saving.');
+        return;
+      }
+
+      if (isSupabaseConfigured && supabase) {
+        try {
+          const ok = await updateUserProfileInSupabase(
+            user.id,
+            { ai_instructions: customInstructions },
+            secretToUse,
+            user.salt || 'default_nanobot_salt'
+          );
+          if (!ok) {
+            setStatusMessage('Error saving custom instructions to database.');
+            return;
+          }
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Failed to encrypt custom instructions.';
+          setStatusMessage(`Error: ${msg}`);
+          return;
+        }
+      }
+
       const updated: UserProfile = {
         ...user,
         ai_instructions: customInstructions
       };
       onUpdateUser(updated);
 
-      const profiles = getLocalProfiles();
-      const idx = profiles.findIndex((p) => p.id === user.id);
-      if (idx >= 0) {
-        profiles[idx].ai_instructions = customInstructions;
-        saveLocalProfiles(profiles);
-      }
-
-      if (isSupabaseConfigured && supabase) {
-        supabase.from('user_profiles').update({ ai_instructions: customInstructions }).eq('id', user.id);
-      }
-
       setInstructionsSavedNotice(true);
       setTimeout(() => setInstructionsSavedNotice(false), 2500);
     }
   };
 
-  // Handle Model Training toggle
+  // Handle Model Training toggle without localStorage profile caching [Commented by: Google AI Studio at 23/11/2026 22:30]
   const handleToggleTraining = async () => {
     const nextVal = !modelTraining;
     setModelTraining(nextVal);
@@ -360,13 +573,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       model_training: nextVal
     };
     onUpdateUser(updated);
-
-    const profiles = getLocalProfiles();
-    const idx = profiles.findIndex((p) => p.id === user.id);
-    if (idx >= 0) {
-      profiles[idx].model_training = nextVal;
-      saveLocalProfiles(profiles);
-    }
 
     if (isSupabaseConfigured && supabase) {
       supabase.from('user_profiles').update({ model_training: nextVal }).eq('id', user.id);
@@ -379,13 +585,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       plugins_connected: nextPlugins as UserProfile['plugins_connected']
     };
     onUpdateUser(updated);
-
-    const profiles = getLocalProfiles();
-    const idx = profiles.findIndex((p) => p.id === user.id);
-    if (idx >= 0) {
-      profiles[idx].plugins_connected = nextPlugins as UserProfile['plugins_connected'];
-      saveLocalProfiles(profiles);
-    }
 
     if (isSupabaseConfigured && supabase) {
       supabase.from('user_profiles').update({ plugins_connected: nextPlugins }).eq('id', user.id);
@@ -625,6 +824,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           >
             Add-ons
           </button>
+
+          {/* Render User Management tab exclusively when server verification confirms admin privileges [Commented by: Google AI Studio at 27/11/2026 21:10] */}
+          {isVerifiedAdmin && (
+            <button
+              onClick={() => setActiveTab('admin')}
+              className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer ${
+                activeTab === 'admin'
+                  ? isLight
+                    ? 'bg-white text-neutral-900 font-semibold shadow-xs border border-neutral-200'
+                    : 'bg-[#1a1a1a] text-white font-semibold'
+                  : isLight
+                  ? 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
+                  : 'text-neutral-400 hover:text-white hover:bg-[#121212]'
+              }`}
+            >
+              User Management
+            </button>
+          )}
 
           <button
             onClick={() => setActiveTab('about')}
@@ -884,8 +1101,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </button>
               </div>
 
-              {/* Delete Account */}
-              <div className="pt-4">
+              {/* Render account status and sign-out error feedback on the Account tab [Commented by: Google AI Studio at 25/11/2026 22:57] */}
+              {statusMessage && (
+                <div
+                  className={`p-3 rounded-xl text-xs font-medium border ${
+                    statusMessage.startsWith('Error') || statusMessage.startsWith('Failed')
+                      ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                      : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                  }`}
+                >
+                  {statusMessage}
+                </div>
+              )}
+
+              {/* Sign Out & Delete Account [Commented by: Google AI Studio at 23/11/2026 22:53] */}
+              <div className="pt-4 space-y-3">
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  disabled={isSigningOut}
+                  className={`w-full py-2.5 px-4 rounded-xl text-sm font-semibold transition-colors cursor-pointer border disabled:opacity-50 ${
+                    isLight
+                      ? 'bg-neutral-100 hover:bg-neutral-200 border-neutral-300 text-neutral-900'
+                      : 'bg-[#1a1a1a] hover:bg-[#242424] border-[#333] text-white'
+                  }`}
+                >
+                  {isSigningOut ? 'Signing Out...' : 'Sign Out'}
+                </button>
+
                 <button
                   type="button"
                   onClick={handleDeleteAccount}
@@ -893,6 +1136,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 >
                   Delete Account
                 </button>
+                {/* Clarify server-side deletion vs browser-local data scope [Commented by: Google AI Studio at 27/11/2026 21:27] */}
+                <p className={`text-[11px] leading-relaxed ${isLight ? 'text-neutral-600' : 'text-neutral-400'}`}>
+                  Deleting your account permanently removes your server-side identity and account data across Supabase and Cloudflare D1, and clears cached data in this browser. Any browser-local IndexedDB file uploads or local archives stored on other browsers or devices cannot be remotely erased and must be cleared locally in those browsers.
+                </p>
               </div>
             </div>
           )}
@@ -1452,7 +1699,304 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           })()}
 
 
-          {/* TAB 4: ABOUT NANOBOT */}
+          {/* TAB 4: ADMIN USER MANAGEMENT (Server-Verified Exclusively) [Commented by: Google AI Studio at 27/11/2026 21:10] */}
+          {activeTab === 'admin' && isVerifiedAdmin && (() => {
+            const normalizedSearch = adminSearchQuery.trim().toLowerCase();
+            const filteredAdminUsers = normalizedSearch
+              ? adminUsers.filter((u) => u.username.toLowerCase().includes(normalizedSearch))
+              : adminUsers;
+
+            const formatUserCreatedAt = (iso: string | null) => {
+              if (!iso) return 'Unavailable';
+              const parsed = Date.parse(iso);
+              if (Number.isNaN(parsed)) return 'Unavailable';
+              return new Date(parsed).toLocaleDateString(undefined, {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+              });
+            };
+
+            const getStatusBadgeClasses = (status: AdminUserRecord['status']) => {
+              switch (status) {
+                case 'active':
+                  return isLight
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+                case 'disabled':
+                case 'deleted':
+                  return isLight
+                    ? 'bg-red-50 text-red-700 border-red-200'
+                    : 'bg-red-500/10 text-red-400 border-red-500/30';
+                case 'pending':
+                  return isLight
+                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : 'bg-amber-500/10 text-amber-400 border-amber-500/30';
+                default:
+                  return isLight
+                    ? 'bg-neutral-100 text-neutral-600 border-neutral-300'
+                    : 'bg-neutral-800 text-neutral-400 border-neutral-700';
+              }
+            };
+
+            return (
+              <div className="space-y-4 max-w-2xl">
+                <div className={`pb-3 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
+                  isLight ? 'border-neutral-200' : 'border-neutral-800'
+                }`}>
+                  <div>
+                    <h2 className="text-xl font-bold font-serif">User Management</h2>
+                    <p className={`text-xs mt-0.5 ${isLight ? 'text-neutral-500' : 'text-neutral-400'}`}>
+                      Administrator directory showing only usernames, creation dates, and account status.
+                    </p>
+                  </div>
+                  <div className={`text-xs font-medium px-2.5 py-1 rounded-lg border self-start sm:self-auto ${
+                    isLight ? 'bg-neutral-50 border-neutral-200 text-neutral-600' : 'bg-[#141414] border-[#2b2b2b] text-neutral-300'
+                  }`}>
+                    {adminTotalCount} {adminTotalCount === 1 ? 'account' : 'accounts'}
+                  </div>
+                </div>
+
+                {/* Search & Refresh Controls */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={adminSearchQuery}
+                      onChange={(e) => setAdminSearchQuery(e.target.value)}
+                      placeholder="Search by username..."
+                      aria-label="Search users by username"
+                      className={`w-full rounded-xl px-3.5 py-2 pr-8 text-sm focus:outline-none border transition-colors ${
+                        isLight
+                          ? 'bg-neutral-50 border-neutral-300 text-neutral-900 placeholder-neutral-400 focus:border-emerald-600'
+                          : 'bg-[#141414] border-[#2d2d2d] text-white placeholder-neutral-500 focus:border-[#39ff14]'
+                      }`}
+                    />
+                    {adminSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setAdminSearchQuery('')}
+                        aria-label="Clear username search"
+                        className={`absolute right-2.5 top-1/2 -translate-y-1/2 text-xs cursor-pointer ${
+                          isLight ? 'text-neutral-400 hover:text-neutral-700' : 'text-neutral-500 hover:text-white'
+                        }`}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void fetchAdminUsers()}
+                    disabled={isLoadingAdminUsers}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-semibold border transition-colors cursor-pointer disabled:opacity-50 ${
+                      isLight
+                        ? 'bg-white hover:bg-neutral-100 border-neutral-300 text-neutral-800'
+                        : 'bg-[#161616] hover:bg-[#222] border-[#2d2d2d] text-neutral-200'
+                    }`}
+                  >
+                    {isLoadingAdminUsers ? 'Refreshing...' : 'Refresh'}
+                  </button>
+                </div>
+
+                {adminError && (
+                  <div className="p-3 rounded-xl text-xs font-medium border bg-red-500/10 border-red-500/30 text-red-400">
+                    {adminError}
+                  </div>
+                )}
+
+                {adminSuccessMessage && (
+                  <div className="p-3 rounded-xl text-xs font-medium border bg-emerald-500/10 border-emerald-500/30 text-emerald-400">
+                    {adminSuccessMessage}
+                  </div>
+                )}
+
+                {isLoadingAdminUsers ? (
+                  <div className={`p-8 rounded-xl border text-center text-xs ${
+                    isLight ? 'bg-neutral-50 border-neutral-200 text-neutral-500' : 'bg-[#111] border-[#242424] text-neutral-400'
+                  }`}>
+                    Loading registered users...
+                  </div>
+                ) : !adminError && filteredAdminUsers.length === 0 ? (
+                  <div className={`p-8 rounded-xl border text-center space-y-2 ${
+                    isLight ? 'bg-neutral-50 border-neutral-200 text-neutral-600' : 'bg-[#111] border-[#242424] text-neutral-400'
+                  }`}>
+                    <p className="text-sm font-medium">
+                      {adminUsers.length === 0
+                        ? 'No registered user accounts found.'
+                        : `No users match "${adminSearchQuery.trim()}".`}
+                    </p>
+                    {adminUsers.length > 0 && adminSearchQuery.trim() !== '' && (
+                      <button
+                        type="button"
+                        onClick={() => setAdminSearchQuery('')}
+                        className="text-xs font-semibold text-emerald-500 hover:text-emerald-400 underline cursor-pointer"
+                      >
+                        Clear search filter
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {filteredAdminUsers.map((entry) => {
+                      const isSelf = Boolean(entry.isCurrentAdmin || entry.id === user.id);
+                      return (
+                        <div
+                          key={entry.id}
+                          className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                            isLight
+                              ? 'bg-neutral-50 border-neutral-200'
+                              : 'bg-[#121212] border-[#262626]'
+                          }`}
+                        >
+                          <div className="min-w-0 space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-semibold truncate">{entry.username}</span>
+                              <span
+                                className={`text-[11px] font-medium px-2 py-0.5 rounded-md border capitalize ${getStatusBadgeClasses(
+                                  entry.status
+                                )}`}
+                              >
+                                {entry.status}
+                              </span>
+                              {isSelf && (
+                                <span
+                                  className={`text-[11px] font-medium px-2 py-0.5 rounded-md border ${
+                                    isLight
+                                      ? 'bg-neutral-200 text-neutral-700 border-neutral-300'
+                                      : 'bg-[#1f1f1f] text-neutral-300 border-[#383838]'
+                                  }`}
+                                >
+                                  Current Admin
+                                </span>
+                              )}
+                            </div>
+                            <div className={`text-xs ${isLight ? 'text-neutral-500' : 'text-neutral-400'}`}>
+                              Created {formatUserCreatedAt(entry.created_at)}
+                            </div>
+                          </div>
+
+                          <div className="shrink-0">
+                            <button
+                              type="button"
+                              disabled={isSelf}
+                              title={
+                                isSelf
+                                  ? 'Administrators cannot delete their own account through User Management'
+                                  : `Delete user ${entry.username}`
+                              }
+                              onClick={() => {
+                                if (isSelf) return;
+                                setDeleteTargetError(null);
+                                setPendingDeleteTarget(entry);
+                              }}
+                              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                                isSelf
+                                  ? isLight
+                                    ? 'bg-neutral-100 border-neutral-200 text-neutral-400 cursor-not-allowed'
+                                    : 'bg-[#181818] border-[#2a2a2a] text-neutral-600 cursor-not-allowed'
+                                  : 'bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white border-red-500/30 cursor-pointer'
+                              }`}
+                            >
+                              {isSelf ? 'Self-Deletion Blocked' : 'Delete User'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Explicit Confirmation Dialog for Admin User Account Deletion */}
+                {pendingDeleteTarget && (
+                  <div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="admin-delete-user-title"
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+                  >
+                    <div
+                      className={`w-full max-w-md rounded-2xl p-6 shadow-2xl border space-y-4 ${
+                        isLight
+                          ? 'bg-white border-neutral-300 text-neutral-900'
+                          : 'bg-[#121212] border-[#2b2b2b] text-white'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between pb-2 border-b border-inherit">
+                        <h3 id="admin-delete-user-title" className="text-base font-bold font-serif text-red-500">
+                          Delete User Account?
+                        </h3>
+                        <button
+                          type="button"
+                          disabled={isDeletingAdminUser}
+                          onClick={() => {
+                            setPendingDeleteTarget(null);
+                            setDeleteTargetError(null);
+                          }}
+                          aria-label="Close user deletion confirmation"
+                          className="text-neutral-400 hover:text-neutral-200 cursor-pointer text-sm disabled:opacity-50"
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      {/* Explicit server-side vs browser-local data-retention disclosure in admin confirmation [Commented by: Google AI Studio at 27/11/2026 21:27] */}
+                      <p className={`text-xs leading-relaxed ${isLight ? 'text-neutral-600' : 'text-neutral-300'}`}>
+                        You are about to permanently delete the account for{' '}
+                        <span className={`font-bold ${isLight ? 'text-neutral-900' : 'text-white'}`}>
+                          {pendingDeleteTarget.username}
+                        </span>
+                        . This removes the Supabase Auth identity and purges server-side account data across Supabase and Cloudflare D1 (profile, conversations, messages, file outputs, add-on connections, OAuth states, and shared links). This action cannot be undone.
+                      </p>
+
+                      <p className={`text-[11px] leading-relaxed p-2.5 rounded-lg border ${
+                        isLight
+                          ? 'bg-neutral-50 border-neutral-200 text-neutral-600'
+                          : 'bg-[#171717] border-[#2a2a2a] text-neutral-400'
+                      }`}>
+                        Note: Browser-local IndexedDB file uploads and local archives stored on the user&apos;s own browser or devices cannot be remotely erased by an administrator; the user must clear browser-local data themselves where applicable.
+                      </p>
+
+                      {deleteTargetError && (
+                        <div className="p-3 rounded-xl text-xs font-medium border bg-red-500/10 border-red-500/30 text-red-400">
+                          {deleteTargetError}
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-end gap-2 pt-2">
+                        <button
+                          type="button"
+                          disabled={isDeletingAdminUser}
+                          onClick={() => {
+                            setPendingDeleteTarget(null);
+                            setDeleteTargetError(null);
+                          }}
+                          className={`px-4 py-2 rounded-lg text-xs font-semibold border cursor-pointer disabled:opacity-50 ${
+                            isLight
+                              ? 'bg-neutral-100 hover:bg-neutral-200 border-neutral-300 text-neutral-700'
+                              : 'bg-[#1a1a1a] hover:bg-[#242424] border-[#2d2d2d] text-neutral-300'
+                          }`}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isDeletingAdminUser}
+                          onClick={handleConfirmDeleteAdminUser}
+                          className="px-4 py-2 rounded-lg text-xs font-bold bg-red-600 hover:bg-red-500 text-white cursor-pointer transition-colors disabled:opacity-50"
+                        >
+                          {isDeletingAdminUser ? 'Deleting Account...' : 'Confirm Permanent Delete'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+
+          {/* TAB 5: ABOUT NANOBOT */}
           {/* Updated About nanobot with static service credits, removed 30-day local storage note box, and brought updates and GitHub links closer [Commented by: Google AI Studio on 29/10/2026 04:00 PM] */}
           {activeTab === 'about' && (() => {
             const baseServices = [

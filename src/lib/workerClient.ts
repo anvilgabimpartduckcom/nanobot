@@ -64,6 +64,28 @@ export interface McpToolCallResult {
   isError?: boolean;
 }
 
+// Minimal privacy-preserving user record returned exclusively to verified administrators [Commented by: Google AI Studio at 27/11/2026 21:10]
+export type AdminUserStatus = 'active' | 'disabled' | 'deleted' | 'pending' | 'unknown';
+
+export interface AdminUserRecord {
+  id: string;
+  username: string;
+  created_at: string | null;
+  status: AdminUserStatus;
+  isCurrentAdmin?: boolean;
+}
+
+export interface AdminDeleteResult {
+  deletedUserId: string;
+  deletedUsername?: string | null;
+  stages?: {
+    d1_purged: boolean;
+    supabase_data_purged: boolean;
+    auth_identity_deleted: boolean;
+  };
+  message: string;
+}
+
 
 // Exported Cloudflare Worker base URL for OAuth callback origin validation [Commented by: Google AI Studio at 22/11/2026 11:51]
 export const WORKER_BASE_URL = (
@@ -113,18 +135,36 @@ async function workerFetch<T>(
 
     if (response.status === 401 || response.status === 403) {
       const errText = await response.text().catch(() => 'Unauthorized');
+      let parsedError = errText;
+      if (errText) {
+        try {
+          const parsed = JSON.parse(errText) as { error?: unknown };
+          if (typeof parsed?.error === 'string' && parsed.error.trim()) {
+            parsedError = parsed.error.trim();
+          }
+        } catch {}
+      }
       return {
         success: false,
-        error: `Authentication failed (${response.status}): ${errText}`,
+        error: `Authentication failed (${response.status}): ${parsedError}`,
         isAuthError: true,
       };
     }
 
     if (!response.ok) {
       const errText = await response.text().catch(() => 'Worker error');
+      let parsedError = errText;
+      if (errText) {
+        try {
+          const parsed = JSON.parse(errText) as { error?: unknown };
+          if (typeof parsed?.error === 'string' && parsed.error.trim()) {
+            parsedError = parsed.error.trim();
+          }
+        } catch {}
+      }
       return {
         success: false,
-        error: `Cloudflare Worker error (${response.status}): ${errText}`,
+        error: `Cloudflare Worker error (${response.status}): ${parsedError}`,
       };
     }
 
@@ -283,37 +323,65 @@ export const workerClient = {
     );
   },
 
-  // Create or update a public shareable snapshot for a chat session with 30-day retention [Commented by: Google AI Studio on 28/10/2026 11:36 PM]
+  // Create or update a public 30-day shareable snapshot in Cloudflare D1 (separate from encrypted local history) [Commented by: Google AI Studio at 24/11/2026 17:13]
   async createShare(
     title: string,
     messages: WorkerMessage[],
     shareId?: string
-  ): Promise<WorkerApiResponse<{ shareId: string; title: string; expires_at: string }>> {
-    return workerFetch<{ shareId: string; title: string; expires_at: string }>('/api/shares', {
+  ): Promise<WorkerApiResponse<{ shareId: string; title: string; updated?: boolean; created_at?: string; expires_at: string }>> {
+    return workerFetch<{ shareId: string; title: string; updated?: boolean; created_at?: string; expires_at: string }>('/api/shares', {
       method: 'POST',
       body: JSON.stringify({ title, messages, shareId }),
     });
   },
 
-  // Retrieve a public shared chat snapshot without authentication, protected with anti-scraping headers [Commented by: Google AI Studio on 22/10/2026 04:50 PM]
+  // Immediately revoke an owner's public share link in Cloudflare D1 [Commented by: Google AI Studio at 24/11/2026 22:57]
+  async revokeShare(
+    shareId: string
+  ): Promise<WorkerApiResponse<{ shareId: string; revoked: boolean; message: string }>> {
+    const trimmedId = (shareId || '').trim();
+    if (!trimmedId) {
+      return { success: false, error: 'Invalid share identifier provided.' };
+    }
+    return workerFetch<{ shareId: string; revoked: boolean; message: string }>(
+      `/api/shares/${encodeURIComponent(trimmedId)}`,
+      { method: 'DELETE' }
+    );
+  },
+
+  // Retrieve a public shared chat snapshot without authentication, parsing Worker JSON errors cleanly [Commented by: Google AI Studio at 24/11/2026 17:13]
   async getPublicShare(
     shareId: string
   ): Promise<{ success: boolean; share?: { id: string; title: string; messages: WorkerMessage[]; created_at: string; expires_at: string }; error?: string }> {
+    const trimmedId = (shareId || '').trim();
+    if (!trimmedId) {
+      return { success: false, error: 'Invalid share identifier provided.' };
+    }
+
     try {
-      const endpoint = `${WORKER_BASE_URL}/api/public/shares/${encodeURIComponent(shareId)}`;
+      const endpoint = `${WORKER_BASE_URL}/api/public/shares/${encodeURIComponent(trimmedId)}`;
       const res = await fetch(endpoint, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
       if (!res.ok) {
         const errText = await res.text().catch(() => '');
-        return { success: false, error: errText || `Failed to load shared chat (${res.status})` };
+        let parsedError = errText;
+        if (errText) {
+          try {
+            const parsed = JSON.parse(errText) as { error?: unknown };
+            if (typeof parsed?.error === 'string' && parsed.error.trim()) {
+              parsedError = parsed.error.trim();
+            }
+          } catch {}
+        }
+        return { success: false, error: parsedError || `Failed to load shared noodle (${res.status})` };
       }
       const data = await res.json();
       return data;
     } catch (e: unknown) {
       const err = e as Error;
-      return { success: false, error: err.message };
+      return { success: false, error: err.message || 'Network error loading shared noodle.' };
     }
   },
 
@@ -398,6 +466,35 @@ export const workerClient = {
     return workerFetch<{ message: string }>('/api/mcp/disconnect', {
       method: 'POST',
       body: JSON.stringify({ providerId }),
+    });
+  },
+
+  // Verify administrator status strictly on the Cloudflare Worker using the active Supabase JWT [Commented by: Google AI Studio at 27/11/2026 21:10]
+  async checkAdminStatus(): Promise<WorkerApiResponse<{ isAdmin: boolean }>> {
+    return workerFetch<{ isAdmin: boolean }>('/api/admin/status', {
+      method: 'GET',
+    });
+  },
+
+  // Fetch registered users with minimal non-sensitive fields for verified administrators only [Commented by: Google AI Studio at 27/11/2026 21:10]
+  async listAdminUsers(
+    search?: string
+  ): Promise<WorkerApiResponse<{ users: AdminUserRecord[]; total: number }>> {
+    const trimmed = (search || '').trim();
+    const querySuffix = trimmed ? `?q=${encodeURIComponent(trimmed)}` : '';
+    return workerFetch<{ users: AdminUserRecord[]; total: number }>(`/api/admin/users${querySuffix}`, {
+      method: 'GET',
+    });
+  },
+
+  // Permanently delete a target user's Supabase Auth identity and associated data via protected admin endpoint [Commented by: Google AI Studio at 27/11/2026 21:10]
+  async deleteAdminUser(userId: string): Promise<WorkerApiResponse<AdminDeleteResult>> {
+    const trimmed = (userId || '').trim();
+    if (!trimmed) {
+      return { success: false, error: 'Valid target user ID is required.' };
+    }
+    return workerFetch<AdminDeleteResult>(`/api/admin/users/${encodeURIComponent(trimmed)}`, {
+      method: 'DELETE',
     });
   },
 };

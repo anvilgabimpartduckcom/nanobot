@@ -20,7 +20,8 @@ import {
   fetchRemoteConversationsFromSupabase,
   persistConversationToSupabase,
   deleteConversationFromSupabase,
-  migrateLocalChatsToSupabase
+  migrateLocalChatsToSupabase,
+  clearLegacyLocalProfileCache
 } from './lib/supabase';
 import { deriveKeyFromPassword, encryptData, decryptData, encryptText, decryptText } from './lib/crypto';
 import { analyzeFileWithScript, ProcessedFile } from './lib/fileReader';
@@ -39,15 +40,26 @@ import {
   cleanupOrphanedFiles
 } from './lib/indexedDb';
 
-// Imported PDF export utility replacing legacy text exports [Commented by: Google AI Studio on 30/10/2026 11:00 PM]
-import { exportNoodleAsPdf } from './lib/pdfExport';
+// Replaced legacy PDF export import with client-side JSON chat backup exporter [Commented by: Google AI Studio at 22/11/2026 14:33]
+import { exportNoodleAsJson, ExportFileOutput } from './lib/jsonExport';
+// Pure sharing helpers for snapshot sanitization, URL extraction, clipboard copy, and independent forking [Commented by: Google AI Studio at 24/11/2026 17:13]
+import {
+  buildShareSnapshotMessages,
+  copyTextToClipboard,
+  createForkedChatSession,
+  extractShareIdFromInput,
+  SHARED_NOODLE_PRIVACY_DISCLOSURE,
+} from './lib/shareUtils';
 
 interface ChatMessage {
+  id?: string;
   role: 'user' | 'ai';
   content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+  createdAt?: string;
   sources?: Array<{ title: string; url: string }>;
   reasoning?: string;
   displayAttachments?: Array<{ type: string; name: string; fileId?: string; isLocalMissing?: boolean }>;
+  metadata?: Record<string, unknown>;
 }
 
 interface ChatSession {
@@ -142,6 +154,7 @@ export default function App() {
   const [isProvideUrlModalOpen, setIsProvideUrlModalOpen] = useState(false);
   const [provideUrlInput, setProvideUrlInput] = useState('');
   const [isImportingUrl, setIsImportingUrl] = useState(false);
+  const [importUrlError, setImportUrlError] = useState<string | null>(null);
 
   // User message hover & inline editing state [Commented by: Google AI Studio on 28/10/2026 11:38 PM]
   const [editingMessageIndex, setEditingMessageIndex] = useState<number | null>(null);
@@ -188,12 +201,13 @@ export default function App() {
   // Added state for cloud-persisted AI file outputs and local storage quota warnings [Commented by: Google AI Studio on 15/10/2026 09:22 PM]
   const [chatFileOutputs, setChatFileOutputs] = useState<Record<string, WorkerFileOutput[]>>({});
   const [quotaErrorNotice, setQuotaErrorNotice] = useState<string | null>(null);
+  const [exportStatusNotice, setExportStatusNotice] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
   // Auto-scroll state: track whether user scrolled up during stream and whether down-arrow snapping is active [Commented by: Google AI Studio on 22/10/2026 04:51 PM]
   const [isUserScrolledUp, setIsUserScrolledUp] = useState<boolean>(false);
   const [isAutoScrollActive, setIsAutoScrollActive] = useState<boolean>(false);
 
-  // Shared chat state for public URL loading, read-only viewing, and seamless forking into user history [Commented by: Google AI Studio on 22/10/2026 04:51 PM]
+  // Shared chat state for public URL loading, read-only viewing, share link feedback, and seamless forking [Commented by: Google AI Studio at 24/11/2026 17:13]
   const [sharedChatView, setSharedChatView] = useState<{
     id: string;
     title: string;
@@ -202,6 +216,21 @@ export default function App() {
     expires_at: string;
   } | null>(null);
   const [isSharing, setIsSharing] = useState<boolean>(false);
+  const [isLoadingSharedChat, setIsLoadingSharedChat] = useState<boolean>(false);
+  // Share revocation confirmation & status feedback state [Commented by: Google AI Studio at 24/11/2026 22:57]
+  const [pendingRevokeShare, setPendingRevokeShare] = useState<{
+    chatId: string;
+    shareId: string;
+    title: string;
+  } | null>(null);
+  const [isRevokingShare, setIsRevokingShare] = useState<boolean>(false);
+  const [revokeShareError, setRevokeShareError] = useState<string | null>(null);
+  const [shareStatusNotice, setShareStatusNotice] = useState<{
+    type: 'success' | 'warning' | 'error';
+    text: string;
+    shareUrl?: string;
+    copied?: boolean;
+  } | null>(null);
 
   // Quick preview state for sidebar chat item hover preview without selection [Commented by: Google AI Studio on 23/10/2026 12:38 PM]
   const [quickPreview, setQuickPreview] = useState<{
@@ -255,7 +284,7 @@ export default function App() {
     };
   }, [isPlusMenuOpen]);
 
-  // Reset signed-in-only composer controls when user signs out [Commented by: Google AI Studio at 22/11/2026 12:05]
+  // Reset transient composer mode and menu state when signed-out state resets on logout [Commented by: Google AI Studio at 27/11/2026 21:17]
   useEffect(() => {
     if (!currentUser) {
       setIsPlusMenuOpen(false);
@@ -295,8 +324,9 @@ export default function App() {
     return () => clearInterval(timer);
   }, [isGenerating]);
 
-  // Auto-restore genuine Supabase Auth session on application mount [Commented by: Google AI Studio on 01/11/2026 02:05 PM]
+  // Purge obsolete plaintext local profile cache on mount and restore Supabase Auth session [Commented by: Google AI Studio at 23/11/2026 22:30]
   useEffect(() => {
+    clearLegacyLocalProfileCache();
     if (!supabase) return;
 
     restoreActiveSession().then((res) => {
@@ -308,9 +338,33 @@ export default function App() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_OUT' || !session) {
+        clearLegacyLocalProfileCache();
         setCurrentUser(null);
         setPasswordSecret('');
         setCryptoKey(null);
+        // Clear cached file outputs, previews, and authenticated transient state on explicit sign-out [Commented by: Google AI Studio at 25/11/2026 22:57]
+        if (event === 'SIGNED_OUT') {
+          if (abortControllerRef.current) abortControllerRef.current.abort();
+          setIsGenerating(false);
+          setChats([]);
+          setActiveChatId(null);
+          setChatFileOutputs({});
+          previewCacheRef.current = {};
+          setQuickPreview(null);
+          setIsIncognito(false);
+          setIsSettingsOpen(false);
+          setPendingRevokeShare(null);
+          setRevokeShareError(null);
+          setHistorySearchQuery('');
+          setHistoryNotice(null);
+          setQuotaErrorNotice(null);
+          setExportStatusNotice(null);
+          setShareStatusNotice(null);
+          setExpandedReasoningIndices({});
+          setShowSourcesPopup(null);
+          setEditingMessageIndex(null);
+          setEditText('');
+        }
       }
     });
 
@@ -325,7 +379,7 @@ export default function App() {
     const targetUser = user !== undefined ? user : currentUser;
     const targetKey = key !== undefined ? key : cryptoKey;
 
-    // 1. Snappy local encrypted client cache
+    // Never fall back to plaintext nanobot_chats for authenticated accounts (even while key is locked) [Commented by: Google AI Studio at 25/11/2026 22:57]
     if (targetUser && targetKey) {
       try {
         const payload = JSON.stringify(allChats);
@@ -334,7 +388,7 @@ export default function App() {
       } catch (err) {
         console.warn('Encrypted local storage write notice:', err);
       }
-    } else {
+    } else if (!targetUser) {
       try {
         localStorage.setItem('nanobot_chats', JSON.stringify(allChats));
       } catch (e) {
@@ -432,89 +486,205 @@ export default function App() {
     }
   }, [currentUser, passwordSecret]);
 
-  // Export currently active noodle history as a beautifully formatted PDF document using jsPDF [Commented by: Google AI Studio on 30/10/2026 11:00 PM]
+  // Export currently active noodle history client-side as a structured JSON backup file [Commented by: Google AI Studio at 22/11/2026 14:33]
   const handleExportActiveChat = () => {
     const targetChat = chats.find((c) => c.id === activeChatId) || (activeChatId ? null : chats[0]);
-    if (!targetChat || targetChat.messages.length === 0) return;
-    exportNoodleAsPdf(targetChat);
+    if (!targetChat || targetChat.messages.length === 0) {
+      setExportStatusNotice({
+        type: 'error',
+        text: 'Cannot export: select an active conversation with at least one message.',
+      });
+      return;
+    }
+
+    try {
+      const outputs: ExportFileOutput[] = (chatFileOutputs[targetChat.id] || []).map((o) => ({
+        id: o.id || o.source_file_id,
+        source_file_id: o.source_file_id,
+        file_name: o.file_name,
+        file_type: o.file_type,
+        output_type: o.output_type,
+        output_content: o.output_content,
+        created_at: o.created_at || new Date().toISOString(),
+      }));
+      exportNoodleAsJson(targetChat, outputs);
+      setExportStatusNotice({
+        type: 'success',
+        text: 'Conversation backup downloaded as DO_NOT_EDIT_BACKUP_FOR_nanobot.json.',
+      });
+      setTimeout(() => {
+        setExportStatusNotice((prev) => (prev?.type === 'success' ? null : prev));
+      }, 4000);
+    } catch (err: unknown) {
+      const e = err as Error;
+      console.error('JSON chat export failed:', e);
+      setExportStatusNotice({
+        type: 'error',
+        text: e.message || 'Failed to export conversation as JSON.',
+      });
+    }
   };
 
-  // Create a public share URL for the active noodle with 30-day retention, updating snapshot under same URL [Commented by: Google AI Studio on 28/10/2026 11:45 PM]
+  // Create or update a public 30-day share link with explicit clipboard and error feedback [Commented by: Google AI Studio at 24/11/2026 17:13]
   const handleShareActiveChat = async () => {
-    if (isIncognito || !currentUser) return;
+    if (!currentUser) {
+      setShareStatusNotice({
+        type: 'error',
+        text: 'Sharing is unavailable while signed out. Please sign in to create a share link.',
+      });
+      return;
+    }
+
+    if (isIncognito) {
+      setShareStatusNotice({
+        type: 'error',
+        text: 'Sharing is unavailable while Incognito Noodle mode is active.',
+      });
+      return;
+    }
 
     const targetChat = chats.find((c) => c.id === activeChatId) || (activeChatId ? null : chats[0]);
-    if (!targetChat || targetChat.messages.length === 0) return;
+    if (!targetChat || targetChat.messages.length === 0) {
+      setShareStatusNotice({
+        type: 'error',
+        text: 'Cannot share an empty noodle. Send at least one message first.',
+      });
+      return;
+    }
 
     setIsSharing(true);
+    setShareStatusNotice(null);
     try {
-      // Strip any bulky local file bytes; keep extracted text, scripts, sources, and reasoning
-      const cleanMessages = targetChat.messages.map((m) => {
-        if (Array.isArray(m.content)) {
-          const textParts = m.content
-            .filter((c) => c.type === 'text')
-            .map((c) => c.text || '')
-            .join('\n');
-          return {
-            role: m.role,
-            content: textParts || '[Shared Content]',
-            sources: m.sources,
-            reasoning: m.reasoning,
-            displayAttachments: m.displayAttachments?.map((a) => ({ type: a.type, name: a.name })),
-          };
-        }
-        return {
-          role: m.role,
-          content: m.content,
-          sources: m.sources,
-          reasoning: m.reasoning,
-          displayAttachments: m.displayAttachments?.map((a) => ({ type: a.type, name: a.name })),
-        };
-      });
+      const cleanMessages = buildShareSnapshotMessages(targetChat.messages);
 
-      // Pass existing targetChat.shareId so re-sharing by the same user updates the snapshot under identical URL [Commented by: Google AI Studio on 28/10/2026 11:45 PM]
+      // Pass existing targetChat.shareId so re-sharing by the same owner updates the snapshot under identical URL
       const res = await workerClient.createShare(targetChat.title, cleanMessages as WorkerMessage[], targetChat.shareId);
       if (res.success && res.data?.shareId) {
-        targetChat.shareId = res.data.shareId;
-        persistChat(targetChat);
-        const shareUrl = `${window.location.origin}/?share=${res.data.shareId}`;
-        await navigator.clipboard.writeText(shareUrl).catch(() => {});
+        const updatedChat: ChatSession = {
+          ...targetChat,
+          shareId: res.data.shareId,
+        };
+        persistChat(updatedChat);
+
+        const shareUrl = `${window.location.origin}/?share=${encodeURIComponent(res.data.shareId)}`;
+        const copyRes = await copyTextToClipboard(shareUrl);
+
+        if (copyRes.copied) {
+          setShareStatusNotice({
+            type: 'success',
+            text: res.data.updated
+              ? 'Share link updated and copied to clipboard.'
+              : 'Share link created and copied to clipboard.',
+            shareUrl,
+            copied: true,
+          });
+        } else {
+          setShareStatusNotice({
+            type: 'warning',
+            text: `Share link created, but automatic copying failed${copyRes.error ? ` (${copyRes.error})` : ''}. Copy the link manually below:`,
+            shareUrl,
+            copied: false,
+          });
+        }
       } else {
-        throw new Error(res.error || 'Failed to generate share URL');
+        throw new Error(res.error || 'Failed to generate share URL.');
       }
     } catch (err: unknown) {
-      console.warn('Share noodle notice:', err);
+      const message = err instanceof Error ? err.message : 'Failed to create share link.';
+      console.warn('Share noodle notice:', message);
+      setShareStatusNotice({
+        type: 'error',
+        text: message,
+      });
     } finally {
       setIsSharing(false);
     }
   };
 
-  // Import shared noodle via URL for signed-in and signed-out users [Commented by: Google AI Studio on 28/10/2026 11:45 PM]
+  // Open confirmation dialog before revoking an existing public share link [Commented by: Google AI Studio at 24/11/2026 22:57]
+  const requestRevokeShareForChat = (targetChat?: ChatSession | null) => {
+    if (!currentUser) {
+      setShareStatusNotice({
+        type: 'error',
+        text: 'You must be signed in to revoke a share link.',
+      });
+      return;
+    }
+    if (!targetChat?.shareId) {
+      setShareStatusNotice({
+        type: 'error',
+        text: 'This noodle does not currently have an active share link.',
+      });
+      return;
+    }
+    setRevokeShareError(null);
+    setPendingRevokeShare({
+      chatId: targetChat.id,
+      shareId: targetChat.shareId,
+      title: targetChat.title || 'Shared Noodle',
+    });
+  };
+
+  // Execute confirmed owner-only share revocation and clear local shareId on success [Commented by: Google AI Studio at 24/11/2026 22:57]
+  const handleConfirmRevokeShare = async () => {
+    if (!pendingRevokeShare) return;
+    if (!currentUser) {
+      setRevokeShareError('You must be signed in to revoke this share link.');
+      return;
+    }
+
+    setIsRevokingShare(true);
+    setRevokeShareError(null);
+    try {
+      const res = await workerClient.revokeShare(pendingRevokeShare.shareId);
+      if (res.success && res.data?.revoked) {
+        const targetLocalChat = chats.find((c) => c.id === pendingRevokeShare.chatId);
+        if (targetLocalChat) {
+          const { shareId: _removedShareId, ...withoutShareId } = targetLocalChat;
+          const updatedChat: ChatSession = withoutShareId;
+          persistChat(updatedChat);
+        }
+        setPendingRevokeShare(null);
+        setRevokeShareError(null);
+        setShareStatusNotice({
+          type: 'success',
+          text: 'Share link revoked. Anyone with the previous link can no longer view or fork this noodle.',
+        });
+      } else {
+        throw new Error(res.error || 'Failed to revoke share link.');
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to revoke share link.';
+      setRevokeShareError(message);
+      setShareStatusNotice({
+        type: 'error',
+        text: message,
+      });
+    } finally {
+      setIsRevokingShare(false);
+    }
+  };
+
+  // Import shared noodle via URL into an independent local copy (signed-in) or view-only snapshot (signed-out) [Commented by: Google AI Studio at 24/11/2026 17:13]
   const handleImportFromUrl = async (urlStr: string) => {
-    const raw = urlStr.trim();
-    if (!raw) return;
+    const { shareId, error: parseError } = extractShareIdFromInput(urlStr);
+    if (!shareId) {
+      setImportUrlError(parseError || 'Please enter a valid shared noodle link or share ID.');
+      return;
+    }
+
+    setImportUrlError(null);
     setIsImportingUrl(true);
     try {
-      let shareId = raw;
-      if (raw.includes('share=')) {
-        const match = raw.match(/[?&]share=([^&#]+)/);
-        if (match) shareId = decodeURIComponent(match[1]);
-      } else if (raw.includes('/')) {
-        const parts = raw.split('/');
-        shareId = parts[parts.length - 1];
-      }
       const res = await workerClient.getPublicShare(shareId);
       if (res.success && res.share) {
         if (currentUser) {
-          // Import into current account and save to encrypted local storage
-          const importedNoodle: ChatSession = {
-            id: Date.now().toString(),
+          // Fork into current account as an independent noodle without retaining original shareId
+          const importedNoodle = createForkedChatSession({
+            id: res.share.id,
             title: res.share.title || 'Imported Noodle',
             messages: (res.share.messages || []) as ChatMessage[],
-            pinned: false,
-            updated: Date.now(),
-            shareId: res.share.id,
-          };
+          }) as ChatSession;
           const nextChats = [importedNoodle, ...chats];
           setChats(nextChats);
           setActiveChatId(importedNoodle.id);
@@ -522,8 +692,13 @@ export default function App() {
           setSharedChatView(null);
           setIsProvideUrlModalOpen(false);
           setProvideUrlInput('');
+          setImportUrlError(null);
         } else {
           // Signed out: load view-only shared chat
+          let robotsMeta = document.querySelector('meta[name="robots"]');
+          if (robotsMeta) {
+            robotsMeta.setAttribute('content', 'noindex, nofollow, noarchive');
+          }
           setSharedChatView({
             id: res.share.id,
             title: res.share.title,
@@ -533,30 +708,43 @@ export default function App() {
           });
           setIsProvideUrlModalOpen(false);
           setProvideUrlInput('');
+          setImportUrlError(null);
         }
       } else {
-        alert(res.error || 'Failed to load shared noodle. URL may be invalid or expired.');
+        setImportUrlError(res.error || 'Failed to load shared noodle. The link may be invalid or expired.');
       }
     } catch (err: unknown) {
       const e = err as Error;
-      alert(`Error loading shared noodle: ${e.message}`);
+      setImportUrlError(`Error loading shared noodle: ${e.message || 'Unknown error'}`);
     } finally {
       setIsImportingUrl(false);
     }
   };
 
-  // Detect public share parameter in URL on page load, load view-only snapshot, and set anti-scraping robots headers [Commented by: Google AI Studio on 22/10/2026 04:51 PM]
+  // Detect public share parameter in URL on page load, load view-only snapshot, and surface errors cleanly [Commented by: Google AI Studio at 24/11/2026 17:13]
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const shareId = params.get('share');
-    if (shareId) {
-      // Anti-scraping meta tag: prevents web scrapers from discovering or indexing shared chats
-      let robotsMeta = document.querySelector('meta[name="robots"]');
-      if (robotsMeta) {
-        robotsMeta.setAttribute('content', 'noindex, nofollow, noarchive');
-      }
+    if (!params.has('share')) return;
 
-      workerClient.getPublicShare(shareId).then((res) => {
+    const rawShareParam = (params.get('share') || '').trim();
+    if (!rawShareParam) {
+      setShareStatusNotice({
+        type: 'error',
+        text: 'The shared noodle link is incomplete or missing a share identifier.',
+      });
+      return;
+    }
+
+    // Anti-scraping meta tag: prevents web scrapers from discovering or indexing shared chats
+    const robotsMeta = document.querySelector('meta[name="robots"]');
+    if (robotsMeta) {
+      robotsMeta.setAttribute('content', 'noindex, nofollow, noarchive');
+    }
+
+    setIsLoadingSharedChat(true);
+    workerClient
+      .getPublicShare(rawShareParam)
+      .then((res) => {
         if (res.success && res.share) {
           setSharedChatView({
             id: res.share.id,
@@ -565,14 +753,27 @@ export default function App() {
             created_at: res.share.created_at,
             expires_at: res.share.expires_at,
           });
+        } else {
+          setShareStatusNotice({
+            type: 'error',
+            text: res.error || 'Shared noodle could not be found or has expired after 30 days.',
+          });
         }
-      }).catch((err) => {
-        console.warn('Failed to load shared chat:', err);
+      })
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Unable to load shared noodle.';
+        console.warn('Failed to load shared chat:', message);
+        setShareStatusNotice({
+          type: 'error',
+          text: message,
+        });
+      })
+      .finally(() => {
+        setIsLoadingSharedChat(false);
       });
-    }
   }, []);
 
-  // Fork shared chat into user's personal chat history as an independent separate chat session [Commented by: Google AI Studio on 22/10/2026 04:51 PM]
+  // Fork shared chat into user's personal chat history as an independent separate chat session [Commented by: Google AI Studio at 24/11/2026 17:13]
   const handleContinueSharedChat = () => {
     if (!sharedChatView) return;
 
@@ -581,13 +782,7 @@ export default function App() {
       return;
     }
 
-    const forkedChat: ChatSession = {
-      id: Date.now().toString(),
-      title: sharedChatView.title,
-      messages: JSON.parse(JSON.stringify(sharedChatView.messages)),
-      pinned: false,
-      updated: Date.now(),
-    };
+    const forkedChat = createForkedChatSession(sharedChatView) as ChatSession;
 
     setChats((prev) => [forkedChat, ...prev]);
     setActiveChatId(forkedChat.id);
@@ -701,6 +896,15 @@ export default function App() {
 
   // Load message history and AI file outputs from Cloudflare Worker with zero-knowledge decryption, verifying local file presence in IndexedDB [Commented by: Google AI Studio on 16/10/2026 10:55 PM]
   const handleSelectChat = async (id: string) => {
+    setSharedChatView(null);
+    setShareStatusNotice(null);
+    if (window.location.search.includes('share=')) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    const robotsMeta = document.querySelector('meta[name="robots"]');
+    if (robotsMeta) {
+      robotsMeta.setAttribute('content', 'index, follow');
+    }
     setActiveChatId(id);
     setSidebarOpen(false);
 
@@ -773,8 +977,10 @@ export default function App() {
                 }
               }
               return {
+                id: m.id,
                 role: m.role,
                 content: plainContent,
+                createdAt: m.created_at,
                 sources: m.sources,
                 reasoning: plainReasoning,
                 displayAttachments: m.displayAttachments?.map((att) => ({
@@ -939,8 +1145,17 @@ export default function App() {
     setStreamDisplayContent(targetContentRef.current);
   };
 
-  // Start new chat
+  // Start new chat and clear any active view-only shared snapshot [Commented by: Google AI Studio at 24/11/2026 17:13]
   const handleStartNewChat = () => {
+    setSharedChatView(null);
+    setShareStatusNotice(null);
+    if (window.location.search.includes('share=')) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    const robotsMeta = document.querySelector('meta[name="robots"]');
+    if (robotsMeta) {
+      robotsMeta.setAttribute('content', 'index, follow');
+    }
     setActiveChatId(null);
     setInputText('');
     setAttachments([]);
@@ -1002,6 +1217,11 @@ export default function App() {
       return;
     }
 
+    if (sharedChatView && !currentUser) {
+      setAuthModalMode('signin');
+      return;
+    }
+
     // Determined API keys strictly from authenticated user profile, removing obsolete global env fallbacks [Commented by: Google AI Studio on 01/11/2026 04:18 PM]
     const orKey = currentUser?.openrouter_key || '';
     const tvKey = currentUser?.tavily_key || '';
@@ -1009,6 +1229,18 @@ export default function App() {
     if (orKey.startsWith('enc:')) {
       alert('Your OpenRouter API Key is zero-knowledge encrypted. Please open Account Settings and enter your account password to unlock your credentials for this session.');
       setIsSettingsOpen(true);
+      return;
+    }
+
+    // Require Tavily key (and unlock if encrypted) before starting Deep Research, including for signed-out users [Commented by: Google AI Studio at 27/11/2026 21:17]
+    if (composerMode === 'deep_research' && tvKey.startsWith('enc:')) {
+      alert('Your Tavily API Key is zero-knowledge encrypted. Please open Account Settings and enter your account password to unlock your credentials for this session.');
+      setIsSettingsOpen(true);
+      return;
+    }
+
+    if (!tvKey && composerMode === 'deep_research') {
+      alert('Please Sign In or configure your Tavily API Key in Account Settings.');
       return;
     }
 
@@ -1054,13 +1286,7 @@ export default function App() {
         messages: chat.messages.slice(0, editedMsgIndex)
       };
     } else if (!chat && sharedChatView) {
-      chat = {
-        id: Date.now().toString(),
-        title: sharedChatView.title,
-        messages: JSON.parse(JSON.stringify(sharedChatView.messages)),
-        pinned: false,
-        updated: Date.now()
-      };
+      chat = createForkedChatSession(sharedChatView) as ChatSession;
       setChats((prev) => [chat!, ...prev]);
       setActiveChatId(chat.id);
       setSharedChatView(null);
@@ -1167,13 +1393,24 @@ export default function App() {
       userContent = fullTextPrompt;
     }
 
-    // Append user message
+    // Append user message with stable ID, timestamp, and mode metadata for faithful persistence and JSON backup [Commented by: Google AI Studio at 22/11/2026 14:33]
+    const createMessageId = () =>
+      typeof globalThis.crypto?.randomUUID === 'function'
+        ? globalThis.crypto.randomUUID()
+        : `msg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
     const updatedMessages: ChatMessage[] = [
       ...chat.messages,
       {
+        id: createMessageId(),
         role: 'user',
         content: userContent,
-        displayAttachments
+        createdAt: new Date().toISOString(),
+        displayAttachments,
+        metadata: {
+          composerMode,
+          ...(composerMode === 'deep_research' ? { deepResearchTier: isSuperDeepResearch ? 'pro' : 'mini' } : {}),
+        },
       }
     ];
 
@@ -1202,8 +1439,8 @@ export default function App() {
     abortControllerRef.current = new AbortController();
     const signal = abortControllerRef.current.signal;
 
-    // Route messages via composer Deep Research toggle only for signed-in users (no # / ## prefix required) [Commented by: Google AI Studio at 22/11/2026 12:05]
-    if (currentUser && composerMode === 'deep_research') {
+    // Route messages via composer Deep Research toggle for all users once required keys are verified [Commented by: Google AI Studio at 27/11/2026 21:17]
+    if (composerMode === 'deep_research') {
       const isPro = isSuperDeepResearch;
       const researchQuery = trimmedPrompt || promptSummary;
 
@@ -1222,9 +1459,15 @@ export default function App() {
         stopStreamSmoothing();
 
         const aiMsg: ChatMessage = {
+          id: createMessageId(),
           role: 'ai',
           content: researchResult.content,
-          sources: researchResult.sources
+          createdAt: new Date().toISOString(),
+          sources: researchResult.sources,
+          metadata: {
+            mode: 'deep_research',
+            tier: isPro ? 'pro' : 'mini',
+          },
         };
 
         chat.messages.push(aiMsg);
@@ -1242,7 +1485,13 @@ export default function App() {
       } catch (err: unknown) {
         const e = err as Error;
         const errMsg = e.name === 'AbortError' ? 'Research Stopped.' : e.message;
-        chat.messages.push({ role: 'ai', content: errMsg });
+        chat.messages.push({
+          id: createMessageId(),
+          role: 'ai',
+          content: errMsg,
+          createdAt: new Date().toISOString(),
+          metadata: { mode: 'deep_research', isError: e.name !== 'AbortError' },
+        });
         persistChat(chat);
         setCurrentStatus(null);
       } finally {
@@ -1255,7 +1504,7 @@ export default function App() {
     // Configured system prompt with real MCP server tool definitions, Learn Step By Step tutor mode, persona rules, and URL scraping capability [Commented by: Google AI Studio at 22/11/2026 11:51]
     const customInstructions = currentUser?.ai_instructions || '';
     const learnStepByStepPrompt =
-      currentUser && composerMode === 'learn_step_by_step'
+      composerMode === 'learn_step_by_step'
         ? `\n8. Learn Step By Step Mode (ACTIVE): Act as an encouraging, structured master tutor guiding the user step by step. Always organize explanations into clear, numbered progressive steps (Step 1, Step 2, Step 3, etc.). For each step: explain the intuition and "why" before technical details, provide a concrete worked example or analogy, point out common mistakes to avoid, and end with a brief comprehension check or next-step prompt so the user learns actively.`
         : '';
     // Updated system identity to source available AI chat bot [Commented by: Google AI Studio on 29/10/2026 09:00 PM]
@@ -1705,10 +1954,17 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
       }
 
       const aiMessage: ChatMessage = {
+        id: createMessageId(),
         role: 'ai',
         content: currentOutput,
+        createdAt: new Date().toISOString(),
         sources: accumulatedSources,
-        reasoning: reasoningText
+        reasoning: reasoningText,
+        metadata: {
+          model: 'nvidia/nemotron-3.5-super-vl:free',
+          reasoningEffort,
+          composerMode,
+        },
       };
 
       chat.messages.push(aiMessage);
@@ -1747,16 +2003,25 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
       const e = err as Error;
       if (e.name === 'AbortError') {
         const stoppedMsg: ChatMessage = {
+          id: createMessageId(),
           role: 'ai',
           content: currentOutput || 'Stopped',
+          createdAt: new Date().toISOString(),
           sources: accumulatedSources,
-          reasoning: reasoningText
+          reasoning: reasoningText,
+          metadata: { aborted: true },
         };
         chat.messages.push(stoppedMsg);
         persistChat(chat);
       } else {
         const errorMsg = e.message.startsWith('OpenRouter Error:') ? e.message : `OpenRouter Error: ${e.message}`;
-        chat.messages.push({ role: 'ai', content: errorMsg });
+        chat.messages.push({
+          id: createMessageId(),
+          role: 'ai',
+          content: errorMsg,
+          createdAt: new Date().toISOString(),
+          metadata: { isError: true },
+        });
         persistChat(chat);
       }
     } finally {
@@ -1779,9 +2044,12 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
     const remaining = chats.filter((c) => Boolean(c.pinned));
     setChats(remaining);
     saveLocalEncryptedChats(remaining, cryptoKey, currentUser);
-    try {
-      localStorage.setItem('nanobot_chats', JSON.stringify(remaining));
-    } catch {}
+    // Only update guest localStorage chats when signed out so authenticated chats never reappear after logout [Commented by: Google AI Studio at 25/11/2026 22:57]
+    if (!currentUser) {
+      try {
+        localStorage.setItem('nanobot_chats', JSON.stringify(remaining));
+      } catch {}
+    }
 
     // Synchronized noodle deletions to remote Supabase, Cloudflare Worker, and local IndexedDB file storage [Commented by: Google AI Studio on 29/10/2026 04:00 PM]
     chats.forEach((c) => {
@@ -1813,9 +2081,12 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
         (a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (b.updated || 0) - (a.updated || 0)
       );
       saveLocalEncryptedChats(sorted, cryptoKey, currentUser);
-      try {
-        localStorage.setItem('nanobot_chats', JSON.stringify(sorted));
-      } catch {}
+      // Only update guest localStorage chats when signed out so authenticated pins never leak into guest storage [Commented by: Google AI Studio at 25/11/2026 22:57]
+      if (!currentUser) {
+        try {
+          localStorage.setItem('nanobot_chats', JSON.stringify(sorted));
+        } catch {}
+      }
       const target = sorted.find((c) => c.id === id);
       if (currentUser && target) {
         workerClient.updateConversation(id, { pinned: target.pinned }).catch(() => {});
@@ -2336,51 +2607,84 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
               )}
             </div>
           ) : (
-            /* Signed-In Running Noodle (>0 messages): borderless three-dot menu with Share and Export as PDF */
-            !isIncognito ? (
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setIsRunningNoodleMenuOpen((prev) => !prev)}
-                  className="p-1.5 text-neutral-400 hover:text-white border-none outline-none focus:outline-none cursor-pointer text-xl leading-none transition-colors select-none tracking-widest"
-                  title="Menu"
-                  aria-label="Menu"
-                >
-                  ···
-                </button>
+            /* Signed-In Running Noodle (>0 messages): borderless three-dot menu with Share (disabled notice in Incognito) and Export as JSON */
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsRunningNoodleMenuOpen((prev) => !prev)}
+                className="p-1.5 text-neutral-400 hover:text-white border-none outline-none focus:outline-none cursor-pointer text-xl leading-none transition-colors select-none tracking-widest"
+                title="Menu"
+                aria-label="Menu"
+              >
+                ···
+              </button>
 
-                {isRunningNoodleMenuOpen && (
-                  <div className={`absolute right-0 top-full mt-2 w-44 rounded-xl py-2 px-1 text-xs shadow-2xl z-50 border ${
-                    theme === 'Minimalist Light'
-                      ? 'bg-white border-neutral-200 text-neutral-800'
-                      : 'bg-[#141414] border-[#2b2b2b] text-neutral-200'
-                  }`}>
+              {isRunningNoodleMenuOpen && (
+                <div className={`absolute right-0 top-full mt-2 w-60 rounded-xl py-2 px-1 text-xs shadow-2xl z-50 border ${
+                  theme === 'Minimalist Light'
+                    ? 'bg-white border-neutral-200 text-neutral-800'
+                    : 'bg-[#141414] border-[#2b2b2b] text-neutral-200'
+                }`}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsRunningNoodleMenuOpen(false);
+                      handleShareActiveChat();
+                    }}
+                    disabled={isSharing}
+                    className={`w-full text-left px-3 py-2 hover:bg-neutral-800/40 rounded-lg font-medium cursor-pointer transition-colors ${
+                      isIncognito ? 'opacity-65' : ''
+                    }`}
+                  >
+                    <div>
+                      {isSharing
+                        ? 'Sharing...'
+                        : isIncognito
+                          ? 'Share (Unavailable in Incognito)'
+                          : activeChat?.shareId
+                            ? 'Update Share Link'
+                            : 'Share'}
+                    </div>
+                    <div className="text-[10px] opacity-70 font-normal leading-snug mt-0.5">
+                      {isIncognito
+                        ? 'Turn off Incognito to share a public 30-day link.'
+                        : activeChat?.shareId
+                          ? 'Update public 30-day Cloudflare D1 snapshot under this link.'
+                          : 'Public link in Cloudflare D1 (30-day expiry or until revoked).'}
+                    </div>
+                  </button>
+                  {/* Owner-only immediate share revocation trigger opening confirmation dialog [Commented by: Google AI Studio at 24/11/2026 22:57] */}
+                  {activeChat?.shareId && !isIncognito && (
                     <button
                       type="button"
                       onClick={() => {
                         setIsRunningNoodleMenuOpen(false);
-                        handleShareActiveChat();
+                        requestRevokeShareForChat(activeChat);
                       }}
-                      disabled={isSharing}
-                      className="w-full text-left px-3 py-2 hover:bg-neutral-800/40 rounded-lg font-medium cursor-pointer transition-colors"
+                      disabled={isRevokingShare}
+                      className="w-full text-left px-3 py-2 hover:bg-red-950/50 text-red-400 hover:text-red-300 rounded-lg font-medium cursor-pointer transition-colors"
                     >
-                      {isSharing ? 'Sharing...' : 'Share'}
+                      <div>{isRevokingShare ? 'Revoking...' : 'Revoke Share Link'}</div>
+                      <div className="text-[10px] opacity-75 font-normal leading-snug mt-0.5">
+                        Immediately disable the public link without deleting private history.
+                      </div>
                     </button>
-                    {/* Formatted PDF export button [Commented by: Google AI Studio on 30/10/2026 11:00 PM] */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsRunningNoodleMenuOpen(false);
-                        handleExportActiveChat();
-                      }}
-                      className="w-full text-left px-3 py-2 hover:bg-neutral-800/40 rounded-lg font-medium cursor-pointer transition-colors"
-                    >
-                      Export as PDF
-                    </button>
-                  </div>
-                )}
-              </div>
-            ) : null
+                  )}
+                  {/* Client-side JSON backup export button [Commented by: Google AI Studio at 22/11/2026 14:33] */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsRunningNoodleMenuOpen(false);
+                      handleExportActiveChat();
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-neutral-800/40 rounded-lg font-medium cursor-pointer transition-colors flex items-center gap-2"
+                  >
+                    <span className="font-mono text-[11px] opacity-80">{'{}'}</span>
+                    <span>Export as JSON</span>
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
 
@@ -2416,20 +2720,23 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
           }`}
         >
           {/* Shared Chat Session Banner */}
-          {/* View-only shared chat notification banner with 'Continue this chat' action button  [Commented by: Google AI Studio on 22/10/2026 04:51 PM] */}
+          {/* View-only shared chat notification banner with accurate public Cloudflare D1 disclosure & fork action [Commented by: Google AI Studio at 24/11/2026 17:13] */}
           {sharedChatView && (
             <div className={`p-4 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-2 animate-in fade-in duration-200 ${
               theme === 'Minimalist Light'
                 ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
                 : 'bg-emerald-950/40 border-emerald-600/60 text-emerald-200'
             }`}>
-              <div className="space-y-0.5">
+              <div className="space-y-1">
                 <div className="text-xs font-semibold flex items-center gap-1.5">
-                  <span>🔗 Shared Chat:</span>
+                  <span>🔗 Shared Noodle (Read-Only):</span>
                   <span className="font-bold">{sharedChatView.title}</span>
                 </div>
-                <div className="text-[11px] opacity-80">
-                  Shared view-only snapshot • Retained for 30 days per policy
+                <div className="text-[11px] opacity-85 leading-relaxed">
+                  {SHARED_NOODLE_PRIVACY_DISCLOSURE}
+                  {sharedChatView.expires_at && !Number.isNaN(Date.parse(sharedChatView.expires_at))
+                    ? ` (Expires ${new Date(sharedChatView.expires_at).toLocaleDateString()})`
+                    : ''}
                 </div>
               </div>
               <button
@@ -2437,7 +2744,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                 onClick={handleContinueSharedChat}
                 className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-colors cursor-pointer shrink-0 shadow-sm"
               >
-                Continue this chat ➔
+                {currentUser ? 'Continue this chat ➔' : 'Sign in to fork & continue ➔'}
               </button>
             </div>
           )}
@@ -2597,9 +2904,9 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                     {/* Action buttons (Copy, Sources) */}
                     <div className="flex items-center gap-2 mt-3">
                       <button
+                        type="button"
                         onClick={() => {
-                          navigator.clipboard.writeText(textContent);
-                          alert('Copied to clipboard!');
+                          void copyTextToClipboard(textContent);
                         }}
                         className="bg-[#1e1e1e] hover:bg-[#2e2e2e] text-neutral-300 px-3 py-1 rounded text-xs transition-colors cursor-pointer"
                       >
@@ -2737,6 +3044,126 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
               </button>
             </div>
           )}
+          {exportStatusNotice && (
+            <div
+              className={`mb-2 px-3 py-1.5 rounded-lg border text-xs flex items-center justify-between shadow-lg ${
+                exportStatusNotice.type === 'error'
+                  ? 'bg-red-950/80 border-red-600/60 text-red-200'
+                  : 'bg-emerald-950/80 border-emerald-600/60 text-emerald-200'
+              }`}
+            >
+              <span>{exportStatusNotice.type === 'error' ? '⚠️' : '✓'} {exportStatusNotice.text}</span>
+              <button
+                type="button"
+                onClick={() => setExportStatusNotice(null)}
+                className="opacity-70 hover:opacity-100 ml-2 cursor-pointer font-bold"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+          {isLoadingSharedChat && (
+            <div className="mb-2 px-3 py-1.5 rounded-lg bg-blue-950/70 border border-blue-700/60 text-blue-200 text-xs shadow-lg">
+              Loading shared noodle snapshot...
+            </div>
+          )}
+          {shareStatusNotice && (
+            <div
+              role="status"
+              className={`mb-2 px-3 py-2 rounded-lg border text-xs shadow-lg space-y-1.5 ${
+                shareStatusNotice.type === 'error'
+                  ? 'bg-red-950/85 border-red-600/60 text-red-200'
+                  : shareStatusNotice.type === 'warning'
+                    ? 'bg-amber-950/85 border-amber-600/60 text-amber-200'
+                    : 'bg-emerald-950/85 border-emerald-600/60 text-emerald-200'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <span className="font-medium">
+                  {shareStatusNotice.type === 'error' ? '⚠️' : shareStatusNotice.type === 'warning' ? '⚠️' : '✓'} {shareStatusNotice.text}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShareStatusNotice(null)}
+                  aria-label="Dismiss share notice"
+                  className="opacity-70 hover:opacity-100 ml-2 cursor-pointer font-bold shrink-0"
+                >
+                  ✕
+                </button>
+              </div>
+              {shareStatusNotice.shareUrl && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={shareStatusNotice.shareUrl}
+                      onFocus={(e) => e.currentTarget.select()}
+                      aria-label="Share URL"
+                      className="flex-1 bg-black/40 border border-white/15 rounded px-2 py-1 text-[11px] font-mono text-white outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const url = shareStatusNotice.shareUrl || '';
+                        const res = await copyTextToClipboard(url);
+                        if (res.copied) {
+                          setShareStatusNotice((prev) =>
+                            prev ? { ...prev, type: 'success', text: 'Share link copied to clipboard.', copied: true } : prev
+                          );
+                        } else {
+                          setShareStatusNotice((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  type: 'warning',
+                                  text: 'Clipboard access blocked by browser. Please select and copy the link manually:',
+                                  copied: false,
+                                }
+                              : prev
+                          );
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded bg-white/10 hover:bg-white/20 text-white text-[11px] font-semibold cursor-pointer shrink-0"
+                    >
+                      {shareStatusNotice.copied ? 'Copied' : 'Copy Link'}
+                    </button>
+                    {activeChat?.shareId && currentUser && !isIncognito && (
+                      <button
+                        type="button"
+                        onClick={() => requestRevokeShareForChat(activeChat)}
+                        disabled={isRevokingShare}
+                        className="px-2.5 py-1 rounded bg-red-900/60 hover:bg-red-800/80 text-red-100 text-[11px] font-semibold cursor-pointer shrink-0"
+                      >
+                        Revoke Link
+                      </button>
+                    )}
+                  </div>
+                  <div className="text-[10.5px] opacity-80 leading-snug">
+                    {SHARED_NOODLE_PRIVACY_DISCLOSURE}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          {sharedChatView && !currentUser ? (
+            <div className={`w-full rounded-[20px] p-4 flex items-center justify-between gap-3 border ${
+              theme === 'Minimalist Light'
+                ? 'bg-white border-neutral-300 text-neutral-700 shadow-lg'
+                : 'bg-[#111] border-[#333] text-neutral-300'
+            }`}>
+              <span className="text-xs">
+                Viewing a read-only shared noodle. Sign in and click Continue this chat to fork an independent copy.
+              </span>
+              <button
+                type="button"
+                onClick={() => setAuthModalMode('signin')}
+                className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold cursor-pointer shrink-0"
+              >
+                Sign In
+              </button>
+            </div>
+          ) : (
           <div className={`w-full rounded-[20px] p-[15px] flex flex-col gap-2.5 transition-all duration-200 ${
             theme === 'Minimalist Light'
               ? 'bg-white border border-neutral-300 shadow-xl'
@@ -2797,210 +3224,203 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
               }`}
             />
 
-            {/* Bottom Controls: Plus Popup Menu + Deep Research / Learn Step By Step + Effort Slider restricted to signed-in users; Send always visible [Commented by: Google AI Studio at 22/11/2026 12:05] */}
+            {/* Bottom Controls: Plus Popup Menu + Deep Research / Learn Step By Step + Effort Slider visible for both signed-in and signed-out users [Commented by: Google AI Studio at 27/11/2026 21:17] */}
             <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
               <div className="flex items-center gap-2.5 flex-wrap">
-                {currentUser && (
-                  <>
-                    <div ref={plusMenuRef} className="relative flex items-center">
+                <div ref={plusMenuRef} className="relative flex items-center">
+                  <button
+                    type="button"
+                    onClick={() => setIsPlusMenuOpen((prev) => !prev)}
+                    aria-expanded={isPlusMenuOpen}
+                    aria-haspopup="menu"
+                    className={`p-1 text-[1.2rem] cursor-pointer transition-colors ${
+                      theme === 'Minimalist Light'
+                        ? 'text-neutral-600 hover:text-neutral-900'
+                        : 'text-neutral-400 hover:text-white'
+                    }`}
+                    title="Actions: Upload File, Deep Research, Learn Step By Step"
+                  >
+                    ➕
+                  </button>
+
+                  {isPlusMenuOpen && (
+                    <div
+                      role="menu"
+                      className="absolute bottom-full left-0 mb-2 w-52 bg-black text-white border border-[#2f2f2f] rounded-xl shadow-2xl p-1.5 z-40 flex flex-col gap-0.5"
+                    >
                       <button
                         type="button"
-                        onClick={() => setIsPlusMenuOpen((prev) => !prev)}
-                        aria-expanded={isPlusMenuOpen}
-                        aria-haspopup="menu"
-                        className={`p-1 text-[1.2rem] cursor-pointer transition-colors ${
-                          theme === 'Minimalist Light'
-                            ? 'text-neutral-600 hover:text-neutral-900'
-                            : 'text-neutral-400 hover:text-white'
-                        }`}
-                        title="Actions: Upload File, Deep Research, Learn Step By Step"
+                        role="menuitem"
+                        onClick={() => {
+                          setIsPlusMenuOpen(false);
+                          fileInputRef.current?.click();
+                        }}
+                        className="w-full text-left px-3 py-2 rounded-lg text-xs font-medium text-white hover:bg-[#1a1a1a] flex items-center gap-2.5 cursor-pointer transition-colors"
                       >
-                        ➕
+                        <span aria-hidden="true">📁</span>
+                        <span>Upload File</span>
                       </button>
-
-                      {isPlusMenuOpen && (
-                        <div
-                          role="menu"
-                          className="absolute bottom-full left-0 mb-2 w-52 bg-black text-white border border-[#2f2f2f] rounded-xl shadow-2xl p-1.5 z-40 flex flex-col gap-0.5"
-                        >
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              setIsPlusMenuOpen(false);
-                              fileInputRef.current?.click();
-                            }}
-                            className="w-full text-left px-3 py-2 rounded-lg text-xs font-medium text-white hover:bg-[#1a1a1a] flex items-center gap-2.5 cursor-pointer transition-colors"
-                          >
-                            <span aria-hidden="true">📁</span>
-                            <span>Upload File</span>
-                          </button>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              setComposerMode('deep_research');
-                              setIsPlusMenuOpen(false);
-                            }}
-                            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium text-white hover:bg-[#1a1a1a] flex items-center gap-2.5 cursor-pointer transition-colors ${
-                              composerMode === 'deep_research' ? 'bg-[#161616] text-emerald-400' : ''
-                            }`}
-                          >
-                            <span aria-hidden="true">🔬</span>
-                            <span>Deep Research</span>
-                          </button>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              setComposerMode('learn_step_by_step');
-                              setIsPlusMenuOpen(false);
-                            }}
-                            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium text-white hover:bg-[#1a1a1a] flex items-center gap-2.5 cursor-pointer transition-colors ${
-                              composerMode === 'learn_step_by_step' ? 'bg-[#161616] text-emerald-400' : ''
-                            }`}
-                          >
-                            <span aria-hidden="true">🪜</span>
-                            <span>Learn Step By Step</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      multiple
-                      onChange={handleFileUpload}
-                      className="hidden"
-                    />
-
-                    {composerMode === 'deep_research' && (
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setIsSuperDeepResearch(false)}
-                          className={`text-xs cursor-pointer select-none ${
-                            !isSuperDeepResearch
-                              ? theme === 'Minimalist Light'
-                                ? 'text-neutral-900 font-semibold'
-                                : 'text-white font-semibold'
-                              : 'text-neutral-500'
-                          }`}
-                        >
-                          Deep Research
-                        </button>
-                        {/* Always-black toggle track with always-green slider knob (zero colourisation/decolourisation) */}
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={isSuperDeepResearch}
-                          aria-label="Toggle between Deep Research and Super Deep Research"
-                          onClick={() => setIsSuperDeepResearch((prev) => !prev)}
-                          className="w-11 h-6 rounded-full bg-black border border-[#333] p-0.5 flex items-center cursor-pointer shrink-0"
-                        >
-                          <span
-                            className={`w-[18px] h-[18px] rounded-full bg-emerald-500 transition-transform duration-150 ${
-                              isSuperDeepResearch ? 'translate-x-5' : 'translate-x-0'
-                            }`}
-                          />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setIsSuperDeepResearch(true)}
-                          className={`text-xs cursor-pointer select-none ${
-                            isSuperDeepResearch
-                              ? theme === 'Minimalist Light'
-                                ? 'text-neutral-900 font-semibold'
-                                : 'text-white font-semibold'
-                              : 'text-neutral-500'
-                          }`}
-                        >
-                          Super Deep Research
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setComposerMode('normal')}
-                          title="Exit Deep Research mode"
-                          aria-label="Exit Deep Research mode"
-                          className="text-xs text-neutral-400 hover:text-red-400 px-1 cursor-pointer"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    )}
-
-                    {composerMode === 'learn_step_by_step' && (
-                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black border border-[#333] text-xs text-emerald-400 font-medium">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setComposerMode('deep_research');
+                          setIsPlusMenuOpen(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium text-white hover:bg-[#1a1a1a] flex items-center gap-2.5 cursor-pointer transition-colors ${
+                          composerMode === 'deep_research' ? 'bg-[#161616] text-emerald-400' : ''
+                        }`}
+                      >
+                        <span aria-hidden="true">🔬</span>
+                        <span>Deep Research</span>
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setComposerMode('learn_step_by_step');
+                          setIsPlusMenuOpen(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium text-white hover:bg-[#1a1a1a] flex items-center gap-2.5 cursor-pointer transition-colors ${
+                          composerMode === 'learn_step_by_step' ? 'bg-[#161616] text-emerald-400' : ''
+                        }`}
+                      >
                         <span aria-hidden="true">🪜</span>
                         <span>Learn Step By Step</span>
-                        <button
-                          type="button"
-                          onClick={() => setComposerMode('normal')}
-                          title="Exit Learn Step By Step mode"
-                          aria-label="Exit Learn Step By Step mode"
-                          className="text-neutral-400 hover:text-red-400 ml-1 cursor-pointer"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    )}
-                  </>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+
+                {composerMode === 'deep_research' && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsSuperDeepResearch(false)}
+                      className={`text-xs cursor-pointer select-none ${
+                        !isSuperDeepResearch
+                          ? theme === 'Minimalist Light'
+                            ? 'text-neutral-900 font-semibold'
+                            : 'text-white font-semibold'
+                          : 'text-neutral-500'
+                      }`}
+                    >
+                      Deep Research
+                    </button>
+                    {/* Always-black toggle track with always-green slider knob (zero colourisation/decolourisation) */}
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={isSuperDeepResearch}
+                      aria-label="Toggle between Deep Research and Super Deep Research"
+                      onClick={() => setIsSuperDeepResearch((prev) => !prev)}
+                      className="w-11 h-6 rounded-full bg-black border border-[#333] p-0.5 flex items-center cursor-pointer shrink-0"
+                    >
+                      <span
+                        className={`w-[18px] h-[18px] rounded-full bg-emerald-500 transition-transform duration-150 ${
+                          isSuperDeepResearch ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsSuperDeepResearch(true)}
+                      className={`text-xs cursor-pointer select-none ${
+                        isSuperDeepResearch
+                          ? theme === 'Minimalist Light'
+                            ? 'text-neutral-900 font-semibold'
+                            : 'text-white font-semibold'
+                          : 'text-neutral-500'
+                      }`}
+                    >
+                      Super Deep Research
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setComposerMode('normal')}
+                      title="Exit Deep Research mode"
+                      aria-label="Exit Deep Research mode"
+                      className="text-xs text-neutral-400 hover:text-red-400 px-1 cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+
+                {composerMode === 'learn_step_by_step' && (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black border border-[#333] text-xs text-emerald-400 font-medium">
+                    <span aria-hidden="true">🪜</span>
+                    <span>Learn Step By Step</span>
+                    <button
+                      type="button"
+                      onClick={() => setComposerMode('normal')}
+                      title="Exit Learn Step By Step mode"
+                      aria-label="Exit Learn Step By Step mode"
+                      className="text-neutral-400 hover:text-red-400 ml-1 cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 )}
               </div>
 
               <div className="flex items-center gap-3 ml-auto">
-                {/* Green 3-stop OpenRouter Reasoning Effort slider with white thumb (Low / Medium / High), signed-in users only */}
-                {currentUser && (
-                  <div className="flex flex-col items-center min-w-[136px] select-none">
-                    {/* Removed redundant current effort value text span above Effort slider [Commented by: Google AI Studio at 22/11/2026 12:02] */}
-                    <div className="w-full flex items-center justify-between text-[10px] font-semibold leading-none mb-1">
-                      <span className={theme === 'Minimalist Light' ? 'text-neutral-600' : 'text-neutral-400'}>
-                        Effort
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={2}
-                      step={1}
-                      value={reasoningEffort === 'low' ? 0 : reasoningEffort === 'medium' ? 1 : 2}
-                      onChange={(e) => {
-                        const val = Number(e.target.value);
-                        setReasoningEffort(val === 0 ? 'low' : val === 1 ? 'medium' : 'high');
-                      }}
-                      aria-label="Effort"
-                      className="effort-slider"
-                    />
-                    <div
-                      className={`w-full flex items-center justify-between text-[9.5px] leading-none mt-1 ${
-                        theme === 'Minimalist Light' ? 'text-neutral-600' : 'text-neutral-400'
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setReasoningEffort('low')}
-                        className={`cursor-pointer ${reasoningEffort === 'low' ? 'text-emerald-400 font-semibold' : ''}`}
-                      >
-                        Low
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setReasoningEffort('medium')}
-                        className={`cursor-pointer ${reasoningEffort === 'medium' ? 'text-emerald-400 font-semibold' : ''}`}
-                      >
-                        Medium
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setReasoningEffort('high')}
-                        className={`cursor-pointer ${reasoningEffort === 'high' ? 'text-emerald-400 font-semibold' : ''}`}
-                      >
-                        High
-                      </button>
-                    </div>
+                {/* Green 3-stop OpenRouter Reasoning Effort slider with white thumb (Low / Medium / High), visible to all users [Commented by: Google AI Studio at 27/11/2026 21:17] */}
+                <div className="flex flex-col items-center min-w-[136px] select-none">
+                  <div className="w-full flex items-center justify-between text-[10px] font-semibold leading-none mb-1">
+                    <span className={theme === 'Minimalist Light' ? 'text-neutral-600' : 'text-neutral-400'}>
+                      Effort
+                    </span>
                   </div>
-                )}
+                  <input
+                    type="range"
+                    min={0}
+                    max={2}
+                    step={1}
+                    value={reasoningEffort === 'low' ? 0 : reasoningEffort === 'medium' ? 1 : 2}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setReasoningEffort(val === 0 ? 'low' : val === 1 ? 'medium' : 'high');
+                    }}
+                    aria-label="Effort"
+                    className="effort-slider"
+                  />
+                  <div
+                    className={`w-full flex items-center justify-between text-[9.5px] leading-none mt-1 ${
+                      theme === 'Minimalist Light' ? 'text-neutral-600' : 'text-neutral-400'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setReasoningEffort('low')}
+                      className={`cursor-pointer ${reasoningEffort === 'low' ? 'text-emerald-400 font-semibold' : ''}`}
+                    >
+                      Low
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReasoningEffort('medium')}
+                      className={`cursor-pointer ${reasoningEffort === 'medium' ? 'text-emerald-400 font-semibold' : ''}`}
+                    >
+                      Medium
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReasoningEffort('high')}
+                      className={`cursor-pointer ${reasoningEffort === 'high' ? 'text-emerald-400 font-semibold' : ''}`}
+                    >
+                      High
+                    </button>
+                  </div>
+                </div>
 
                 <button
                   type="button"
@@ -3021,6 +3441,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
               </div>
             </div>
           </div>
+          )}
         </div>
       </main>
 
@@ -3053,6 +3474,38 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
             if (newSecret) setPasswordSecret(newSecret);
             if (updated.theme) setTheme(updated.theme);
           }}
+          // Cleanly reset in-memory session state, transient notices, and legacy profile cache on sign-out without deleting account or unrelated guest data [Commented by: Google AI Studio at 25/11/2026 22:57]
+          onLogout={() => {
+            if (abortControllerRef.current) abortControllerRef.current.abort();
+            setIsGenerating(false);
+            stopStreamSmoothing();
+            setCurrentUser(null);
+            setPasswordSecret('');
+            setCryptoKey(null);
+            setChats([]);
+            setChatFileOutputs({});
+            previewCacheRef.current = {};
+            setQuickPreview(null);
+            setIsIncognito(false);
+            setIsSettingsOpen(false);
+            setIsNewNoodleMenuOpen(false);
+            setIsRunningNoodleMenuOpen(false);
+            setIsProvideUrlModalOpen(false);
+            setProvideUrlInput('');
+            setImportUrlError(null);
+            setPendingRevokeShare(null);
+            setRevokeShareError(null);
+            setHistorySearchQuery('');
+            setHistoryNotice(null);
+            setQuotaErrorNotice(null);
+            setExportStatusNotice(null);
+            setExpandedReasoningIndices({});
+            setShowSourcesPopup(null);
+            setEditingMessageIndex(null);
+            setEditText('');
+            clearLegacyLocalProfileCache();
+            handleStartNewChat();
+          }}
           onDeleteAccount={() => {
             // Thoroughly wipe all account sessions, encrypted noodles, and local files upon account deletion [Commented by: Google AI Studio on 30/10/2026 11:00 PM]
             const deletedUserId = currentUser?.id;
@@ -3060,12 +3513,15 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
             setPasswordSecret('');
             setCryptoKey(null);
             setChats([]);
+            setPendingRevokeShare(null);
+            setRevokeShareError(null);
             localStorage.removeItem('nanobot_chats');
             localStorage.removeItem('nanobot_encrypted_chats');
             if (deletedUserId) {
               localStorage.removeItem(`nanobot_encrypted_chats_${deletedUserId}`);
             }
             localStorage.removeItem('nanobot_active_user');
+            clearLegacyLocalProfileCache();
             clearAllOriginalFiles().catch(() => {});
             handleStartNewChat();
           }}
@@ -3159,6 +3615,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                 onClick={() => {
                   setIsProvideUrlModalOpen(false);
                   setProvideUrlInput('');
+                  setImportUrlError(null);
                 }}
                 className="text-neutral-400 hover:text-white cursor-pointer text-sm"
               >
@@ -3166,15 +3623,24 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
               </button>
             </div>
 
-            <p className="text-xs text-neutral-400">
-              Paste a shared noodle link to import and continue chatting.
+            <p className="text-xs text-neutral-400 leading-relaxed">
+              Paste a shared noodle link to view a public snapshot{currentUser ? ' or import an independent copy into your private encrypted history' : ''}.
             </p>
+
+            {importUrlError && (
+              <div className="px-3 py-2 rounded-lg bg-red-950/80 border border-red-600/60 text-red-200 text-xs">
+                ⚠️ {importUrlError}
+              </div>
+            )}
 
             <input
               type="text"
               autoFocus
               value={provideUrlInput}
-              onChange={(e) => setProvideUrlInput(e.target.value)}
+              onChange={(e) => {
+                setProvideUrlInput(e.target.value);
+                if (importUrlError) setImportUrlError(null);
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
@@ -3195,6 +3661,7 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                 onClick={() => {
                   setIsProvideUrlModalOpen(false);
                   setProvideUrlInput('');
+                  setImportUrlError(null);
                 }}
                 className="px-4 py-2 rounded-lg text-xs font-semibold text-neutral-400 hover:text-white bg-transparent cursor-pointer"
               >
@@ -3207,6 +3674,72 @@ ${customInstructions ? `Custom User Instructions: ${customInstructions}` : ''}`;
                 className="px-5 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer transition-colors disabled:opacity-50"
               >
                 {isImportingUrl ? 'Importing...' : 'Import'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation dialog preventing accidental public share revocation [Commented by: Google AI Studio at 24/11/2026 22:57] */}
+      {pendingRevokeShare && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="revoke-share-modal-title"
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+        >
+          <div className={`w-full max-w-md rounded-2xl p-6 shadow-2xl border space-y-4 animate-in fade-in zoom-in-95 duration-150 ${
+            theme === 'Minimalist Light'
+              ? 'bg-white border-neutral-300 text-neutral-900'
+              : 'bg-[#121212] border-[#2b2b2b] text-white'
+          }`}>
+            <div className="flex items-center justify-between pb-1 border-b border-inherit opacity-90">
+              <h3 id="revoke-share-modal-title" className="text-base font-bold font-serif">
+                Revoke Share Link?
+              </h3>
+              <button
+                type="button"
+                disabled={isRevokingShare}
+                onClick={() => {
+                  setPendingRevokeShare(null);
+                  setRevokeShareError(null);
+                }}
+                aria-label="Close revoke confirmation"
+                className="text-neutral-400 hover:text-white cursor-pointer text-sm disabled:opacity-50"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-neutral-400 leading-relaxed">
+              Revoking <span className="font-semibold text-neutral-200">{pendingRevokeShare.title}</span> will immediately delete this public snapshot from the Cloudflare sharing database. Anyone holding the link will no longer be able to view or fork it. Your private encrypted noodle remains in your personal history.
+            </p>
+
+            {revokeShareError && (
+              <div className="px-3 py-2 rounded-lg bg-red-950/80 border border-red-600/60 text-red-200 text-xs">
+                ⚠️ {revokeShareError}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={isRevokingShare}
+                onClick={() => {
+                  setPendingRevokeShare(null);
+                  setRevokeShareError(null);
+                }}
+                className="px-4 py-2 rounded-lg text-xs font-semibold text-neutral-400 hover:text-white bg-transparent cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isRevokingShare}
+                onClick={handleConfirmRevokeShare}
+                className="px-5 py-2 rounded-lg text-xs font-bold bg-red-600 hover:bg-red-500 text-white cursor-pointer transition-colors disabled:opacity-50"
+              >
+                {isRevokingShare ? 'Revoking...' : 'Confirm Revoke'}
               </button>
             </div>
           </div>

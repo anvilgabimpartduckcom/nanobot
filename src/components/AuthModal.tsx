@@ -136,9 +136,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
+  // Added viewport-aware vertical scrolling so AuthModal remains accessible on short mobile screens [Commented by: Google AI Studio at 24/11/2026 09:45]
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-md bg-[#0a0a0a] border border-[#333] rounded-2xl p-6 sm:p-8 text-white shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
+      <div className="relative w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto my-auto bg-[#0a0a0a] border border-[#333] rounded-2xl p-6 sm:p-8 text-white shadow-2xl">
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-neutral-400 hover:text-white text-xl p-1 cursor-pointer"

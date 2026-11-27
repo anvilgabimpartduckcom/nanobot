@@ -29,6 +29,8 @@ export interface Env {
   SUPABASE_SERVICE_ROLE_KEY?: string;
   SUPABASE_JWT_SECRET?: string;
   CORS_ORIGIN?: string;
+  ADMIN_USER_ID?: string;
+  ADMIN_USER_IDS?: string;
   MCP_ENCRYPTION_SECRET?: string;
   GITHUB_OAUTH_CLIENT_ID?: string;
   GITHUB_OAUTH_CLIENT_SECRET?: string;
@@ -50,12 +52,15 @@ export interface Env {
   TAVILY_OAUTH_CLIENT_SECRET?: string;
 }
 
-
-
+// Server-verified Supabase Auth user shape including server-controlled app_metadata [Commented by: Google AI Studio at 27/11/2026 21:10]
 interface SupabaseUser {
   id: string;
   email?: string;
   role?: string;
+  app_metadata?: {
+    role?: unknown;
+    roles?: unknown;
+  } & Record<string, unknown>;
 }
 
 // CORS headers helper supporting wildcard or configured origins from runtime environment [Commented by: Google AI Studio on 15/10/2026 09:57 AM]
@@ -91,6 +96,88 @@ function getCorsHeaders(origin: string | null, allowedOrigin: string = '*'): Hea
 // Sanitization & injection guard rejecting prototype pollution, SQL injection artifacts, and payload abuse [Commented by: Google AI Studio on 30/10/2026 10:48 AM]
 function validateSafeId(id: string): boolean {
   return /^[a-zA-Z0-9_\-.:]{1,128}$/.test(id);
+}
+
+// Strict allowlist sanitizer for shared noodle snapshots excluding internal reasoning, private metadata, credentials, and local file IDs [Commented by: Google AI Studio at 24/11/2026 22:57]
+function sanitizeSharedMessagesForStorage(rawMessages: unknown): {
+  valid: boolean;
+  messages: Array<{
+    role: 'user' | 'ai';
+    content: string;
+    sources?: Array<{ title: string; url: string }>;
+    displayAttachments?: Array<{ type: string; name: string }>;
+  }>;
+} {
+  if (!Array.isArray(rawMessages) || rawMessages.length === 0) {
+    return { valid: false, messages: [] };
+  }
+
+  const sanitized: Array<{
+    role: 'user' | 'ai';
+    content: string;
+    sources?: Array<{ title: string; url: string }>;
+    displayAttachments?: Array<{ type: string; name: string }>;
+  }> = [];
+
+  for (const item of rawMessages) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      return { valid: false, messages: [] };
+    }
+    const m = item as Record<string, unknown>;
+    if ((m.role !== 'user' && m.role !== 'ai') || typeof m.content !== 'string') {
+      return { valid: false, messages: [] };
+    }
+
+    const cleanMsg: {
+      role: 'user' | 'ai';
+      content: string;
+      sources?: Array<{ title: string; url: string }>;
+      displayAttachments?: Array<{ type: string; name: string }>;
+    } = {
+      role: m.role,
+      content: m.content,
+    };
+
+    if (Array.isArray(m.sources)) {
+      const cleanSources: Array<{ title: string; url: string }> = [];
+      for (const rawSource of m.sources) {
+        if (!rawSource || typeof rawSource !== 'object') continue;
+        const src = rawSource as Record<string, unknown>;
+        if (typeof src.url !== 'string') continue;
+        try {
+          const parsedUrl = new URL(src.url.trim());
+          if (parsedUrl.protocol === 'https:' || parsedUrl.protocol === 'http:') {
+            cleanSources.push({
+              title: typeof src.title === 'string' ? src.title.slice(0, 300) : '',
+              url: parsedUrl.toString(),
+            });
+          }
+        } catch {}
+      }
+      if (cleanSources.length > 0) {
+        cleanMsg.sources = cleanSources;
+      }
+    }
+
+    if (Array.isArray(m.displayAttachments)) {
+      const cleanAttachments: Array<{ type: string; name: string }> = [];
+      for (const rawAtt of m.displayAttachments) {
+        if (!rawAtt || typeof rawAtt !== 'object') continue;
+        const att = rawAtt as Record<string, unknown>;
+        cleanAttachments.push({
+          type: typeof att.type === 'string' && att.type.trim() ? att.type.trim().slice(0, 40) : 'file',
+          name: typeof att.name === 'string' && att.name.trim() ? att.name.trim().slice(0, 260) : 'Attachment',
+        });
+      }
+      if (cleanAttachments.length > 0) {
+        cleanMsg.displayAttachments = cleanAttachments;
+      }
+    }
+
+    sanitized.push(cleanMsg);
+  }
+
+  return { valid: true, messages: sanitized };
 }
 
 // Server-side AES-GCM credential encryption, SSRF whitelist, and dynamic MCP execution engine [Commented by: Google AI Studio on 31/10/2026 10:31 AM]
@@ -1926,6 +2013,126 @@ async function authenticateRequest(
   }
 }
 
+// Server-side administrator verification, UUID validation, and Supabase table purge helpers [Commented by: Google AI Studio at 27/11/2026 21:10]
+const STRICT_UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isValidUuid(value: string): boolean {
+  return STRICT_UUID_REGEX.test(value.trim());
+}
+
+type AdminAccountStatus = 'active' | 'disabled' | 'deleted' | 'pending' | 'unknown';
+
+function isAuthorizedAdmin(user: SupabaseUser | null | undefined, env: Env): boolean {
+  if (!user || typeof user.id !== 'string' || !isValidUuid(user.id)) {
+    return false;
+  }
+
+  const normalizedUserId = user.id.trim().toLowerCase();
+  const allowlistedIds = new Set<string>();
+
+  for (const rawList of [env.ADMIN_USER_ID, env.ADMIN_USER_IDS]) {
+    if (typeof rawList !== 'string' || !rawList.trim()) continue;
+    for (const part of rawList.split(/[\s,;]+/)) {
+      const candidate = part.trim();
+      if (isValidUuid(candidate)) {
+        allowlistedIds.add(candidate.toLowerCase());
+      }
+    }
+  }
+
+  if (allowlistedIds.has(normalizedUserId)) {
+    return true;
+  }
+
+  // Only trust Supabase server-controlled app_metadata (never user_metadata or client flags)
+  const appMeta = user.app_metadata && typeof user.app_metadata === 'object' ? user.app_metadata : null;
+  if (appMeta) {
+    if (typeof appMeta.role === 'string' && appMeta.role.trim().toLowerCase() === 'admin') {
+      return true;
+    }
+    if (
+      Array.isArray(appMeta.roles) &&
+      appMeta.roles.some((r) => typeof r === 'string' && r.trim().toLowerCase() === 'admin')
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function deriveAdminAccountStatus(authUser: Record<string, unknown> | null | undefined): AdminAccountStatus {
+  if (!authUser || typeof authUser !== 'object') {
+    return 'unknown';
+  }
+  if (typeof authUser.deleted_at === 'string' && authUser.deleted_at.trim() !== '') {
+    return 'deleted';
+  }
+  if (typeof authUser.banned_until === 'string' && authUser.banned_until.trim() !== '') {
+    const bannedMs = Date.parse(authUser.banned_until);
+    if (!Number.isNaN(bannedMs) && bannedMs > Date.now()) {
+      return 'disabled';
+    }
+  }
+  if (
+    (typeof authUser.email_confirmed_at === 'string' && authUser.email_confirmed_at.trim() !== '') ||
+    (typeof authUser.confirmed_at === 'string' && authUser.confirmed_at.trim() !== '')
+  ) {
+    return 'active';
+  }
+  return 'pending';
+}
+
+// Sanitize Supabase table deletion errors so raw upstream bodies or details never leak to API callers [Commented by: Google AI Studio at 27/11/2026 21:17]
+async function deleteSupabaseTableRowsForUser(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  tableName: string,
+  filterColumn: string,
+  targetUserId: string,
+  allowMissingTable: boolean
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const endpoint = `${supabaseUrl}/rest/v1/${tableName}?${filterColumn}=eq.${encodeURIComponent(targetUserId)}`;
+    const res = await fetch(endpoint, {
+      method: 'DELETE',
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+        Prefer: 'return=minimal',
+      },
+    });
+
+    if (res.ok) {
+      return { ok: true };
+    }
+
+    const errBody = await res.text().catch(() => '');
+    const lowerErr = errBody.toLowerCase();
+    if (
+      allowMissingTable &&
+      (res.status === 404 ||
+        lowerErr.includes('pgrst205') ||
+        lowerErr.includes('could not find the table') ||
+        lowerErr.includes('does not exist'))
+    ) {
+      return { ok: true };
+    }
+
+    console.error(`Supabase cleanup notice for table ${tableName}: HTTP ${res.status}`);
+    return {
+      ok: false,
+      error: `Failed purging Supabase table ${tableName} (HTTP ${res.status}).`,
+    };
+  } catch {
+    console.error(`Network error purging Supabase table ${tableName}.`);
+    return {
+      ok: false,
+      error: `Network error purging Supabase table ${tableName}.`,
+    };
+  }
+}
+
 // Cryptographically verify HMAC-SHA256 signature of Supabase JWT using SUPABASE_JWT_SECRET [Commented by: Google AI Studio at 05/11/2026 17:28]
 async function verifySupabaseJwtSignature(token: string, secret: string): Promise<{ valid: boolean; sub?: string }> {
   try {
@@ -2447,23 +2654,37 @@ export default {
     }
 
 
-    // Public read-only share retrieval endpoint with 30-day retention and X-Robots-Tag anti-scraper headers [Commented by: Google AI Studio on 22/10/2026 04:49 AM]
+    // Public read-only share retrieval endpoint with 30-day retention and X-Robots-Tag anti-scraper headers [Commented by: Google AI Studio at 24/11/2026 17:13]
     const publicShareMatch = pathname.match(/^\/api\/public\/shares\/([^/]+)$/);
     if (publicShareMatch && request.method === 'GET') {
       if (!env.DB || typeof env.DB.prepare !== 'function') {
         return sendError('D1 database binding "DB" is not available on Cloudflare Worker', 500);
       }
-      const shareId = decodeURIComponent(publicShareMatch[1]);
+
+      let shareId = '';
+      try {
+        shareId = decodeURIComponent(publicShareMatch[1]).trim();
+      } catch {
+        return sendError('Invalid share identifier provided', 400);
+      }
+
       if (!validateSafeId(shareId)) {
         return sendError('Invalid share identifier provided', 400);
       }
-      const nowIso = new Date().toISOString();
+
+      const nowMs = Date.now();
+      const nowIso = new Date(nowMs).toISOString();
 
       try {
         // Enforce D1 database table initialization before executing public share queries to prevent uninitialized schema crashes [Commented by: Google AI Studio at 05/11/2026 04:00 PM]
-        await ensureD1Tables(env.DB);
-        // Enforce 30-day retention cleanup on shares
-        await env.DB.prepare(`DELETE FROM shared_chats WHERE expires_at < ?`).bind(nowIso).run().catch(() => {});
+        try {
+          await ensureD1Tables(env.DB);
+        } catch (d1InitErr) {
+          return sendError('Database initialization unavailable; please retry request: ' + (d1InitErr as Error).message, 503);
+        }
+
+        // Enforce 30-day retention cleanup using UTC julian comparison so valid non-expired rows are never deleted [Commented by: Google AI Studio at 24/11/2026 22:57]
+        await env.DB.prepare(`DELETE FROM shared_chats WHERE julianday(expires_at) <= julianday(?)`).bind(nowIso).run().catch(() => {});
 
         const shareRecord = await env.DB.prepare(
           `SELECT id, title, messages_json, created_at, expires_at FROM shared_chats WHERE id = ?`
@@ -2471,8 +2692,37 @@ export default {
           .bind(shareId)
           .first<{ id: string; title: string; messages_json: string; created_at: string; expires_at: string }>();
 
-        if (!shareRecord || shareRecord.expires_at < nowIso) {
+        if (!shareRecord) {
           return sendError('Shared chat does not exist or has expired after the 30-day retention period.', 404);
+        }
+
+        const expiresMs = shareRecord.expires_at ? Date.parse(shareRecord.expires_at) : NaN;
+        if (Number.isNaN(expiresMs) || expiresMs <= nowMs) {
+          // Best-effort cleanup of expired/invalid record even if global purge failed; never return expired content [Commented by: Google AI Studio at 24/11/2026 22:57]
+          await env.DB.prepare(`DELETE FROM shared_chats WHERE id = ?`).bind(shareId).run().catch(() => {});
+          return sendError('Shared chat does not exist or has expired after the 30-day retention period.', 404);
+        }
+
+        let parsedPayload: any = null;
+        try {
+          parsedPayload = JSON.parse(shareRecord.messages_json);
+        } catch {
+          return sendError('Shared chat payload is malformed or unreadable.', 500);
+        }
+
+        const isEncrypted = Boolean(parsedPayload && typeof parsedPayload === 'object' && !Array.isArray(parsedPayload) && parsedPayload.is_encrypted && parsedPayload.encrypted_payload);
+        let responseMessages: Array<{
+          role: 'user' | 'ai';
+          content: string;
+          sources?: Array<{ title: string; url: string }>;
+          displayAttachments?: Array<{ type: string; name: string }>;
+        }> = [];
+        if (!isEncrypted) {
+          const sanitizedRead = sanitizeSharedMessagesForStorage(parsedPayload);
+          if (!sanitizedRead.valid) {
+            return sendError('Shared chat payload format is invalid.', 500);
+          }
+          responseMessages = sanitizedRead.messages;
         }
 
         const headers = getCorsHeaders(origin, allowedOrigin);
@@ -2480,22 +2730,13 @@ export default {
         headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive, nosnippet');
         headers.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
 
-        let parsedPayload: any = null;
-        try {
-          parsedPayload = JSON.parse(shareRecord.messages_json);
-        } catch {
-          parsedPayload = [];
-        }
-
-        const isEncrypted = parsedPayload && parsedPayload.is_encrypted && parsedPayload.encrypted_payload;
-
         return new Response(
           JSON.stringify({
             success: true,
             share: {
               id: shareRecord.id,
               title: shareRecord.title,
-              messages: isEncrypted ? [] : (Array.isArray(parsedPayload) ? parsedPayload : []),
+              messages: isEncrypted ? [] : responseMessages,
               encrypted_payload: isEncrypted ? parsedPayload.encrypted_payload : undefined,
               created_at: shareRecord.created_at,
               expires_at: shareRecord.expires_at,
@@ -2516,11 +2757,15 @@ export default {
       }
 
       let verifiedUserId: string | null = null;
+      let verifiedUserEmail: string | undefined = undefined;
+      let verifiedUserObject: SupabaseUser | null = null;
       let isPreDeletedAuthRecovery = false;
 
       const { user, error: authError } = await authenticateRequest(request, env);
       if (user) {
         verifiedUserId = user.id;
+        verifiedUserEmail = user.email;
+        verifiedUserObject = user;
       } else if (pathname === '/api/account' && request.method === 'DELETE') {
         // Recovery path: if Auth deletion succeeded on a prior attempt but the response was lost,
         // the user's JWT will fail standard authentication because their identity in auth.users was deleted.
@@ -2570,7 +2815,7 @@ export default {
       }
 
       try {
-        // 0. DELETE /api/account -> Complete account deletion state machine with staged tracking and safe retry [Commented by: Google AI Studio on 04/11/2026 05:38 PM]
+        // 0. DELETE /api/account -> Complete account deletion state machine aligned with fail-fast ordering and safe retry [Commented by: Google AI Studio at 27/11/2026 21:27]
         if (pathname === '/api/account' && request.method === 'DELETE') {
           const stages = {
             d1_purged: false,
@@ -2578,50 +2823,7 @@ export default {
             auth_identity_deleted: false,
           };
 
-          // Step 1: Purge user-owned records from Cloudflare D1
-          try {
-            await env.DB.batch([
-              env.DB.prepare(`DELETE FROM file_outputs WHERE user_id = ?`).bind(verifiedUserId),
-              env.DB.prepare(`DELETE FROM messages WHERE user_id = ?`).bind(verifiedUserId),
-              env.DB.prepare(`DELETE FROM conversations WHERE user_id = ?`).bind(verifiedUserId),
-              env.DB.prepare(`DELETE FROM user_mcp_connections WHERE user_id = ?`).bind(verifiedUserId),
-              env.DB.prepare(`DELETE FROM shared_chats WHERE user_id = ?`).bind(verifiedUserId),
-            ]);
-            stages.d1_purged = true;
-          } catch (d1Err) {
-            console.warn('Account deletion stage notice: D1 cleanup error:', d1Err);
-          }
-
-          // Step 2: Cascade cleanup in Supabase data tables via delete_user_account RPC
-          const authHeader = request.headers.get('Authorization') || '';
           const supabaseUrl = env.SUPABASE_URL ? env.SUPABASE_URL.replace(/\/$/, '') : '';
-          const supabaseAnon = env.SUPABASE_ANON_KEY || '';
-
-          if (!isPreDeletedAuthRecovery && supabaseUrl && supabaseAnon && authHeader) {
-            try {
-              const rpcRes = await fetch(`${supabaseUrl}/rest/v1/rpc/delete_user_account`, {
-                method: 'POST',
-                headers: {
-                  apikey: supabaseAnon,
-                  Authorization: authHeader,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({}),
-              });
-              if (rpcRes.ok) {
-                stages.supabase_data_purged = true;
-              } else {
-                console.warn('Account deletion stage notice: Supabase RPC returned status', rpcRes.status);
-              }
-            } catch (rpcErr) {
-              console.warn('Account deletion stage notice: Supabase RPC network error:', rpcErr);
-            }
-          } else if (isPreDeletedAuthRecovery) {
-            // In PostgreSQL, cascading FKs from auth.users(id) already wiped public tables when user identity was deleted
-            stages.supabase_data_purged = true;
-          }
-
-          // Step 3: Purge Supabase Auth identity using Supabase Admin API
           if (!env.SUPABASE_SERVICE_ROLE_KEY) {
             return jsonResponse(
               {
@@ -2635,45 +2837,148 @@ export default {
               allowedOrigin
             );
           }
+          const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
 
+          // Step 1: Purge user-owned records across all Cloudflare D1 tables including PKCE OAuth state [Commented by: Google AI Studio at 27/11/2026 21:27]
+          try {
+            await env.DB.batch([
+              env.DB.prepare(`DELETE FROM file_outputs WHERE user_id = ?`).bind(verifiedUserId),
+              env.DB.prepare(`DELETE FROM messages WHERE user_id = ?`).bind(verifiedUserId),
+              env.DB.prepare(`DELETE FROM conversations WHERE user_id = ?`).bind(verifiedUserId),
+              env.DB.prepare(`DELETE FROM user_mcp_connections WHERE user_id = ?`).bind(verifiedUserId),
+              env.DB.prepare(`DELETE FROM shared_chats WHERE user_id = ?`).bind(verifiedUserId),
+              env.DB.prepare(`DELETE FROM mcp_oauth_states WHERE user_id = ?`).bind(verifiedUserId),
+            ]);
+            stages.d1_purged = true;
+          } catch (d1Err) {
+            console.warn('Account deletion stage notice: D1 cleanup error:', d1Err);
+            return jsonResponse(
+              {
+                success: false,
+                error: 'Cloudflare D1 data cleanup failed; please retry account deletion.',
+                stages,
+                can_retry: true,
+              },
+              500,
+              origin,
+              allowedOrigin
+            );
+          }
+
+          // Step 2: Purge Supabase child tables in child-to-parent order before Auth deletion (preserving user_profiles until Auth deletion succeeds)
+          if (supabaseUrl) {
+            const preAuthSupabaseTables: Array<{ name: string; column: string; allowMissing: boolean }> = [
+              { name: 'chats', column: 'user_id', allowMissing: true },
+              { name: 'file_code_outputs', column: 'user_id', allowMissing: true },
+              { name: 'messages', column: 'user_id', allowMissing: true },
+              { name: 'conversations', column: 'user_id', allowMissing: true },
+            ];
+
+            for (const table of preAuthSupabaseTables) {
+              const tableRes = await deleteSupabaseTableRowsForUser(
+                supabaseUrl,
+                serviceRoleKey,
+                table.name,
+                table.column,
+                verifiedUserId,
+                table.allowMissing
+              );
+              if (!tableRes.ok) {
+                console.warn('Account deletion stage notice: Supabase child cleanup error:', tableRes.error);
+                return jsonResponse(
+                  {
+                    success: false,
+                    error: tableRes.error || 'Account deletion incomplete; Supabase cleanup failed. Please retry.',
+                    stages,
+                    can_retry: true,
+                  },
+                  500,
+                  origin,
+                  allowedOrigin
+                );
+              }
+            }
+          }
+
+          // Step 3: Purge Supabase Auth identity using Supabase Admin API
           if (isPreDeletedAuthRecovery) {
             stages.auth_identity_deleted = true;
           } else if (supabaseUrl) {
             const adminEndpoint = `${supabaseUrl}/auth/v1/admin/users/${verifiedUserId}`;
-            const adminRes = await fetch(adminEndpoint, {
-              method: 'DELETE',
-              headers: {
-                apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-                Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-                'Content-Type': 'application/json',
-              },
-            });
+            try {
+              const adminRes = await fetch(adminEndpoint, {
+                method: 'DELETE',
+                headers: {
+                  apikey: serviceRoleKey,
+                  Authorization: `Bearer ${serviceRoleKey}`,
+                  'Content-Type': 'application/json',
+                },
+              });
 
-            // Accept 200 OK or 404 Not Found (if already deleted / repeated deletion request)
-            if (adminRes.ok || adminRes.status === 404) {
-              stages.auth_identity_deleted = true;
-            } else {
-              const errBody = await adminRes.text();
-              console.error('Account deletion stage notice: Supabase Admin API returned status', adminRes.status);
+              // Accept 200 OK or 404 Not Found (if already deleted / repeated deletion request)
+              if (adminRes.ok || adminRes.status === 404) {
+                stages.auth_identity_deleted = true;
+              } else {
+                await adminRes.text().catch(() => '');
+                console.error('Account deletion stage notice: Supabase Admin API returned status', adminRes.status);
+                return jsonResponse(
+                  {
+                    success: false,
+                    error: `Supabase Auth identity deletion failed (HTTP ${adminRes.status}).`,
+                    stages,
+                    can_retry: true,
+                  },
+                  adminRes.status >= 400 && adminRes.status < 600 ? adminRes.status : 500,
+                  origin,
+                  allowedOrigin
+                );
+              }
+            } catch {
+              console.error('Account deletion stage notice: Supabase Admin API network failure.');
               return jsonResponse(
                 {
                   success: false,
-                  error: `Supabase Auth identity deletion failed (${adminRes.status}): ${errBody}`,
+                  error: 'Network error deleting Supabase Auth identity. Please retry.',
                   stages,
                   can_retry: true,
                 },
-                adminRes.status >= 400 && adminRes.status < 600 ? adminRes.status : 500,
+                502,
                 origin,
                 allowedOrigin
               );
             }
           }
 
-          // Never report successful deletion before all required stages are confirmed [Commented by: Google AI Studio at 05/11/2026 04:00 PM]
-          if (stages.auth_identity_deleted) {
+          // Step 4: Delete/verify user_profiles cleanup after Auth identity deletion succeeds
+          if (supabaseUrl) {
+            const profileDelRes = await deleteSupabaseTableRowsForUser(
+              supabaseUrl,
+              serviceRoleKey,
+              'user_profiles',
+              'id',
+              verifiedUserId,
+              true
+            );
+            if (!profileDelRes.ok) {
+              console.warn('Account deletion stage notice: Supabase profile cleanup error:', profileDelRes.error);
+              return jsonResponse(
+                {
+                  success: false,
+                  error: profileDelRes.error || 'Account deletion incomplete; profile cleanup failed. Please retry.',
+                  stages,
+                  can_retry: true,
+                },
+                500,
+                origin,
+                allowedOrigin
+              );
+            }
+            stages.supabase_data_purged = true;
+          } else if (isPreDeletedAuthRecovery) {
             stages.supabase_data_purged = true;
           }
 
+          // Never report successful deletion before all required stages are confirmed [Commented by: Google AI Studio at 05/11/2026 04:00 PM]
           if (!stages.d1_purged || !stages.supabase_data_purged || !stages.auth_identity_deleted) {
             return jsonResponse(
               {
@@ -2699,6 +3004,548 @@ export default {
             },
             200
           );
+        }
+
+        // 0a. Admin-only User Management endpoints enforced strictly on server [Commented by: Google AI Studio at 27/11/2026 21:10]
+        if (pathname === '/api/admin' || pathname.startsWith('/api/admin/')) {
+          const sendAdminJson = (data: unknown, status = 200) => {
+            const headers = getCorsHeaders(origin, allowedOrigin);
+            headers.set('Content-Type', 'application/json');
+            headers.set('Cache-Control', 'private, no-store, max-age=0');
+            headers.set('Pragma', 'no-cache');
+            headers.set('X-Robots-Tag', 'noindex, nofollow');
+            return new Response(JSON.stringify(data), { status, headers });
+          };
+
+          if (!verifiedUserObject || !verifiedUserId || isPreDeletedAuthRecovery) {
+            return sendError('Unauthorized: Valid authenticated session required.', 401);
+          }
+
+          if (pathname === '/api/admin/status' && request.method === 'GET') {
+            return sendAdminJson(
+              {
+                success: true,
+                isAdmin: isAuthorizedAdmin(verifiedUserObject, env),
+              },
+              200
+            );
+          }
+
+          if (!isAuthorizedAdmin(verifiedUserObject, env)) {
+            return sendError('Forbidden: Administrator privileges are required for this endpoint.', 403);
+          }
+
+          const supabaseUrl = env.SUPABASE_URL ? env.SUPABASE_URL.replace(/\/$/, '') : '';
+          const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY || '';
+          if (!supabaseUrl || !serviceRoleKey) {
+            return sendError(
+              'Server configuration error: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for administrator operations.',
+              500
+            );
+          }
+
+          // GET /api/admin/users -> Return ONLY minimal fields (id, username, created_at, status, isCurrentAdmin) with resilient pagination [Commented by: Google AI Studio at 27/11/2026 21:17]
+          if (pathname === '/api/admin/users' && request.method === 'GET') {
+            const searchQuery = (url.searchParams.get('q') || '').trim().toLowerCase();
+            const PAGE_SIZE = 1000;
+            const MAX_PAGES = 100;
+            const collectedProfiles: Array<{ id: string; username: string; created_at: string | null }> = [];
+            const seenProfileIds = new Set<string>();
+            let offset = 0;
+
+            for (let pageIndex = 0; pageIndex < MAX_PAGES; pageIndex++) {
+              const rangeHeader = `${offset}-${offset + PAGE_SIZE - 1}`;
+              const profileRes = await fetch(
+                `${supabaseUrl}/rest/v1/user_profiles?select=id,username,created_at&order=created_at.desc`,
+                {
+                  method: 'GET',
+                  headers: {
+                    apikey: serviceRoleKey,
+                    Authorization: `Bearer ${serviceRoleKey}`,
+                    Range: rangeHeader,
+                    Prefer: 'count=exact',
+                  },
+                }
+              );
+
+              if (!profileRes.ok) {
+                console.error('Admin user listing error: Supabase profile query returned status', profileRes.status);
+                return sendError(`Failed to load registered users (HTTP ${profileRes.status}).`, 502);
+              }
+
+              const rows = (await profileRes.json()) as Array<Record<string, unknown>>;
+              if (!Array.isArray(rows) || rows.length === 0) {
+                break;
+              }
+
+              let addedInPage = 0;
+              for (const row of rows) {
+                const rowId = typeof row.id === 'string' ? row.id.trim() : '';
+                const rowUsername = typeof row.username === 'string' ? row.username.trim() : '';
+                if (!rowId || !rowUsername) continue;
+                const lowerId = rowId.toLowerCase();
+                if (seenProfileIds.has(lowerId)) continue;
+                seenProfileIds.add(lowerId);
+                addedInPage++;
+                collectedProfiles.push({
+                  id: rowId,
+                  username: rowUsername,
+                  created_at: typeof row.created_at === 'string' ? row.created_at : null,
+                });
+              }
+
+              if (addedInPage === 0) {
+                break;
+              }
+
+              offset += rows.length;
+              const contentRange = profileRes.headers.get('Content-Range') || '';
+              const totalMatch = contentRange.match(/\/(\d+)$/);
+              if (totalMatch) {
+                if (offset >= Number(totalMatch[1])) {
+                  break;
+                }
+              } else if (rows.length < PAGE_SIZE) {
+                break;
+              }
+            }
+
+            // Best-effort status resolution via Supabase Auth Admin API honoring capped per_page pagination without forwarding emails/metadata [Commented by: Google AI Studio at 27/11/2026 21:17]
+            const authStatusMap = new Map<string, AdminAccountStatus>();
+            try {
+              for (let authPage = 1; authPage <= MAX_PAGES; authPage++) {
+                const authRes = await fetch(
+                  `${supabaseUrl}/auth/v1/admin/users?page=${authPage}&per_page=${PAGE_SIZE}`,
+                  {
+                    method: 'GET',
+                    headers: {
+                      apikey: serviceRoleKey,
+                      Authorization: `Bearer ${serviceRoleKey}`,
+                    },
+                  }
+                );
+                if (!authRes.ok) {
+                  break;
+                }
+                const authPayload = (await authRes.json()) as
+                  | { users?: Array<Record<string, unknown>>; nextPage?: number | null; total?: number }
+                  | Array<Record<string, unknown>>;
+                const authUsers = Array.isArray(authPayload)
+                  ? authPayload
+                  : Array.isArray(authPayload?.users)
+                  ? authPayload.users
+                  : [];
+
+                if (authUsers.length === 0) {
+                  break;
+                }
+
+                let addedAuthUsers = 0;
+                for (const authUser of authUsers) {
+                  if (authUser && typeof authUser.id === 'string' && authUser.id.trim()) {
+                    const key = authUser.id.trim().toLowerCase();
+                    if (!authStatusMap.has(key)) {
+                      addedAuthUsers++;
+                    }
+                    authStatusMap.set(key, deriveAdminAccountStatus(authUser));
+                  }
+                }
+
+                if (addedAuthUsers === 0) {
+                  break;
+                }
+
+                if (!Array.isArray(authPayload)) {
+                  if (authPayload.nextPage === null) {
+                    break;
+                  }
+                  if (typeof authPayload.nextPage === 'number' && authPayload.nextPage > authPage) {
+                    continue;
+                  }
+                  if (typeof authPayload.total === 'number' && authStatusMap.size < authPayload.total) {
+                    continue;
+                  }
+                }
+
+                if (authUsers.length < PAGE_SIZE) {
+                  break;
+                }
+              }
+            } catch (authStatusErr) {
+              console.warn('Admin user status enrichment unavailable:', authStatusErr);
+            }
+
+            const sanitizedUsers = collectedProfiles.map((profile) => ({
+              id: profile.id,
+              username: profile.username,
+              created_at: profile.created_at,
+              status: authStatusMap.get(profile.id.toLowerCase()) || ('unknown' as AdminAccountStatus),
+              isCurrentAdmin: profile.id.toLowerCase() === verifiedUserId.toLowerCase(),
+            }));
+
+            const filteredUsers = searchQuery
+              ? sanitizedUsers.filter((u) => u.username.toLowerCase().includes(searchQuery))
+              : sanitizedUsers;
+
+            return sendAdminJson(
+              {
+                success: true,
+                users: filteredUsers,
+                total: sanitizedUsers.length,
+              },
+              200
+            );
+          }
+
+          // DELETE /api/admin/users/:userId -> Delete target account & all associated data (strictly blocking self-deletion, sanitizing errors, and preserving user_profiles until Auth deletion succeeds for safe retry) [Commented by: Google AI Studio at 27/11/2026 21:17]
+          const adminDeleteMatch = pathname.match(/^\/api\/admin\/users\/([^/]+)$/);
+          if (adminDeleteMatch && request.method === 'DELETE') {
+            let targetUserId = '';
+            try {
+              targetUserId = decodeURIComponent(adminDeleteMatch[1]).trim();
+            } catch {
+              return sendError('Invalid target user identifier.', 400);
+            }
+
+            if (!isValidUuid(targetUserId)) {
+              return sendError('Invalid target user identifier format; UUID required.', 400);
+            }
+
+            if (targetUserId.toLowerCase() === verifiedUserId.toLowerCase()) {
+              return sendError(
+                'Forbidden: Administrators cannot delete their own account through User Management.',
+                403
+              );
+            }
+
+            // Verify target account exists before running deletions
+            let targetUsername: string | null = null;
+            let profileExists = false;
+            let authExists = false;
+
+            try {
+              const profileLookupRes = await fetch(
+                `${supabaseUrl}/rest/v1/user_profiles?select=id,username&id=eq.${encodeURIComponent(targetUserId)}&limit=1`,
+                {
+                  method: 'GET',
+                  headers: {
+                    apikey: serviceRoleKey,
+                    Authorization: `Bearer ${serviceRoleKey}`,
+                  },
+                }
+              );
+              if (!profileLookupRes.ok) {
+                return sendError(
+                  `Failed to verify target user profile before deletion (HTTP ${profileLookupRes.status}).`,
+                  502
+                );
+              }
+              const profileRows = (await profileLookupRes.json()) as Array<{ id?: string; username?: string }>;
+              if (Array.isArray(profileRows) && profileRows.length > 0 && profileRows[0]?.id) {
+                profileExists = true;
+                targetUsername =
+                  typeof profileRows[0].username === 'string' && profileRows[0].username.trim()
+                    ? profileRows[0].username.trim()
+                    : null;
+              }
+            } catch (lookupErr) {
+              console.error('Admin delete profile verification network error:', lookupErr);
+              return sendError('Network error verifying target user profile.', 502);
+            }
+
+            try {
+              const authLookupRes = await fetch(`${supabaseUrl}/auth/v1/admin/users/${targetUserId}`, {
+                method: 'GET',
+                headers: {
+                  apikey: serviceRoleKey,
+                  Authorization: `Bearer ${serviceRoleKey}`,
+                },
+              });
+              if (authLookupRes.ok) {
+                authExists = true;
+              } else if (authLookupRes.status === 404) {
+                authExists = false;
+              } else {
+                return sendError(
+                  `Failed to verify target auth identity before deletion (HTTP ${authLookupRes.status}).`,
+                  502
+                );
+              }
+            } catch (authLookupErr) {
+              console.error('Admin delete auth verification network error:', authLookupErr);
+              return sendError('Network error verifying target auth identity.', 502);
+            }
+
+            if (!profileExists && !authExists) {
+              return sendError('Target user account was not found.', 404);
+            }
+
+            const stages = {
+              d1_purged: false,
+              supabase_data_purged: false,
+              auth_identity_deleted: false,
+            };
+
+            // Stage 1: Purge all target user data across all Cloudflare D1 tables including OAuth states
+            try {
+              await env.DB.batch([
+                env.DB.prepare(`DELETE FROM file_outputs WHERE user_id = ?`).bind(targetUserId),
+                env.DB.prepare(`DELETE FROM messages WHERE user_id = ?`).bind(targetUserId),
+                env.DB.prepare(`DELETE FROM conversations WHERE user_id = ?`).bind(targetUserId),
+                env.DB.prepare(`DELETE FROM user_mcp_connections WHERE user_id = ?`).bind(targetUserId),
+                env.DB.prepare(`DELETE FROM shared_chats WHERE user_id = ?`).bind(targetUserId),
+                env.DB.prepare(`DELETE FROM mcp_oauth_states WHERE user_id = ?`).bind(targetUserId),
+              ]);
+              stages.d1_purged = true;
+            } catch (d1Err) {
+              console.error('Admin account deletion stage failure (D1 purge):', d1Err);
+              return sendAdminJson(
+                {
+                  success: false,
+                  error: 'Cloudflare D1 data cleanup failed.',
+                  deletedUserId: targetUserId,
+                  stages,
+                  can_retry: true,
+                },
+                500
+              );
+            }
+
+            // Stage 2: Purge target user's Supabase child/conversation tables in child-to-parent order before Auth deletion
+            const preAuthSupabaseTables: Array<{ name: string; column: string; allowMissing: boolean }> = [
+              { name: 'chats', column: 'user_id', allowMissing: true },
+              { name: 'file_code_outputs', column: 'user_id', allowMissing: true },
+              { name: 'messages', column: 'user_id', allowMissing: true },
+              { name: 'conversations', column: 'user_id', allowMissing: true },
+            ];
+
+            for (const table of preAuthSupabaseTables) {
+              const tableRes = await deleteSupabaseTableRowsForUser(
+                supabaseUrl,
+                serviceRoleKey,
+                table.name,
+                table.column,
+                targetUserId,
+                table.allowMissing
+              );
+              if (!tableRes.ok) {
+                console.error('Admin account deletion stage failure (Supabase child table purge):', tableRes.error);
+                return sendAdminJson(
+                  {
+                    success: false,
+                    error: tableRes.error || `Failed deleting Supabase ${table.name} records for user.`,
+                    deletedUserId: targetUserId,
+                    stages,
+                    can_retry: true,
+                  },
+                  500
+                );
+              }
+            }
+
+            // Stage 3: Delete Supabase Auth identity via Auth Admin API while retaining user_profiles until Auth deletion succeeds
+            if (!authExists) {
+              stages.auth_identity_deleted = true;
+            } else {
+              try {
+                const adminDelRes = await fetch(`${supabaseUrl}/auth/v1/admin/users/${targetUserId}`, {
+                  method: 'DELETE',
+                  headers: {
+                    apikey: serviceRoleKey,
+                    Authorization: `Bearer ${serviceRoleKey}`,
+                    'Content-Type': 'application/json',
+                  },
+                });
+                if (adminDelRes.ok || adminDelRes.status === 404) {
+                  stages.auth_identity_deleted = true;
+                } else {
+                  await adminDelRes.text().catch(() => '');
+                  console.error('Admin account deletion stage failure (Supabase Auth Admin API):', adminDelRes.status);
+                  return sendAdminJson(
+                    {
+                      success: false,
+                      error: `Supabase Auth Admin deletion failed (HTTP ${adminDelRes.status}).`,
+                      deletedUserId: targetUserId,
+                      stages,
+                      can_retry: true,
+                    },
+                    adminDelRes.status >= 400 && adminDelRes.status < 600 ? adminDelRes.status : 502
+                  );
+                }
+              } catch (authDelErr) {
+                console.error('Admin account deletion network failure (Supabase Auth Admin API):', authDelErr);
+                return sendAdminJson(
+                  {
+                    success: false,
+                    error: 'Network error deleting Supabase Auth identity.',
+                    deletedUserId: targetUserId,
+                    stages,
+                    can_retry: true,
+                  },
+                  502
+                );
+              }
+            }
+
+            // Stage 4: Delete/verify user_profiles removal after Auth identity deletion succeeds (cascaded or explicit cleanup)
+            const profileDelRes = await deleteSupabaseTableRowsForUser(
+              supabaseUrl,
+              serviceRoleKey,
+              'user_profiles',
+              'id',
+              targetUserId,
+              true
+            );
+            if (!profileDelRes.ok) {
+              console.error('Admin account deletion stage failure (Supabase profile purge):', profileDelRes.error);
+              return sendAdminJson(
+                {
+                  success: false,
+                  error: profileDelRes.error || 'Failed removing Supabase user_profiles record.',
+                  deletedUserId: targetUserId,
+                  stages,
+                  can_retry: true,
+                },
+                500
+              );
+            }
+            stages.supabase_data_purged = true;
+
+            if (!stages.d1_purged || !stages.supabase_data_purged || !stages.auth_identity_deleted) {
+              return sendAdminJson(
+                {
+                  success: false,
+                  error: 'Administrator account deletion incomplete; one or more stages failed.',
+                  deletedUserId: targetUserId,
+                  stages,
+                  can_retry: true,
+                },
+                500
+              );
+            }
+
+            return sendAdminJson(
+              {
+                success: true,
+                deletedUserId: targetUserId,
+                deletedUsername: targetUsername,
+                stages,
+                message: targetUsername
+                  ? `Deleted user "${targetUsername}" and all associated account data.`
+                  : 'Deleted user account and all associated data.',
+              },
+              200
+            );
+          }
+
+          return sendError('Administrator endpoint not found.', 404);
+        }
+
+        // 0b. POST /api/auth/migrate-internal-email -> Safely migrate legacy username@nanobot.auth.internal users to randomized @nanobot.internal emails [Commented by: Google AI Studio at 22/11/2026 14:33]
+        if (pathname === '/api/auth/migrate-internal-email' && request.method === 'POST') {
+          const supabaseUrl = env.SUPABASE_URL ? env.SUPABASE_URL.replace(/\/$/, '') : '';
+          if (!env.SUPABASE_SERVICE_ROLE_KEY || !supabaseUrl) {
+            return sendError(
+              'Server migration unavailable: SUPABASE_SERVICE_ROLE_KEY and SUPABASE_URL are required on the Worker.',
+              503
+            );
+          }
+
+          let currentEmail = (verifiedUserEmail || '').trim().toLowerCase();
+          if (!currentEmail) {
+            const adminLookupRes = await fetch(`${supabaseUrl}/auth/v1/admin/users/${verifiedUserId}`, {
+              method: 'GET',
+              headers: {
+                apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+                Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+              },
+            });
+            if (adminLookupRes.ok) {
+              const adminUser = (await adminLookupRes.json()) as { email?: string };
+              currentEmail = (adminUser?.email || '').trim().toLowerCase();
+            }
+          }
+
+          if (!currentEmail.endsWith('@nanobot.auth.internal')) {
+            return sendJson({ success: true, migrated: false, alreadyMigrated: true }, 200);
+          }
+
+          const generateRandomInternalEmail = (): string => {
+            const bytes = new Uint8Array(24);
+            crypto.getRandomValues(bytes);
+            const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+            return `${hex}@nanobot.internal`;
+          };
+
+          let migrated = false;
+          let migratedEmail = '';
+          let lastErrorStatus = 500;
+          let lastErrorText = 'Failed to migrate internal auth email.';
+
+          for (let attempt = 0; attempt < 5; attempt++) {
+            const candidateEmail = generateRandomInternalEmail();
+            const updateRes = await fetch(`${supabaseUrl}/auth/v1/admin/users/${verifiedUserId}`, {
+              method: 'PUT',
+              headers: {
+                apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+                Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                email: candidateEmail,
+                email_confirm: true,
+              }),
+            });
+
+            if (updateRes.ok) {
+              migrated = true;
+              migratedEmail = candidateEmail;
+              break;
+            }
+
+            lastErrorStatus = updateRes.status;
+            const errBody = await updateRes.text().catch(() => '');
+            lastErrorText = errBody || `Admin API returned status ${updateRes.status}`;
+            const lowerErr = lastErrorText.toLowerCase();
+            const isCollision =
+              updateRes.status === 409 ||
+              (updateRes.status === 422 && (lowerErr.includes('already') || lowerErr.includes('exists') || lowerErr.includes('duplicate')));
+            if (!isCollision) {
+              break;
+            }
+          }
+
+          if (!migrated || !migratedEmail) {
+            console.warn('Internal auth email migration returned status', lastErrorStatus);
+            return sendError(`Unable to complete internal auth email migration (${lastErrorStatus}).`, 500);
+          }
+
+          // Keep public.user_profiles.auth_email synchronized with auth.users.email
+          try {
+            const profileSyncRes = await fetch(
+              `${supabaseUrl}/rest/v1/user_profiles?id=eq.${encodeURIComponent(verifiedUserId || '')}`,
+              {
+                method: 'PATCH',
+                headers: {
+                  apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+                  Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+                  'Content-Type': 'application/json',
+                  Prefer: 'return=minimal',
+                },
+                body: JSON.stringify({
+                  auth_email: migratedEmail,
+                  updated_at: new Date().toISOString(),
+                }),
+              }
+            );
+            if (!profileSyncRes.ok) {
+              console.warn('Internal auth email profile sync returned status', profileSyncRes.status);
+            }
+          } catch {
+            console.warn('Internal auth email profile sync encountered a network notice');
+          }
+
+          return sendJson({ success: true, migrated: true }, 200);
         }
 
         // 1. GET /api/conversations -> List all conversations for the authenticated user (with 30-day auto-purge)
@@ -3186,53 +4033,168 @@ export default {
         }
 
 
-        // Authenticated creation of a zero-knowledge shareable chat session snapshot retaining the 30-day retention policy [Commented by: Google AI Studio at 05/11/2026 09:28]
+        // Authenticated creation/update of a public 30-day shareable chat snapshot stored in D1 with strict owner-only updates and field sanitization [Commented by: Google AI Studio at 24/11/2026 22:57]
         if (pathname === '/api/shares' && request.method === 'POST') {
           const body: any = await request.json().catch(() => null);
-          if (!body || typeof body !== 'object' || (!Array.isArray(body.messages) && !body.encrypted_payload)) {
-            return sendError('Invalid share payload: messages or encrypted_payload is required', 400);
+          if (!body || typeof body !== 'object') {
+            return sendError('Invalid share payload: JSON object is required', 400);
           }
 
-          // Ensure table exists in D1
-          await ensureD1Tables(env.DB);
+          const hasEncryptedPayload = Boolean(body.encrypted_payload && typeof body.encrypted_payload === 'object');
+          let sanitizedMessagesToStore: ReturnType<typeof sanitizeSharedMessagesForStorage>['messages'] = [];
+          if (!hasEncryptedPayload) {
+            const sanitizedWrite = sanitizeSharedMessagesForStorage(body.messages);
+            if (!sanitizedWrite.valid) {
+              return sendError('Invalid share payload: a non-empty messages array with valid role and string content is required', 400);
+            }
+            sanitizedMessagesToStore = sanitizedWrite.messages;
+          }
 
-          // Supported updating existing share snapshot under the same share ID and URL [Commented by: Google AI Studio on 28/10/2026 11:35 AM]
-          const shareId = typeof body.shareId === 'string' && body.shareId.trim() ? body.shareId.trim() : crypto.randomUUID();
-          const title = typeof body.title === 'string' && body.title.trim() ? body.title.trim() : 'Shared Noodle';
+          const hasCallerShareId = body.shareId !== undefined && body.shareId !== null;
+          let shareId = '';
+          if (hasCallerShareId) {
+            if (typeof body.shareId !== 'string' || !body.shareId.trim() || !validateSafeId(body.shareId.trim())) {
+              return sendError('Invalid shareId format provided', 400);
+            }
+            shareId = body.shareId.trim();
+          } else {
+            shareId = crypto.randomUUID();
+          }
+
+          // Ensure table exists in D1 before ownership check or write
+          try {
+            await ensureD1Tables(env.DB);
+          } catch (d1InitErr) {
+            return sendError('Database initialization unavailable; please retry request: ' + (d1InitErr as Error).message, 503);
+          }
+
+          // Enforce strict ownership verification before updating an existing shareId
+          let isSameOwnerUpdate = false;
+          if (hasCallerShareId) {
+            const existingShare = await env.DB.prepare(
+              `SELECT user_id FROM shared_chats WHERE id = ?`
+            )
+              .bind(shareId)
+              .first<{ user_id: string }>();
+
+            if (existingShare) {
+              if (existingShare.user_id !== verifiedUserId) {
+                return sendError('Forbidden: you do not have permission to overwrite another user\'s share.', 403);
+              }
+              isSameOwnerUpdate = true;
+            }
+          }
+
+          const title = typeof body.title === 'string' && body.title.trim() ? body.title.trim().slice(0, 160) : 'Shared Noodle';
           const now = Date.now();
           const nowIso = new Date(now).toISOString();
           const expiresIso = new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-          let messagesJson: string;
-          if (body.encrypted_payload && typeof body.encrypted_payload === 'object') {
-            messagesJson = JSON.stringify({
-              is_encrypted: true,
-              encrypted_payload: body.encrypted_payload,
-            });
-          } else {
-            messagesJson = JSON.stringify(body.messages || []);
-          }
+          const messagesJson = hasEncryptedPayload
+            ? JSON.stringify({
+                is_encrypted: true,
+                encrypted_payload: body.encrypted_payload,
+              })
+            : JSON.stringify(sanitizedMessagesToStore);
 
-          await env.DB.prepare(
+          const writeResult = await env.DB.prepare(
             `INSERT INTO shared_chats (id, user_id, title, messages_json, created_at, expires_at)
              VALUES (?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET
                title = excluded.title,
                messages_json = excluded.messages_json,
-               expires_at = excluded.expires_at`
+               expires_at = excluded.expires_at
+             WHERE shared_chats.user_id = excluded.user_id`
           )
             .bind(shareId, verifiedUserId, title, messagesJson, nowIso, expiresIso)
             .run();
+
+          if (!writeResult?.success || Number(writeResult.meta?.changes ?? 0) === 0) {
+            return sendError('Forbidden: unable to save share due to an ownership conflict.', 403);
+          }
 
           return sendJson(
             {
               success: true,
               shareId,
               title,
+              updated: isSameOwnerUpdate,
               created_at: nowIso,
               expires_at: expiresIso,
             },
-            201
+            isSameOwnerUpdate ? 200 : 201
+          );
+        }
+
+        // Authenticated owner-only immediate revocation of a public share link [Commented by: Google AI Studio at 24/11/2026 22:57]
+        if (pathname === '/api/shares' && request.method === 'DELETE') {
+          return sendError('Invalid share identifier provided', 400);
+        }
+
+        const revokeShareMatch = pathname.match(/^\/api\/shares\/([^/]+)$/);
+        if (revokeShareMatch && request.method === 'DELETE') {
+          let shareId = '';
+          try {
+            shareId = decodeURIComponent(revokeShareMatch[1]).trim();
+          } catch {
+            return sendError('Invalid share identifier provided', 400);
+          }
+
+          if (!validateSafeId(shareId)) {
+            return sendError('Invalid share identifier provided', 400);
+          }
+
+          try {
+            await ensureD1Tables(env.DB);
+          } catch (d1InitErr) {
+            return sendError('Database initialization unavailable; please retry request: ' + (d1InitErr as Error).message, 503);
+          }
+
+          const existingShare = await env.DB.prepare(
+            `SELECT id, user_id FROM shared_chats WHERE id = ?`
+          )
+            .bind(shareId)
+            .first<{ id: string; user_id: string }>();
+
+          if (!existingShare) {
+            return sendError('Shared noodle does not exist or has already been revoked.', 404);
+          }
+
+          if (existingShare.user_id !== verifiedUserId) {
+            return sendError('Forbidden: you do not have permission to revoke another user\'s share.', 403);
+          }
+
+          const deleteResult = await env.DB.prepare(
+            `DELETE FROM shared_chats WHERE id = ? AND user_id = ?`
+          )
+            .bind(shareId, verifiedUserId)
+            .run();
+
+          if (!deleteResult?.success) {
+            return sendError('Failed to revoke share link due to a database error.', 500);
+          }
+
+          if (Number(deleteResult.meta?.changes ?? 0) === 0) {
+            const postCheck = await env.DB.prepare(
+              `SELECT user_id FROM shared_chats WHERE id = ?`
+            )
+              .bind(shareId)
+              .first<{ user_id: string }>();
+
+            if (postCheck && postCheck.user_id !== verifiedUserId) {
+              return sendError('Forbidden: you do not have permission to revoke another user\'s share.', 403);
+            }
+            return sendError('Shared noodle does not exist or has already been revoked.', 404);
+          }
+
+          return sendJson(
+            {
+              success: true,
+              shareId,
+              revoked: true,
+              message: 'Share link revoked. Anyone with the previous link can no longer access this snapshot.',
+            },
+            200
           );
         }
 

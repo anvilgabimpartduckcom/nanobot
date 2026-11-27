@@ -20,7 +20,89 @@ const md = new MarkdownIt({
     return ''; // use default escaping
   }
 });
+// Prevent untrusted Markdown image syntax from emitting auto-fetching <img> tags [Commented by: Google AI Studio at 24/11/2026 09:45]
+function getSafeExternalImageLink(value: unknown): string {
+  const raw = String(value ?? '').trim();
+  if (!/^https?:\/\//i.test(raw)) {
+    return '';
+  }
+  try {
+    const parsed = new URL(raw);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.href : '';
+  } catch {
+    return '';
+  }
+}
 
+md.renderer.rules.image = (tokens, idx) => {
+  const token = tokens[idx];
+  const src = token.attrGet('src') || '';
+  const alt = token.content || token.children?.map((c) => c.content).join('') || '';
+  const label = escapeHtml(alt.trim() || 'image');
+  const safeHref = getSafeExternalImageLink(src);
+  if (safeHref) {
+    return `<span class="inline-flex items-center gap-1 text-xs text-neutral-400 italic">[External image blocked for privacy: <a href="${escapeHtml(safeHref)}" target="_blank" rel="noopener noreferrer" class="underline text-blue-400 hover:text-blue-300">${label}</a>]</span>`;
+  }
+  return `<span class="text-xs text-neutral-400 italic">[External image blocked: ${label}]</span>`;
+};
+
+export const MARKDOWN_DOMPURIFY_CONFIG = {
+  FORBID_TAGS: [
+    'img',
+    'picture',
+    'source',
+    'video',
+    'audio',
+    'track',
+    'image',
+    'feimage',
+    'iframe',
+    'frame',
+    'object',
+    'embed',
+  ],
+  FORBID_ATTR: ['srcset', 'poster', 'background'],
+};
+
+let domPurifyHooksRegistered = false;
+
+export function registerMarkdownSanitizerHooks(
+  purifier: { addHook?: (hook: string, cb: (node: Element, data: { attrName: string; attrValue: string; keepAttr: boolean }) => void) => void } = DOMPurify as unknown as {
+    addHook?: (hook: string, cb: (node: Element, data: { attrName: string; attrValue: string; keepAttr: boolean }) => void) => void;
+  }
+): void {
+  if (!purifier || typeof purifier.addHook !== 'function') return;
+  if (purifier === (DOMPurify as unknown) && domPurifyHooksRegistered) return;
+
+  purifier.addHook('uponSanitizeAttribute', (node, data) => {
+    const attrName = (data.attrName || '').toLowerCase();
+    const attrValue = String(data.attrValue || '');
+
+    // Strip CSS url(...) references inside inline style attributes while preserving KaTeX layout styles
+    if (attrName === 'style' && /url\s*\(/i.test(attrValue)) {
+      const cleaned = attrValue.replace(/url\s*\([^)]*\)/gi, 'none').trim();
+      data.attrValue = cleaned;
+      if (!cleaned) {
+        data.keepAttr = false;
+      }
+      return;
+    }
+
+    // Prevent SVG <use href/xlink:href="..."> from fetching external sprite URLs
+    const tagName = (node?.tagName || '').toLowerCase();
+    if (tagName === 'use' && (attrName === 'href' || attrName === 'xlink:href')) {
+      if (!attrValue.trim().startsWith('#')) {
+        data.keepAttr = false;
+      }
+    }
+  });
+
+  if (purifier === (DOMPurify as unknown)) {
+    domPurifyHooksRegistered = true;
+  }
+}
+
+registerMarkdownSanitizerHooks();
 export function escapeHtml(value: unknown): string {
   return String(value ?? '').replace(/[&<>"']/g, (ch) => {
     switch (ch) {
@@ -101,7 +183,8 @@ export function markdownToHtml(value: unknown): string {
       });
     }
 
-    return DOMPurify.sanitize(html);
+    registerMarkdownSanitizerHooks();
+    return DOMPurify.sanitize(html, MARKDOWN_DOMPURIFY_CONFIG);
   } catch (error) {
     console.error('Error in markdownToHtml:', error);
     return escapeHtml(String(value ?? ''));
