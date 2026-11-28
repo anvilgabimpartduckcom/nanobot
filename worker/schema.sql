@@ -121,3 +121,13 @@ CREATE TABLE IF NOT EXISTS mcp_oauth_states (
 CREATE INDEX IF NOT EXISTS idx_mcp_oauth_states_expires
   ON mcp_oauth_states (expires_at);
 
+-- 7. User Preferences Table (Theme, Accent Colour, and Fish Audio Voice selection synced across devices)
+-- Added user_preferences table for cloud-synced theme, accent color, and voice choice [Commented by: Google AI Studio on 28/11/2026 06:47]
+CREATE TABLE IF NOT EXISTS user_preferences (
+  user_id TEXT PRIMARY KEY,
+  theme TEXT NOT NULL DEFAULT 'Neon Black',
+  accent_family TEXT NOT NULL DEFAULT 'green',
+  accent_color TEXT NOT NULL DEFAULT '#10b981',
+  voice_id TEXT NOT NULL DEFAULT 'random',
+  updated_at TEXT NOT NULL
+);

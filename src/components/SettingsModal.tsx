@@ -15,10 +15,19 @@ import {
 import { MCP_PLUGINS, PluginDefinition } from '../lib/plugins';
 import { deriveKeyFromPassword, encryptText, decryptText } from '../lib/crypto';
 import { workerClient, WORKER_BASE_URL, McpConnection, McpTool, AdminUserRecord } from '../lib/workerClient';
+import {
+  AppTheme,
+  AccentFamilyId,
+  AccentPreference,
+  ACCENT_COLOR_FAMILIES,
+  DEFAULT_ACCENT_PREFERENCE,
+  getFamilyDisplayLabel,
+  getNeutralDefaultHex,
+  isValidAccentFamily,
+  isValidHexColor,
+} from '../lib/theme';
 
-
-// Added theme toggle support between Neon Black and Minimalist Light themes in SettingsModal [Commented by: Google AI Studio on 20/10/2026 11:28 PM]
-export type AppTheme = 'Neon Black' | 'Minimalist Light';
+export type { AppTheme };
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -31,9 +40,11 @@ interface SettingsModalProps {
   onDeleteAccount: () => void;
   theme?: AppTheme;
   onThemeChange?: (theme: AppTheme) => void;
+  accent?: AccentPreference;
+  onAccentChange?: (accent: AccentPreference) => void;
 }
 
-type TabType = 'account' | 'ai_config' | 'plugins' | 'admin' | 'about';
+type TabType = 'account' | 'theme_colour' | 'ai_config' | 'plugins' | 'admin' | 'about';
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
@@ -44,22 +55,96 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onLogout,
   onDeleteAccount,
   theme,
-  onThemeChange
+  onThemeChange,
+  accent,
+  onAccentChange
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('account');
   const [currentTheme, setCurrentTheme] = useState<AppTheme>(
     () => theme || (user.theme as AppTheme) || (localStorage.getItem('nanobot_theme') as AppTheme) || 'Neon Black'
   );
+  // State for Theme & Colour accent family, active shade, and open palette dropdown [Commented by: Google AI Studio on 28/11/2026 06:50]
+  const [currentAccent, setCurrentAccent] = useState<AccentPreference>(() => {
+    if (accent) return accent;
+    const savedFam = localStorage.getItem('nanobot_accent_family') || '';
+    const savedCol = localStorage.getItem('nanobot_accent_color') || '';
+    return {
+      family: isValidAccentFamily(savedFam) ? savedFam : DEFAULT_ACCENT_PREFERENCE.family,
+      color: isValidHexColor(savedCol) ? savedCol : DEFAULT_ACCENT_PREFERENCE.color,
+    };
+  });
+  const [openPaletteFamilyId, setOpenPaletteFamilyId] = useState<AccentFamilyId | null>(null);
+
+  useEffect(() => {
+    if (theme) setCurrentTheme(theme);
+  }, [theme]);
+
+  useEffect(() => {
+    if (accent) setCurrentAccent(accent);
+  }, [accent]);
 
   const isLight = currentTheme === 'Minimalist Light';
 
-  // Stored theme strictly in browser localStorage without syncing to remote backend [Commented by: Google AI Studio on 30/10/2026 11:00 PM]
+  // Sync theme changes immediately to DOM, localStorage, and cloud preferences [Commented by: Google AI Studio on 28/11/2026 06:50]
   const handleSwitchTheme = (nextTheme: AppTheme) => {
     setCurrentTheme(nextTheme);
     localStorage.setItem('nanobot_theme', nextTheme);
     if (onThemeChange) {
       onThemeChange(nextTheme);
     }
+
+    let nextAccentForCloud = currentAccent;
+    if (currentAccent.family === 'neutral') {
+      const adjustedHex = getNeutralDefaultHex(nextTheme);
+      if (
+        (nextTheme === 'Minimalist Light' && currentAccent.color.toLowerCase() === '#ffffff') ||
+        (nextTheme === 'Neon Black' && currentAccent.color.toLowerCase() === '#171717')
+      ) {
+        nextAccentForCloud = { family: 'neutral', color: adjustedHex };
+        setCurrentAccent(nextAccentForCloud);
+        localStorage.setItem('nanobot_accent_family', nextAccentForCloud.family);
+        localStorage.setItem('nanobot_accent_color', nextAccentForCloud.color);
+        if (onAccentChange) {
+          onAccentChange(nextAccentForCloud);
+        }
+      }
+    }
+
+    workerClient
+      .updatePreferences({
+        theme: nextTheme,
+        accent_family: nextAccentForCloud.family,
+        accent_color: nextAccentForCloud.color,
+      })
+      .catch(() => {});
+
+    if (isSupabaseConfigured && supabase && user?.id) {
+      Promise.resolve(
+        supabase
+          .from('user_profiles')
+          .update({ theme: nextTheme, updated_at: new Date().toISOString() })
+          .eq('id', user.id)
+      ).catch(() => {});
+    }
+  };
+
+  // Apply chosen accent shade across app and persist to cloud preferences [Commented by: Google AI Studio on 28/11/2026 06:50]
+  const handleSelectAccentShade = (familyId: AccentFamilyId, hex: string) => {
+    const nextAccent: AccentPreference = { family: familyId, color: hex };
+    setCurrentAccent(nextAccent);
+    setOpenPaletteFamilyId(null);
+    localStorage.setItem('nanobot_accent_family', familyId);
+    localStorage.setItem('nanobot_accent_color', hex);
+    if (onAccentChange) {
+      onAccentChange(nextAccent);
+    }
+    workerClient
+      .updatePreferences({
+        theme: currentTheme,
+        accent_family: familyId,
+        accent_color: hex,
+      })
+      .catch(() => {});
   };
 
   // Account Tab form fields
@@ -794,6 +879,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             Account
           </button>
 
+          {/* Added Theme and Colour tab between Account and AI Configuration [Commented by: Google AI Studio on 28/11/2026 06:50] */}
+          <button
+            onClick={() => setActiveTab('theme_colour')}
+            className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer ${
+              activeTab === 'theme_colour'
+                ? isLight
+                  ? 'bg-white text-neutral-900 font-semibold shadow-xs border border-neutral-200'
+                  : 'bg-[#1a1a1a] text-white font-semibold'
+                : isLight
+                ? 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
+                : 'text-neutral-400 hover:text-white hover:bg-[#121212]'
+            }`}
+          >
+            Theme and Colour
+          </button>
+
           <button
             onClick={() => setActiveTab('ai_config')}
             className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer ${
@@ -884,8 +985,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   onKeyDown={handleCredentialKeyDown}
                   className={`w-full rounded-xl px-4 py-2.5 focus:outline-none transition-colors select-text ${
                     isLight
-                      ? 'bg-neutral-50 border border-neutral-300 text-neutral-900 focus:border-emerald-600 focus:bg-white'
-                      : 'bg-[#141414] border border-[#333] text-white focus:border-[#39ff14]'
+                      ? 'bg-neutral-50 border border-neutral-300 text-neutral-900 accent-focus-border focus:bg-white'
+                      : 'bg-[#141414] border border-[#333] text-white accent-focus-border'
                   }`}
                 />
               </div>
@@ -905,8 +1006,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onKeyDown={handleCredentialKeyDown}
                     className={`w-full rounded-xl pl-4 pr-10 py-2.5 focus:outline-none transition-colors select-text ${
                       isLight
-                        ? 'bg-neutral-50 border border-neutral-300 text-neutral-900 focus:border-emerald-600 focus:bg-white'
-                        : 'bg-[#141414] border border-[#333] text-white focus:border-[#39ff14]'
+                        ? 'bg-neutral-50 border border-neutral-300 text-neutral-900 accent-focus-border focus:bg-white'
+                        : 'bg-[#141414] border border-[#333] text-white accent-focus-border'
                     }`}
                   />
                   <button
@@ -964,8 +1065,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onKeyDown={handleCredentialKeyDown}
                     className={`w-full rounded-xl pl-4 pr-10 py-2.5 focus:outline-none transition-colors select-text ${
                       isLight
-                        ? 'bg-neutral-50 border border-neutral-300 text-neutral-900 focus:border-emerald-600 focus:bg-white'
-                        : 'bg-[#141414] border border-[#333] text-white focus:border-[#39ff14]'
+                        ? 'bg-neutral-50 border border-neutral-300 text-neutral-900 accent-focus-border focus:bg-white'
+                        : 'bg-[#141414] border border-[#333] text-white accent-focus-border'
                     }`}
                   />
                   <button
@@ -1011,8 +1112,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onKeyDown={handleCredentialKeyDown}
                     className={`w-full rounded-xl pl-4 pr-10 py-2.5 focus:outline-none transition-colors select-text ${
                       isLight
-                        ? 'bg-neutral-50 border border-neutral-300 text-neutral-900 focus:border-emerald-600 focus:bg-white'
-                        : 'bg-[#141414] border border-[#333] text-white focus:border-[#39ff14]'
+                        ? 'bg-neutral-50 border border-neutral-300 text-neutral-900 accent-focus-border focus:bg-white'
+                        : 'bg-[#141414] border border-[#333] text-white accent-focus-border'
                     }`}
                   />
                   <button
@@ -1036,50 +1137,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
 
-              {/* Theme toggle in Account Settings for switching between Neon Black and Minimalist Light  [Commented by: Google AI Studio on 20/10/2026 11:29 PM] */}
-              <div className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                isLight ? 'bg-neutral-50 border-neutral-200' : 'bg-[#111] border-[#262626]'
-              }`}>
-                <div>
-                  <div className={`text-xs uppercase tracking-wider font-semibold ${isLight ? 'text-neutral-700' : 'text-neutral-300'}`}>
-                    Theme Mode
-                  </div>
-                  <div className={`text-xs mt-0.5 ${isLight ? 'text-neutral-500' : 'text-neutral-400'}`}>
-                    Active: <span className="font-semibold">{currentTheme}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleSwitchTheme('Neon Black')}
-                    className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
-                      currentTheme === 'Neon Black'
-                        ? 'bg-black text-white border border-[#39ff14]/70 font-semibold shadow-xs'
-                        : isLight
-                        ? 'bg-neutral-200 text-neutral-700 hover:text-neutral-900'
-                        : 'bg-[#181818] text-neutral-400 hover:text-white'
-                    }`}
-                  >
-                    <span className="w-2 h-2 rounded-full bg-[#39ff14]"></span>
-                    <span>Neon Black</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSwitchTheme('Minimalist Light')}
-                    className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
-                      currentTheme === 'Minimalist Light'
-                        ? 'bg-white text-neutral-900 border border-emerald-500 font-semibold shadow-xs'
-                        : isLight
-                        ? 'bg-neutral-200 text-neutral-700 hover:text-neutral-900'
-                        : 'bg-[#181818] text-neutral-400 hover:text-white'
-                    }`}
-                  >
-                    <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
-                    <span>Minimalist Light</span>
-                  </button>
-                </div>
-              </div>
-
               {/* Action Buttons */}
               <div className={`flex items-center justify-between pt-4 border-t ${
                 isLight ? 'border-neutral-200' : 'border-neutral-800'
@@ -1095,7 +1152,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <button
                   type="button"
                   onClick={handleSaveAccount}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded-xl text-sm font-semibold transition-colors cursor-pointer"
+                  className="accent-btn px-6 py-2 rounded-xl text-sm font-semibold transition-colors cursor-pointer"
                 >
                   Save
                 </button>
@@ -1107,7 +1164,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   className={`p-3 rounded-xl text-xs font-medium border ${
                     statusMessage.startsWith('Error') || statusMessage.startsWith('Failed')
                       ? 'bg-red-500/10 border-red-500/30 text-red-400'
-                      : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                      : 'accent-soft-box'
                   }`}
                 >
                   {statusMessage}
@@ -1136,13 +1193,186 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 >
                   Delete Account
                 </button>
-                {/* Clarify server-side deletion vs browser-local data scope [Commented by: Google AI Studio at 27/11/2026 21:27] */}
+                {/* Clarify server-side deletion vs browser-local regular, incognito, and file-output cleanup [Commented by: Google AI Studio on 28/11/2026 07:30] */}
                 <p className={`text-[11px] leading-relaxed ${isLight ? 'text-neutral-600' : 'text-neutral-400'}`}>
-                  Deleting your account permanently removes your server-side identity and account data across Supabase and Cloudflare D1, and clears cached data in this browser. Any browser-local IndexedDB file uploads or local archives stored on other browsers or devices cannot be remotely erased and must be cleared locally in those browsers.
+                  Deleting your account permanently removes your server-side identity, account credentials, and shared links across Supabase and Cloudflare, and clears regular, incognito, file-output, and IndexedDB data stored in this browser. Any local chat history or IndexedDB uploads stored on other browsers or devices cannot be remotely erased and must be cleared locally in those browsers.
                 </p>
               </div>
             </div>
           )}
+
+          {/* TAB: THEME AND COLOUR [Commented by: Google AI Studio on 28/11/2026 06:50] */}
+          {activeTab === 'theme_colour' && (() => {
+            const activeDropdownFamily = ACCENT_COLOR_FAMILIES.find((f) => f.id === openPaletteFamilyId) || null;
+            return (
+              <div className="space-y-6 max-w-xl">
+                <div className={`pb-2 border-b ${isLight ? 'border-neutral-200' : 'border-neutral-800'}`}>
+                  <h2 className="text-xl font-bold font-serif">Theme and Colour</h2>
+                  <p className={`text-xs mt-1 ${isLight ? 'text-neutral-500' : 'text-neutral-400'}`}>
+                    Customize your visual theme and choose the accent colour applied across nanobot.
+                  </p>
+                </div>
+
+                {/* Section 1: Minimalist Light and Neon Black theme selection */}
+                <div className={`p-4 rounded-xl border space-y-3 ${
+                  isLight ? 'bg-neutral-50 border-neutral-200' : 'bg-[#111] border-[#262626]'
+                }`}>
+                  <div>
+                    <div className={`text-xs uppercase tracking-wider font-semibold ${isLight ? 'text-neutral-700' : 'text-neutral-300'}`}>
+                      Theme
+                    </div>
+                    <div className={`text-xs mt-0.5 ${isLight ? 'text-neutral-500' : 'text-neutral-400'}`}>
+                      Active: <span className="font-semibold">{currentTheme}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => handleSwitchTheme('Minimalist Light')}
+                      className={`px-4 py-2 text-xs rounded-lg font-medium transition-all cursor-pointer flex items-center gap-2 ${
+                        currentTheme === 'Minimalist Light'
+                          ? 'bg-white text-neutral-900 border accent-border font-semibold shadow-xs'
+                          : isLight
+                          ? 'bg-neutral-200 text-neutral-700 hover:text-neutral-900'
+                          : 'bg-[#181818] text-neutral-400 hover:text-white border border-[#2d2d2d]'
+                      }`}
+                    >
+                      <span className="w-2.5 h-2.5 rounded-full bg-white border border-neutral-400"></span>
+                      <span>Minimalist Light</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSwitchTheme('Neon Black')}
+                      className={`px-4 py-2 text-xs rounded-lg font-medium transition-all cursor-pointer flex items-center gap-2 ${
+                        currentTheme === 'Neon Black'
+                          ? 'bg-black text-white border accent-border font-semibold shadow-xs'
+                          : isLight
+                          ? 'bg-neutral-200 text-neutral-700 hover:text-neutral-900'
+                          : 'bg-[#181818] text-neutral-400 hover:text-white border border-[#2d2d2d]'
+                      }`}
+                    >
+                      <span className="w-2.5 h-2.5 rounded-full bg-black border border-neutral-500"></span>
+                      <span>Neon Black</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Section 2: Side-by-side color buttons + lightest-to-darkest shade dropdown */}
+                <div className={`p-4 rounded-xl border space-y-3 ${
+                  isLight ? 'bg-neutral-50 border-neutral-200' : 'bg-[#111] border-[#262626]'
+                }`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className={`text-xs uppercase tracking-wider font-semibold ${isLight ? 'text-neutral-700' : 'text-neutral-300'}`}>
+                        Colour
+                      </div>
+                      <div className={`text-xs mt-0.5 ${isLight ? 'text-neutral-500' : 'text-neutral-400'}`}>
+                        Selected:{' '}
+                        <span className="font-semibold">
+                          {getFamilyDisplayLabel(currentAccent.family, currentTheme)}
+                        </span>{' '}
+                        <span className="font-mono text-[11px] opacity-80">({currentAccent.color})</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Ordered buttons: White/Black, Violet, Indigo, Blue, Green, Yellow, Orange, Red */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {ACCENT_COLOR_FAMILIES.map((family) => {
+                      const displayLabel = getFamilyDisplayLabel(family.id, currentTheme);
+                      const isSelectedFamily = currentAccent.family === family.id;
+                      const isDropdownOpen = openPaletteFamilyId === family.id;
+                      const swatchBgClass =
+                        family.id === 'neutral'
+                          ? isLight
+                            ? 'bg-[#171717]'
+                            : 'bg-[#ffffff]'
+                          : family.previewBgClass;
+
+                      return (
+                        <button
+                          key={family.id}
+                          type="button"
+                          onClick={() =>
+                            setOpenPaletteFamilyId((prev) => (prev === family.id ? null : family.id))
+                          }
+                          aria-expanded={isDropdownOpen}
+                          className={`px-3 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-2 border ${
+                            isDropdownOpen || isSelectedFamily
+                              ? isLight
+                                ? 'bg-white text-neutral-900 accent-border font-semibold shadow-xs'
+                                : 'bg-[#1b1b1b] text-white accent-border font-semibold'
+                              : isLight
+                              ? 'bg-white text-neutral-700 border-neutral-300 hover:border-neutral-400'
+                              : 'bg-[#161616] text-neutral-300 border-[#2d2d2d] hover:border-neutral-500'
+                          }`}
+                        >
+                          <span className={`w-3.5 h-3.5 rounded-full border border-neutral-500/50 shrink-0 ${swatchBgClass}`} />
+                          <span>{displayLabel}</span>
+                          <span className="text-[10px] opacity-60">{isDropdownOpen ? '▲' : '▼'}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Shade palette dropdown ordered from lightest to darkest shade */}
+                  {activeDropdownFamily && (
+                    <div
+                      className={`mt-2 p-3 rounded-xl border space-y-1.5 animate-in fade-in duration-150 ${
+                        isLight ? 'bg-white border-neutral-300' : 'bg-[#0b0b0b] border-[#2e2e2e]'
+                      }`}
+                    >
+                      <div className={`text-[11px] font-semibold pb-1 border-b flex items-center justify-between ${
+                        isLight ? 'text-neutral-600 border-neutral-200' : 'text-neutral-400 border-[#222]'
+                      }`}>
+                        <span>{getFamilyDisplayLabel(activeDropdownFamily.id, currentTheme)} Palette (Lightest to Darkest)</span>
+                        <button
+                          type="button"
+                          onClick={() => setOpenPaletteFamilyId(null)}
+                          className="cursor-pointer hover:opacity-80"
+                          aria-label="Close colour palette"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 gap-1 pt-1">
+                        {activeDropdownFamily.shades.map((shade) => {
+                          const isActiveShade =
+                            currentAccent.family === activeDropdownFamily.id &&
+                            currentAccent.color.toLowerCase() === shade.hex.toLowerCase();
+                          return (
+                            <button
+                              key={shade.hex}
+                              type="button"
+                              onClick={() => handleSelectAccentShade(activeDropdownFamily.id, shade.hex)}
+                              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer border ${
+                                isActiveShade
+                                  ? isLight
+                                    ? 'bg-neutral-100 accent-border text-neutral-900 font-semibold'
+                                    : 'bg-[#191919] accent-border text-white font-semibold'
+                                  : isLight
+                                  ? 'bg-transparent border-transparent hover:bg-neutral-100 text-neutral-800'
+                                  : 'bg-transparent border-transparent hover:bg-[#151515] text-neutral-200'
+                              }`}
+                            >
+                              <span className="flex items-center gap-2.5">
+                                <span className={`w-5 h-5 rounded-md border border-neutral-500/40 shrink-0 ${shade.bgClass}`} />
+                                <span>{shade.label}</span>
+                              </span>
+                              <span className="flex items-center gap-2 font-mono text-[11px] opacity-75">
+                                <span>{shade.hex}</span>
+                                {isActiveShade && <span className="accent-text font-bold">✓</span>}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* TAB 2: AI CONFIGURATION */}
           {activeTab === 'ai_config' && (
@@ -1159,11 +1389,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   onKeyDown={handleInstructionsKeyDown}
                   placeholder="Enter custom instructions for nanobot"
                   rows={6}
-                  className="w-full bg-[#141414] border border-[#333] rounded-xl p-4 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] text-sm leading-relaxed resize-none"
+                  className="w-full bg-[#141414] border border-[#333] rounded-xl p-4 text-white placeholder-neutral-500 focus:outline-none accent-focus-border text-sm leading-relaxed resize-none"
                 />
                 {/* Removed Tip text below custom instructions box [Commented by: Google AI Studio on 29/10/2026 04:00 PM] */}
                 {instructionsSavedNotice && (
-                  <p className="text-xs text-emerald-400 mt-2 font-medium">
+                  <p className="text-xs accent-text mt-2 font-medium">
                     ✓ Custom instructions saved successfully!
                   </p>
                 )}
@@ -1189,7 +1419,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     type="button"
                     onClick={handleToggleTraining}
                     className={`w-14 h-8 rounded-full p-1 transition-colors cursor-pointer ${
-                      modelTraining ? 'bg-emerald-600' : 'bg-neutral-700'
+                      modelTraining ? 'accent-solid-bg' : 'bg-neutral-700'
                     }`}
                     aria-label="Toggle model training"
                   >
@@ -1256,11 +1486,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onClick={() => setFilterTab('connected')}
                     className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
                       filterTab === 'connected'
-                        ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 font-semibold'
+                        ? 'accent-soft-box border font-semibold'
                         : 'text-neutral-400 hover:text-white'
                     }`}
                   >
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                    <span className="w-1.5 h-1.5 rounded-full accent-solid-bg"></span>
                     <span>Connected ({connectedCount})</span>
                   </button>
                   <button
@@ -1277,17 +1507,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 {statusMessage && (
-                  <div className="bg-emerald-950/80 border border-emerald-500/60 text-emerald-300 text-xs px-3 py-2 rounded-lg font-mono">
+                  <div className="accent-soft-box border text-xs px-3 py-2 rounded-lg font-mono">
                     {statusMessage}
                   </div>
                 )}
 
                 {/* Pending backend OAuth authorization banner with direct new-tab fallback link [Commented by: Google AI Studio at 22/11/2026 11:51] */}
                 {pendingOAuthFlow && (
-                  <div className="bg-[#0e1711] border border-emerald-500/50 rounded-xl p-3.5 space-y-2.5">
+                  <div className="bg-[#121212] border accent-border-soft rounded-xl p-3.5 space-y-2.5">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-2.5">
-                        <span className="w-3 h-3 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin shrink-0"></span>
+                        <span className="w-3 h-3 border-2 accent-spinner rounded-full animate-spin shrink-0"></span>
                         <div>
                           <div className="text-xs font-semibold text-white">
                             Waiting for {pendingOAuthFlow.plugin.name} authorization...
@@ -1313,7 +1543,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         href={pendingOAuthFlow.authorizationUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold accent-btn transition-colors"
                       >
                         <span>Open Authorization Window</span>
                         <span>↗</span>
@@ -1337,7 +1567,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         key={plugin.id}
                         className={`p-3.5 rounded-xl border transition-all ${
                           isConnected
-                            ? 'bg-[#0e1711] border-emerald-500/40 shadow-xs'
+                            ? 'bg-[#121212] accent-border-soft shadow-xs'
                             : isError
                             ? 'bg-[#180e11] border-rose-500/40'
                             : 'bg-[#131313] border-[#242424] hover:border-[#333]'
@@ -1357,8 +1587,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               <div className="text-sm font-semibold text-white flex items-center gap-2">
                                 {plugin.name}
                                 {isConnected ? (
-                                  <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-500/50 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                  <span className="text-[10px] accent-soft-box border px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full accent-solid-bg animate-pulse"></span>
                                     Connected
                                   </span>
                                 ) : isError ? (
@@ -1376,7 +1606,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               </div>
                               <div className="text-[11px] text-neutral-500 mt-1.5 flex items-center gap-2">
                                 {isConnected ? (
-                                  <span className="text-emerald-400/90 font-medium">
+                                  <span className="accent-text font-medium">
                                     ✓ {activeTools.length} live capabilities active
                                   </span>
                                 ) : (
@@ -1395,7 +1625,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 <div
                                   className={`text-[11px] mt-2 px-2.5 py-1.5 rounded-lg font-medium flex items-center justify-between gap-2 border transition-all ${
                                     testResults[plugin.id].status === 'Connection successful'
-                                      ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300'
+                                      ? 'accent-soft-box'
                                       : testResults[plugin.id].status === 'Authentication failed' || testResults[plugin.id].status === 'Provider unavailable'
                                       ? 'bg-rose-950/80 border-rose-500/50 text-rose-300'
                                       : 'bg-amber-950/80 border-amber-500/50 text-amber-300'
@@ -1433,7 +1663,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 >
                                   {testingPluginId === plugin.id ? (
                                     <>
-                                      <span className="w-2.5 h-2.5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin"></span>
+                                      <span className="w-2.5 h-2.5 border-2 accent-spinner rounded-full animate-spin"></span>
                                       <span>Testing...</span>
                                     </>
                                   ) : (
@@ -1459,7 +1689,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                     ? 'bg-rose-600 hover:bg-rose-500 text-white'
                                     : plugin.oauthProvider === 'google'
                                     ? 'bg-white hover:bg-neutral-100 text-neutral-900 font-bold'
-                                    : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                                    : 'accent-btn'
                                 }`}
                               >
                                 {installingPluginId === plugin.id ? (
@@ -1492,7 +1722,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           <button
                             type="button"
                             onClick={() => setExpandedToolsPluginId(isExpanded ? null : plugin.id)}
-                            className="text-neutral-400 hover:text-emerald-400 cursor-pointer flex items-center gap-1 transition-colors"
+                            className="text-neutral-400 accent-hover-text cursor-pointer flex items-center gap-1 transition-colors"
                           >
                             <span>{isExpanded ? '▼ Hide' : '▶ View'} {activeTools.length} {isConnected ? 'active' : 'available'} capabilities</span>
                           </button>
@@ -1510,14 +1740,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                   : 'Capabilities available once connected:'}
                               </span>
                               {isConnected && (
-                                <span className="text-emerald-400 font-mono text-[10px]">Verified</span>
+                                <span className="accent-text font-mono text-[10px]">Verified</span>
                               )}
                             </div>
                             <div className="grid grid-cols-1 gap-1 max-h-44 overflow-y-auto pr-1">
                               {activeTools.map((tool) => (
                                 <div key={tool.name} className="flex flex-col gap-0.5 text-[11px] text-neutral-300 bg-[#141414] p-1.5 rounded border border-[#202020]">
                                   <div className="flex items-center gap-1.5">
-                                    <span className="text-emerald-400 font-mono font-medium">⚡ {tool.name}</span>
+                                    <span className="accent-text font-mono font-medium">⚡ {tool.name}</span>
                                   </div>
                                   <div className="text-neutral-400 text-[10.5px]">{tool.description}</div>
                                 </div>
@@ -1560,7 +1790,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         <div className="bg-[#161616] border border-[#262626] rounded-xl p-3.5 space-y-2 text-xs text-neutral-300 max-h-36 overflow-y-auto">
                           {authorizingPlugin.permissions.map((perm, idx) => (
                             <div key={idx} className="flex items-start gap-2">
-                              <span className="text-emerald-400 font-bold shrink-0">✓</span>
+                              <span className="accent-text font-bold shrink-0">✓</span>
                               <span className="leading-tight">{perm}</span>
                             </div>
                           ))}
@@ -1605,7 +1835,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               href={authorizingPlugin.helpUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-[11px] text-emerald-400 hover:underline flex items-center gap-1 font-medium"
+                              className="text-[11px] accent-text hover:underline flex items-center gap-1 font-medium"
                             >
                               <span>{authorizingPlugin.helpActionText || 'Open Token Dashboard'}</span>
                               <span>↗</span>
@@ -1623,7 +1853,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             }}
                             onKeyDown={handleCredentialKeyDown}
                             placeholder={authorizingPlugin.credentialPlaceholder}
-                            className="w-full bg-[#181818] border border-[#333] rounded-lg pl-3 pr-20 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-emerald-500 font-mono"
+                            className="w-full bg-[#181818] border border-[#333] rounded-lg pl-3 pr-20 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none accent-focus-border font-mono"
                           />
                           <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
                             <button
@@ -1679,11 +1909,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           type="button"
                           onClick={handleGrantAuthorization}
                           disabled={isAuthorizing}
-                          className="px-4 py-2 rounded-lg text-xs font-bold text-black bg-emerald-400 hover:bg-emerald-300 cursor-pointer flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                          className="px-4 py-2 rounded-lg text-xs font-bold accent-btn cursor-pointer flex items-center gap-1.5 transition-colors disabled:opacity-50"
                         >
                           {isAuthorizing ? (
                             <>
-                              <span className="w-3 h-3 border-2 border-black border-t-transparent rounded-full animate-spin"></span>
+                              <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
                               <span>Connecting & Verifying...</span>
                             </>
                           ) : (
@@ -1720,9 +1950,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             const getStatusBadgeClasses = (status: AdminUserRecord['status']) => {
               switch (status) {
                 case 'active':
-                  return isLight
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+                  return 'accent-soft-box';
                 case 'disabled':
                 case 'deleted':
                   return isLight
@@ -1768,8 +1996,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       aria-label="Search users by username"
                       className={`w-full rounded-xl px-3.5 py-2 pr-8 text-sm focus:outline-none border transition-colors ${
                         isLight
-                          ? 'bg-neutral-50 border-neutral-300 text-neutral-900 placeholder-neutral-400 focus:border-emerald-600'
-                          : 'bg-[#141414] border-[#2d2d2d] text-white placeholder-neutral-500 focus:border-[#39ff14]'
+                          ? 'bg-neutral-50 border-neutral-300 text-neutral-900 placeholder-neutral-400 accent-focus-border'
+                          : 'bg-[#141414] border-[#2d2d2d] text-white placeholder-neutral-500 accent-focus-border'
                       }`}
                     />
                     {adminSearchQuery && (
@@ -1806,7 +2034,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 )}
 
                 {adminSuccessMessage && (
-                  <div className="p-3 rounded-xl text-xs font-medium border bg-emerald-500/10 border-emerald-500/30 text-emerald-400">
+                  <div className="p-3 rounded-xl text-xs font-medium border accent-soft-box">
                     {adminSuccessMessage}
                   </div>
                 )}
@@ -1830,7 +2058,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <button
                         type="button"
                         onClick={() => setAdminSearchQuery('')}
-                        className="text-xs font-semibold text-emerald-500 hover:text-emerald-400 underline cursor-pointer"
+                        className="text-xs font-semibold accent-text hover:opacity-80 underline cursor-pointer"
                       >
                         Clear search filter
                       </button>
@@ -1940,13 +2168,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </button>
                       </div>
 
-                      {/* Explicit server-side vs browser-local data-retention disclosure in admin confirmation [Commented by: Google AI Studio at 27/11/2026 21:27] */}
+                      {/* Explicit server-side vs browser-local data-retention disclosure in admin confirmation [Commented by: Google AI Studio on 28/11/2026 07:30] */}
                       <p className={`text-xs leading-relaxed ${isLight ? 'text-neutral-600' : 'text-neutral-300'}`}>
                         You are about to permanently delete the account for{' '}
                         <span className={`font-bold ${isLight ? 'text-neutral-900' : 'text-white'}`}>
                           {pendingDeleteTarget.username}
                         </span>
-                        . This removes the Supabase Auth identity and purges server-side account data across Supabase and Cloudflare D1 (profile, conversations, messages, file outputs, add-on connections, OAuth states, and shared links). This action cannot be undone.
+                        . This removes the Supabase Auth identity and purges server-side account data across Supabase and Cloudflare D1 (profile, add-on connections, OAuth states, shared links, and any legacy server records). This action cannot be undone.
                       </p>
 
                       <p className={`text-[11px] leading-relaxed p-2.5 rounded-lg border ${
@@ -1954,7 +2182,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           ? 'bg-neutral-50 border-neutral-200 text-neutral-600'
                           : 'bg-[#171717] border-[#2a2a2a] text-neutral-400'
                       }`}>
-                        Note: Browser-local IndexedDB file uploads and local archives stored on the user&apos;s own browser or devices cannot be remotely erased by an administrator; the user must clear browser-local data themselves where applicable.
+                        Note: Browser-local chats (regular and incognito), localStorage file outputs, and IndexedDB file uploads stored on the user&apos;s own browser or devices cannot be remotely erased by an administrator; the user must clear browser-local data themselves where applicable.
                       </p>
 
                       {deleteTargetError && (
@@ -1997,18 +2225,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
 
           {/* TAB 5: ABOUT NANOBOT */}
-          {/* Updated About nanobot with static service credits, removed 30-day local storage note box, and brought updates and GitHub links closer [Commented by: Google AI Studio on 29/10/2026 04:00 PM] */}
+          {/* Upgraded About nanobot text block, data disclosure, links, and service credits (removed Google Gemini) [Commented by: Google AI Studio on 28/11/2026 06:50] */}
           {activeTab === 'about' && (() => {
             const baseServices = [
               'Cloudflare',
               'Github',
               'Google AI Studio',
-              'Google Gemini',
               'Netlify',
               'OpenAI ChatGPT',
               'Openrouter',
               'Supabase',
-              'Tavily'
+              'Tavily',
             ];
 
             const sortedServices = [...baseServices].sort((a, b) =>
@@ -2016,74 +2243,100 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             );
 
             return (
-              <div className="space-y-4 max-w-xl text-neutral-300">
-                <h2 className="text-xl font-bold font-serif text-white">About nanobot</h2>
-                {/* Updated description to state 'source available AI chatbot' [Commented by: Google AI Studio on 29/10/2026 09:00 PM] */}
-                <p className="text-sm leading-relaxed">
-                  Everyone should get to use AI, and that too without giving away their data. So I created nanobot, a source available AI chatbot which respects your privacy, and is free to use. Users bring their own API keys, which helps in further keeping nanobot completely free to use.
-                  <br />
-                  <a
-                    href="https://github.com/anvilgabimpartduckcom/nanobot/blob/main/LICENSE"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-emerald-400 hover:text-emerald-300 underline font-medium"
-                  >
-                    See the license under which nanobot comes.
-                  </a>
-                </p>
-                {/* Updated developer contact section to include GitHub discussions link and preserved email box per user specification  [Commented by: Google AI Studio on 22/10/2026 04:47 PM] */}
-                <p className="text-sm leading-relaxed">
-                  For more information, For reporting a bug, issue, or vulnerability, join the{' '}
-                  <a
-                    href="https://github.com/anvilgabimpartduckcom/nanobot/discussions/2"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-emerald-400 hover:text-emerald-300 underline font-medium"
-                  >
-                    GitHub discussion
-                  </a>{' '}
-                  or email at{' '}
-                  <span className="inline-block bg-[#1a1a1a] border border-[#333] text-neutral-200 px-2 py-0.5 rounded font-mono text-xs select-all">
-                    molecule-sip-sauna@duck.com
-                  </span>
-                </p>
-                <p className="text-sm leading-relaxed">
-                  You can also get information about more features of nanobot at the{' '}
-                  <a
-                    href="https://tropical-chime-8c1.notion.site/nanobot-101-3f4b104092f3804792d0c68bca97e821"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-emerald-400 hover:text-emerald-300 underline font-medium"
-                  >
-                    nanobot 101
-                  </a>
-                </p>
-
-                {/* Brought latest updates and Github source links closer together vertically [Commented by: Google AI Studio on 29/10/2026 04:00 PM] */}
-                <div className="space-y-1 pt-1 leading-snug">
-                  <p className="text-sm">
-                    <a
-                      href="https://github.com/anvilgabimpartduckcom/nanobot#-latest-updates"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-emerald-400 hover:text-emerald-300 underline font-medium"
-                    >
-                      See the latest updates in nanobot
-                    </a>
-                  </p>
-                  <p className="text-sm">
-                    <a
-                      href="https://github.com/anvilgabimpartduckcom/nanobot"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-emerald-400 hover:text-emerald-300 underline font-medium"
-                    >
-                      Visit nanobot&#39;s source code in GitHub
-                    </a>
+              <div className={`space-y-4 max-w-xl ${isLight ? 'text-neutral-700' : 'text-neutral-300'}`}>
+                <div className="space-y-2">
+                  <h2 className={`text-xl font-bold font-serif ${isLight ? 'text-neutral-900' : 'text-white'}`}>
+                    About nanobot
+                  </h2>
+                  <p className="text-sm leading-relaxed">
+                    AI should be a tool, which is free to use, easy to set up, and can be used in many use cases. So we created nanobot, a completely free-to-use AI chat bot that runs on the API keys provided by an user.
                   </p>
                 </div>
 
-                <div className="border-t border-neutral-800 pt-4 mt-2 space-y-2 text-xs text-neutral-400 leading-relaxed">
+                {/* Updated Settings > About privacy disclosure to match H-5 local-first storage architecture accurately [Commented by: Google AI Studio on 28/11/2026 07:30] */}
+                <div className="space-y-2.5">
+                  <h3 className={`text-base font-bold font-serif ${isLight ? 'text-neutral-900' : 'text-white'}`}>
+                    Understand how your data is stored
+                  </h3>
+                  <p className="text-sm leading-relaxed">
+                    nanobot separates account data, public shared snapshots, and browser-local conversations:
+                  </p>
+                  <ol className="text-sm leading-relaxed pl-6 space-y-1.5">
+                    <li>
+                      <strong>i. Account &amp; authentication data (Supabase):</strong> Your username, authentication record, encrypted API keys, and account preferences are stored in your account backend.
+                    </li>
+                    <li>
+                      <strong>ii. Shared Noodles (Cloudflare):</strong> Snapshots you explicitly choose to share are stored in Cloudflare for public link access (up to 30 days, or until you revoke the link).
+                    </li>
+                    <li>
+                      <strong>iii. Connected Add-ons:</strong> Authorized MCP add-on tokens are encrypted on the Cloudflare backend.
+                    </li>
+                    <li>
+                      <strong>iv. Regular chats (Browser localStorage):</strong> Stored locally in this browser&apos;s localStorage (and encrypted with your account password when signed in) — never synchronized or backed up to Supabase.
+                    </li>
+                    <li>
+                      <strong>v. Incognito chats (Browser localStorage):</strong> Stored locally in this browser under a separate incognito localStorage key so they persist across refreshes without mixing into regular history, and are never uploaded to Supabase or Cloudflare.
+                    </li>
+                    <li>
+                      <strong>vi. Uploaded files &amp; extracted outputs:</strong> Raw files remain in browser IndexedDB, and extracted summaries/reader scripts remain in browser localStorage only.
+                    </li>
+                  </ol>
+                  <p className={`text-xs leading-relaxed pt-1 ${isLight ? 'text-neutral-600' : 'text-neutral-400'}`}>
+                    Important: Browser storage (localStorage and IndexedDB) keeps data on your device rather than in Supabase, but does not protect data against malicious browser extensions, XSS, or compromise of the local browser or device.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className={`text-base font-bold font-serif ${isLight ? 'text-neutral-900' : 'text-white'}`}>
+                    Other links you&#39;d like to visit
+                  </h3>
+                  <div className="space-y-1.5 text-sm">
+                    <p>
+                      <a
+                        href="https://github.com/anvilgabimpartduckcom/nanobot"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="accent-text underline font-medium hover:opacity-80 transition-opacity"
+                      >
+                        See nanobot&#39;s source code
+                      </a>
+                    </p>
+                    <p>
+                      <a
+                        href="https://github.com/anvilgabimpartduckcom/nanobot#-latest-updates"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="accent-text underline font-medium hover:opacity-80 transition-opacity"
+                      >
+                        See the latest updates in nanobot
+                      </a>
+                    </p>
+                    <p>
+                      <a
+                        href="https://github.com/anvilgabimpartduckcom"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="accent-text underline font-medium hover:opacity-80 transition-opacity"
+                      >
+                        See our full catalog of products
+                      </a>
+                    </p>
+                    <p>
+                      <a
+                        href="https://tropical-chime-8c1.notion.site/AI-News-3e6b104092f38092a013ff0804763a13"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="accent-text underline font-medium hover:opacity-80 transition-opacity"
+                      >
+                        Try AI News
+                      </a>
+                    </p>
+                  </div>
+                </div>
+
+                <div className={`border-t pt-4 mt-2 space-y-2 text-xs leading-relaxed ${
+                  isLight ? 'border-neutral-200 text-neutral-600' : 'border-neutral-800 text-neutral-400'
+                }`}>
                   <p>
                     Special thanks to {sortedServices.join(', ')}. The features provided by these services have helped me code, develop, host, build the backend for, and maintain nanobot.
                   </p>
@@ -2091,7 +2344,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     All terms and conditions are under these services.
                   </p>
                   {/* Added centered 'Made in INDIA 🇮🇳 ❤️' statement under terms and conditions  [Commented by: Google AI Studio on 22/10/2026 05:36 PM] */}
-                  <p className="text-center text-xs text-neutral-300 font-medium pt-2">
+                  <p className={`text-center text-xs font-medium pt-2 ${isLight ? 'text-neutral-800' : 'text-neutral-300'}`}>
                     Made in INDIA 🇮🇳 ❤️
                   </p>
                 </div>

@@ -2,8 +2,9 @@
 
 export const SHARE_RETENTION_DAYS = 30;
 
+// Updated privacy disclosure to reflect browser-local personal history vs Cloudflare shared snapshots [Commented by: Google AI Studio on 28/11/2026 07:30]
 export const SHARED_NOODLE_PRIVACY_DISCLOSURE =
-  'Anyone with this link can view this snapshot until it expires (30 days) or you revoke it. Only conversation messages, cited sources, and attachment names are stored in the Cloudflare sharing database (internal model reasoning, private metadata, credentials, and raw local files are excluded), separate from your private encrypted personal history.';
+  'Anyone with this link can view this snapshot until it expires (30 days) or you revoke it. Only conversation messages, cited sources, and attachment names are stored in the Cloudflare sharing database (internal model reasoning, private metadata, credentials, and raw local files are excluded), separate from your browser-local personal history.';
 
 export interface ShareableAttachment {
   type: string;

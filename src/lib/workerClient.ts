@@ -1,14 +1,6 @@
-// Cloudflare Worker REST API client for nanobot chat persistence with Supabase Bearer authentication [Commented by: Google AI Studio on 30/10/2026 10:48 PM]
+// Cloudflare Worker REST API client for shared noodles, MCP add-ons, account deletion, admin actions, and preferences with Supabase Bearer authentication [Commented by: Google AI Studio on 28/11/2026 07:30]
 
 import { supabase } from './supabase';
-
-export interface WorkerConversation {
-  id: string;
-  title: string;
-  pinned: boolean;
-  created_at?: string;
-  updated_at?: string;
-}
 
 export interface WorkerMessage {
   id?: string;
@@ -86,10 +78,24 @@ export interface AdminDeleteResult {
   message: string;
 }
 
+// Cloud-synced user appearance and Fish Audio voice preferences [Commented by: Google AI Studio on 28/11/2026 06:47]
+export interface WorkerUserPreferences {
+  theme: 'Neon Black' | 'Minimalist Light';
+  accent_family: string;
+  accent_color: string;
+  voice_id: string;
+  updated_at?: string;
+}
 
-// Exported Cloudflare Worker base URL for OAuth callback origin validation [Commented by: Google AI Studio at 22/11/2026 11:51]
+
+// Safely resolve Worker base URL across both Vite browser runtime and Node tsx verification scripts [Commented by: Google AI Studio on 28/11/2026 07:36]
+const workerMetaEnv =
+  typeof import.meta !== 'undefined' && (import.meta as unknown as { env?: Record<string, unknown> }).env
+    ? (import.meta as unknown as { env: Record<string, unknown> }).env
+    : {};
+
 export const WORKER_BASE_URL = (
-  (import.meta.env.VITE_CLOUDFLARE_WORKER_URL as string) ||
+  (workerMetaEnv.VITE_CLOUDFLARE_WORKER_URL as string) ||
   'https://nanobot-api.mud-amiable-tweed.workers.dev'
 ).replace(/\/$/, '');
 
@@ -200,128 +206,7 @@ export const workerClient = {
     }
   },
 
-  // List all conversations for the authenticated user
-  async listConversations(): Promise<WorkerApiResponse<{ conversations: WorkerConversation[] }>> {
-    return workerFetch<{ conversations: WorkerConversation[] }>('/api/conversations', {
-      method: 'GET',
-    });
-  },
-
-  // Create or upsert a conversation record
-  async createOrUpdateConversation(
-    conversation: WorkerConversation
-  ): Promise<WorkerApiResponse<{ conversation: WorkerConversation }>> {
-    return workerFetch<{ conversation: WorkerConversation }>('/api/conversations', {
-      method: 'POST',
-      body: JSON.stringify(conversation),
-    });
-  },
-
-  // Update conversation title or pin state
-  async updateConversation(
-    id: string,
-    updates: { title?: string; pinned?: boolean }
-  ): Promise<WorkerApiResponse<{ updated_at: string }>> {
-    return workerFetch<{ updated_at: string }>(`/api/conversations/${encodeURIComponent(id)}`, {
-      method: 'PUT',
-      body: JSON.stringify(updates),
-    });
-  },
-
-  // Delete a specific conversation and all associated messages
-  async deleteConversation(id: string): Promise<WorkerApiResponse<{ message: string }>> {
-    return workerFetch<{ message: string }>(`/api/conversations/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-    });
-  },
-
-  // Clear all conversations and messages for the user
-  async clearAllConversations(): Promise<WorkerApiResponse<{ message: string }>> {
-    return workerFetch<{ message: string }>('/api/conversations', {
-      method: 'DELETE',
-    });
-  },
-
-  // Get messages for a specific conversation
-  async getMessages(
-    conversationId: string
-  ): Promise<WorkerApiResponse<{ messages: WorkerMessage[] }>> {
-    return workerFetch<{ messages: WorkerMessage[] }>(
-      `/api/conversations/${encodeURIComponent(conversationId)}/messages`,
-      { method: 'GET' }
-    );
-  },
-
-  // Save a single message to a conversation
-  async saveMessage(
-    conversationId: string,
-    message: WorkerMessage,
-    conversationTitle?: string
-  ): Promise<WorkerApiResponse<{ message: WorkerMessage }>> {
-    return workerFetch<{ message: WorkerMessage }>(
-      `/api/conversations/${encodeURIComponent(conversationId)}/messages`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          ...message,
-          title: conversationTitle,
-        }),
-      }
-    );
-  },
-
-  // Save multiple messages in batch to a conversation
-  async saveMessagesBatch(
-    conversationId: string,
-    messages: WorkerMessage[],
-    conversationTitle?: string
-  ): Promise<WorkerApiResponse<{ count: number }>> {
-    return workerFetch<{ count: number }>(
-      `/api/conversations/${encodeURIComponent(conversationId)}/messages`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          messages,
-          title: conversationTitle,
-        }),
-      }
-    );
-  },
-
-  // Retrieve persisted AI-extracted outputs for a conversation [Commented by: Google AI Studio on 15/10/2026 09:22 PM]
-  async getFileOutputs(
-    conversationId: string
-  ): Promise<WorkerApiResponse<{ outputs: WorkerFileOutput[] }>> {
-    return workerFetch<{ outputs: WorkerFileOutput[] }>(
-      `/api/conversations/${encodeURIComponent(conversationId)}/outputs`,
-      { method: 'GET' }
-    );
-  },
-
-  // Persist an AI-generated file extraction or reader script result to Cloudflare D1 [Commented by: Google AI Studio on 15/10/2026 09:22 PM]
-  async saveFileOutput(
-    conversationId: string,
-    output: WorkerFileOutput
-  ): Promise<WorkerApiResponse<{ output: WorkerFileOutput }>> {
-    return workerFetch<{ output: WorkerFileOutput }>(
-      `/api/conversations/${encodeURIComponent(conversationId)}/outputs`,
-      {
-        method: 'POST',
-        body: JSON.stringify(output),
-      }
-    );
-  },
-
-  // Delete a persisted AI output for a file from Cloudflare D1 [Commented by: Google AI Studio on 15/10/2026 09:22 PM]
-  async deleteFileOutput(
-    conversationId: string,
-    fileId: string
-  ): Promise<WorkerApiResponse<{ message: string }>> {
-    return workerFetch<{ message: string }>(
-      `/api/conversations/${encodeURIComponent(conversationId)}/outputs/${encodeURIComponent(fileId)}`,
-      { method: 'DELETE' }
-    );
-  },
+  // Removed regular-chat D1 conversation, message, and file-output endpoints under H-5 Decision 2; regular chats remain strictly browser-local [Commented by: Google AI Studio on 28/11/2026 07:30]
 
   // Create or update a public 30-day shareable snapshot in Cloudflare D1 (separate from encrypted local history) [Commented by: Google AI Studio at 24/11/2026 17:13]
   async createShare(
@@ -495,6 +380,23 @@ export const workerClient = {
     }
     return workerFetch<AdminDeleteResult>(`/api/admin/users/${encodeURIComponent(trimmed)}`, {
       method: 'DELETE',
+    });
+  },
+
+  // Fetch cloud-synced theme, accent color, and voice preferences [Commented by: Google AI Studio on 28/11/2026 06:47]
+  async getPreferences(): Promise<WorkerApiResponse<{ preferences: WorkerUserPreferences | null }>> {
+    return workerFetch<{ preferences: WorkerUserPreferences | null }>('/api/preferences', {
+      method: 'GET',
+    });
+  },
+
+  // Persist user theme, accent color, and voice selection to Cloudflare D1 [Commented by: Google AI Studio on 28/11/2026 06:47]
+  async updatePreferences(
+    updates: Partial<Pick<WorkerUserPreferences, 'theme' | 'accent_family' | 'accent_color' | 'voice_id'>>
+  ): Promise<WorkerApiResponse<{ preferences: WorkerUserPreferences }>> {
+    return workerFetch<{ preferences: WorkerUserPreferences }>('/api/preferences', {
+      method: 'PUT',
+      body: JSON.stringify(updates),
     });
   },
 };

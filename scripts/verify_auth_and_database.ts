@@ -1,6 +1,6 @@
 // nanobot Comprehensive Supabase Auth, Database, Storage, and RLS Verification Suite [Commented by: Google AI Studio on 01/11/2026 04:18 PM]
 
-import { formatAuthEmail, formatLegacyAuthEmail, isLegacyAuthEmail, validateUsername } from '../src/lib/supabase';
+import { formatAuthEmail, formatLegacyAuthEmail, isLegacyAuthEmail, validateUsername, deleteUserAccountFromSupabase } from '../src/lib/supabase';
 import { NANOBOT_BACKUP_FILENAME, buildChatBackupPayload, serializeChatBackupJson } from '../src/lib/jsonExport';
 import { generateSalt, deriveKeyFromPassword, encryptText, decryptText, decryptData, generateShareKey, encryptShareSnapshot, decryptShareSnapshot } from '../src/lib/crypto';
 // Import pure shared noodle utilities for Stage 4D verification [Commented by: Google AI Studio at 24/11/2026 17:13]
@@ -11,6 +11,26 @@ import {
   extractShareIdFromInput,
   SHARED_NOODLE_PRIVACY_DISCLOSURE,
 } from '../src/lib/shareUtils';
+// Import pure local storage and worker client modules for H-5 regression testing [Commented by: Google AI Studio on 28/11/2026 07:35]
+import {
+  REGULAR_GUEST_CHATS_KEY,
+  LEGACY_ENCRYPTED_CHATS_KEY,
+  INCOGNITO_CHATS_KEY,
+  INCOGNITO_MODE_KEY,
+  getEncryptedChatsStorageKey,
+  getLocalFileOutputsStorageKey,
+  saveRegularChatsLocally,
+  loadRegularChatsLocally,
+  saveIncognitoChatsLocally,
+  loadIncognitoChatsLocally,
+  setIncognitoModeFlagLocally,
+  getIncognitoModeFlagLocally,
+  clearIncognitoHistoryLocally,
+  saveLocalFileOutput,
+  loadLocalFileOutputs,
+  clearAllLocalChatAndFileData,
+} from '../src/lib/localChatStorage';
+import { workerClient } from '../src/lib/workerClient';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -253,27 +273,38 @@ async function runAuthAndDatabaseTests() {
   );
 
   // =========================================================================
-  // 6. Atomic Conversation Persistence (RPC & Fallback)
+  // 6. H-5 Local-Only Conversation Persistence (No Supabase Chat Writes)
   // =========================================================================
-  console.log('\n--- 6. Atomic Conversation Persistence ---');
+  console.log('\n--- 6. H-5 Local-Only Conversation Persistence ---');
+
+  const localChatStoragePath = path.resolve(process.cwd(), 'src/lib/localChatStorage.ts');
+  const localChatStorageTs = fs.readFileSync(localChatStoragePath, 'utf8');
+  const aboutModalPath = path.resolve(process.cwd(), 'src/components/AboutModal.tsx');
+  const aboutModalContent = fs.readFileSync(aboutModalPath, 'utf8');
 
   assert(
     schemaSql.includes('CREATE OR REPLACE FUNCTION public.save_conversation_and_messages'),
-    'Atomic RPC Function Defined in Schema',
-    'save_conversation_and_messages function executes upsert and message replacement inside single transaction.'
+    'Database Schema Left Intact Non-Destructively',
+    'schema.sql keeps legacy definitions intact without destructive schema modifications under H-5.'
+  );
+
+  // Verify frontend no longer calls Supabase RPC or tables for conversation/message persistence [Commented by: Google AI Studio on 28/11/2026 07:35]
+  assert(
+    !supabaseTs.includes('save_conversation_and_messages') &&
+    !supabaseTs.includes('persistConversationToSupabase') &&
+    !supabaseTs.includes('fetchRemoteConversationsFromSupabase') &&
+    !supabaseTs.includes('deleteConversationFromSupabase'),
+    'Supabase Client Has Zero Conversation/Message Sync Writes',
+    'Removed all Supabase conversation/message fetch and persistence helpers from src/lib/supabase.ts.'
   );
 
   assert(
-    supabaseTs.includes('save_conversation_and_messages') &&
-    supabaseTs.includes('p_messages: msgRows'),
-    'Client Calls Atomic RPC First',
-    'persistConversationToSupabase calls save_conversation_and_messages RPC to guarantee atomicity.'
-  );
-
-  assert(
-    supabaseTs.includes('Supabase conversation upsert failed; aborting message persistence:'),
-    'Fallback Persistence Avoids Deletion on Failure',
-    'Fallback persistence aborts before deleting existing messages if conversation upsert fails.'
+    localChatStorageTs.includes('export async function saveRegularChatsLocally') &&
+    localChatStorageTs.includes('export function saveIncognitoChatsLocally') &&
+    appContent.includes('saveRegularChatsLocally') &&
+    appContent.includes('saveIncognitoChatsLocally'),
+    'App Delegates Regular & Incognito Persistence Exclusively to Local Storage',
+    'src/App.tsx uses localChatStorage helpers exclusively for both regular and incognito chats.'
   );
 
   // =========================================================================
@@ -321,22 +352,23 @@ async function runAuthAndDatabaseTests() {
   );
 
   // =========================================================================
-  // 9. Migration Handles Errors, Empty vs Failed States & Idempotency
+  // 9. Local-Only Guest-to-Encrypted Upgrade & Zero Cloud Upload
   // =========================================================================
-  console.log('\n--- 9. Local-to-Cloud Migration Robustness ---');
+  console.log('\n--- 9. Local-Only Guest Upgrade & Zero Cloud Upload ---');
 
+  // Verify no cloud migration helper exists in supabase.ts while local guest-to-encrypted upgrade removes guest key only on success [Commented by: Google AI Studio on 28/11/2026 07:35]
   assert(
-    supabaseTs.includes('if (countErr) {') &&
-    supabaseTs.includes('Migration aborted: Unable to verify remote state due to query error:'),
-    'Migration Aborts on Query Error',
-    'migrateLocalChatsToSupabase distinguishes query error from count === 0 and aborts immediately.'
+    !supabaseTs.includes('migrateLocalChatsToSupabase') &&
+    !appContent.includes('migrateLocalChatsToSupabase'),
+    'Removed Local-to-Supabase Chat Migration',
+    'Local regular chats are never uploaded or migrated to Supabase upon sign-in.'
   );
 
   assert(
-    supabaseTs.includes('if (allSucceeded') &&
-    supabaseTs.includes('localStorage.removeItem(\'nanobot_chats\')'),
-    'Local Cache Preserved Until Remote Success',
-    'Unencrypted local chats are only removed after all conversations persist successfully.'
+    localChatStorageTs.includes('if (saveRes.success)') &&
+    localChatStorageTs.includes('storage.removeItem(REGULAR_GUEST_CHATS_KEY)'),
+    'Local Guest Cache Preserved Until Encrypted Local Write Succeeds',
+    'One-time local upgrade only removes nanobot_chats after encrypted localStorage write succeeds.'
   );
 
   // =========================================================================
@@ -356,9 +388,10 @@ async function runAuthAndDatabaseTests() {
 
   assert(
     supabaseTs.includes('deleteUserAccountFromSupabase') &&
-    supabaseTs.includes('localStorage.removeItem(`nanobot_encrypted_chats_${userId}`)'),
-    'deleteUserAccountFromSupabase Clears Local Storage & Cache',
-    'Deletes local cache entries and signs out auth session safely.'
+    supabaseTs.includes('clearAllLocalChatAndFileData(userId, { includeIncognito: true, includeGuest: true })') &&
+    localChatStorageTs.includes('getEncryptedChatsStorageKey(userId)'),
+    'deleteUserAccountFromSupabase Clears All Local Storage & Cache',
+    'Deletes regular, encrypted, incognito, and file-output local storage entries and signs out auth session safely.'
   );
 
   assert(
@@ -417,11 +450,14 @@ async function runAuthAndDatabaseTests() {
     'RPC checks if chats table exists and cascades user chat records safely.'
   );
 
+  // Frontend must never read/import from legacy remote chats, conversations, or file_code_outputs under H-5 [Commented by: Google AI Studio on 28/11/2026 07:35]
   assert(
-    supabaseTs.includes('.from(\'chats\')') &&
-    supabaseTs.includes('legacyRemote'),
-    'Frontend Migrates Legacy Remote Chats Non-Destructively',
-    'migrateLocalChatsToSupabase inspects remote public.chats and safely imports records to conversations.'
+    !supabaseTs.includes(".from('chats')") &&
+    !supabaseTs.includes(".from('conversations')") &&
+    !supabaseTs.includes(".from('messages')") &&
+    !supabaseTs.includes(".from('file_code_outputs')"),
+    'Frontend Never Queries or Writes Legacy Remote Chat Tables',
+    'supabase.ts strictly avoids reading or writing chats, conversations, messages, and file_code_outputs.'
   );
 
   // =========================================================================
@@ -532,25 +568,26 @@ async function runAuthAndDatabaseTests() {
     'Worker response indicates can_retry: true when partial failures occur, enabling safe client recovery.'
   );
 
+  // Verify fail-closed locked history behavior in localChatStorage.ts and App.tsx under H-5 [Commented by: Google AI Studio on 28/11/2026 07:35]
   assert(
-    supabaseTs.includes('nanobot_migration_progress_') &&
-    supabaseTs.includes('completedIds'),
-    'Resumable Migration Progress Tracking',
-    'migrateLocalChatsToSupabase tracks completed chat IDs to support resumption after network interruptions.'
+    localChatStorageTs.includes('if (!opts.cryptoKey)') &&
+    localChatStorageTs.includes('locked: true') &&
+    appContent.includes('isRegularHistoryLocked'),
+    'Locked Encrypted History Fails Closed Without Downgrade',
+    'Signed-in sessions without CryptoKey fail closed with locked: true rather than downgrading to plaintext.'
   );
 
   assert(
-    supabaseTs.includes('seenMsgIds') &&
-    supabaseTs.includes('existingRemote'),
-    'Duplicate Conversation & Message Import Prevention',
-    'migrateLocalChatsToSupabase deduplicates messages and skips already-migrated remote conversations.'
+    localChatStorageTs.includes('quotaError') || localChatStorageTs.includes('isQuotaError'),
+    'Local Persistence Classifies QuotaExceededError Without Cloud Fallback',
+    'localChatStorage surfaces localStorage quota errors explicitly without triggering cloud fallback.'
   );
 
   assert(
-    supabaseTs.includes('console.info(\'Legacy remote chats present but password key locked; preserving remote public.chats') &&
-    supabaseTs.includes('console.info(\'Encryption key not yet unlocked; preserving local encrypted chats'),
-    'Missing / Locked Decryption Key Safe Preservation',
-    'migrateLocalChatsToSupabase safely preserves encrypted payloads without corruption when key is locked.'
+    appContent.includes('if (!userMsgSaved)') &&
+    appContent.includes('quotaErrorNotice'),
+    'App Aborts Turn & Surfaces Local Persistence Errors Clearly',
+    'App.tsx stops generation before clearing input if saving user message locally fails and displays quota notices.'
   );
 
   // =========================================================================
@@ -666,36 +703,24 @@ async function runAuthAndDatabaseTests() {
     'Deletion logging strictly emits operation status without leaking tokens, user IDs, emails, or personal data.'
   );
 
-  // Test 8: Resumable migration crash simulation (crash between remote insert and local checkpoint)
-  let simulatedRemoteConvs = new Set<string>();
-  let simulatedLocalCheckpoints: string[] = [];
-  const simulateChatMigration = (chatId: string): { crashedBeforeCheckpoint: boolean; success: boolean } => {
-    // Check remote presence
-    if (!simulatedRemoteConvs.has(chatId)) {
-      simulatedRemoteConvs.add(chatId);
-      // Simulate crash here! (local checkpoint not written yet)
-      return { crashedBeforeCheckpoint: true, success: false };
-    }
-    // On re-run, detects remote presence, advances checkpoint
-    simulatedLocalCheckpoints.push(chatId);
-    return { crashedBeforeCheckpoint: false, success: true };
-  };
-  const run1 = simulateChatMigration('chat-1');
-  assert(Boolean(run1.crashedBeforeCheckpoint && !simulatedLocalCheckpoints.includes('chat-1')), 'Crash Simulated', 'Remote insert succeeded before crash.');
-  const run2 = simulateChatMigration('chat-1');
+  // Test 8: Fail-closed lock guard prevents overwriting encrypted local chats with plaintext [Commented by: Google AI Studio on 28/11/2026 07:35]
   assert(
-    Boolean(run2.success && simulatedLocalCheckpoints.includes('chat-1') && simulatedRemoteConvs.size === 1),
-    'Resumable Migration Crash Recovery (Zero Duplicate Conversations)',
-    'Interrupted migration detects remote presence on restart, skips re-insertion, avoids duplicates, and advances checkpoint.'
+    localChatStorageTs.includes("if (opts.userId) {\n    if (!opts.cryptoKey)") &&
+    appContent.includes('if (!isIncognito && currentUser && (!cryptoKey || isRegularHistoryLocked))'),
+    'Signed-In Locked Session Blocks Plaintext Regular Chat Writes',
+    'Requires unlocked CryptoKey before saving regular chats when signed in, preventing plaintext downgrade.'
   );
 
-  // Test 9: Simultaneous migration mutex prevents concurrent racing execution
+  // Test 9: App never imports legacy cloud archive helper r2.ts or Worker regular-chat endpoints [Commented by: Google AI Studio on 28/11/2026 07:35]
   assert(
-    supabaseTs.includes('nanobot_migration_lock_') &&
-    supabaseTs.includes('Migration currently active in another session or tab; skipping concurrent run') &&
-    supabaseTs.includes('localStorage.removeItem(lockKey);'),
-    'Simultaneous Migration Concurrency Mutex',
-    'Active migration lock prevents multiple browser tabs or rapid refreshes from racing on chat migration.'
+    !appContent.includes('./lib/r2') &&
+    !appContent.includes('getMessages(') &&
+    !appContent.includes('getFileOutputs(') &&
+    !appContent.includes('updateConversation(') &&
+    !appContent.includes('deleteConversation(') &&
+    !appContent.includes('loadWorkerConversations('),
+    'Frontend Free of R2 Chat Archives & Worker D1 Regular-Chat Calls',
+    'App.tsx does not call R2 chat archive helpers or Cloudflare Worker regular-chat D1 endpoints.'
   );
 
   // Test 10: Client verifies Supabase Auth identity on deletion failure before local cleanup
@@ -1751,13 +1776,13 @@ async function runAuthAndDatabaseTests() {
     'createForkedChatSession omits original shareId/reasoning/fileId, deep-clones messages so edits never mutate original snapshot, and preserves order/sources/attachments.'
   );
 
-  // 20.5 UI & privacy disclosure contract checks in App.tsx and workerClient.ts
+  // Updated to check browser-local personal history wording under H-5 [Commented by: Google AI Studio on 28/11/2026 07:35]
   const workerClientPath = path.resolve(process.cwd(), 'src/lib/workerClient.ts');
   const workerClientTs = fs.readFileSync(workerClientPath, 'utf8');
   const privacyAccurate =
     SHARED_NOODLE_PRIVACY_DISCLOSURE.includes('Anyone with this link') &&
     SHARED_NOODLE_PRIVACY_DISCLOSURE.includes('Cloudflare sharing database') &&
-    SHARED_NOODLE_PRIVACY_DISCLOSURE.includes('separate from your private encrypted personal history') &&
+    SHARED_NOODLE_PRIVACY_DISCLOSURE.includes('separate from your browser-local personal history') &&
     SHARED_NOODLE_PRIVACY_DISCLOSURE.includes('30 days') &&
     SHARED_NOODLE_PRIVACY_DISCLOSURE.includes('revoke') &&
     SHARED_NOODLE_PRIVACY_DISCLOSURE.includes('internal model reasoning') &&
@@ -1804,7 +1829,11 @@ async function runAuthAndDatabaseTests() {
     supabaseTs.indexOf('export async function updateUserProfileInSupabase')
   );
   const onLogoutStart = appContent.indexOf('onLogout={() => {');
-  const onLogoutBlock = onLogoutStart !== -1 ? appContent.slice(onLogoutStart, onLogoutStart + 1100) : '';
+  const onDeleteAccountStart = appContent.indexOf('onDeleteAccount={() => {');
+  const onLogoutBlock =
+    onLogoutStart !== -1 && onDeleteAccountStart > onLogoutStart
+      ? appContent.slice(onLogoutStart, onDeleteAccountStart)
+      : '';
   const accountTabEnd = settingsContent.indexOf('{/* TAB 2: AI CONFIGURATION */}');
   const accountTabSlice = accountTabEnd !== -1 ? settingsContent.slice(0, accountTabEnd) : '';
 
@@ -1812,7 +1841,8 @@ async function runAuthAndDatabaseTests() {
     signOutSection.includes("scope: 'local'") &&
     signOutSection.includes('throw new Error(') &&
     accountTabSlice.includes('{statusMessage && (') &&
-    appContent.includes('} else if (!targetUser) {') &&
+    localChatStorageTs.includes('if (opts.userId) {') &&
+    localChatStorageTs.includes('storage.setItem(REGULAR_GUEST_CHATS_KEY') &&
     onLogoutBlock.includes('setChats([])') &&
     onLogoutBlock.includes('setPasswordSecret(\'\')') &&
     onLogoutBlock.includes('setCryptoKey(null)') &&
@@ -1924,6 +1954,482 @@ async function runAuthAndDatabaseTests() {
     'Pre-Deployment Deletion Parity, Data-Retention Disclosure & Secret Docs',
     'DELETE /api/account fails fast before Auth deletion on D1/Supabase errors, purges mcp_oauth_states, UI discloses browser-local IndexedDB retention limits, and .env.example documents server-only secrets.'
   );
+
+  // =========================================================================
+  // 24. H-5 Privacy Architecture Regression Suite (Mocked localStorage + fetch)
+  // =========================================================================
+  // Functional and contract tests verifying regular/incognito local-only persistence, Cloudflare share continuity, zero cloud fallback, cleanup, and disclosures [Commented by: Google AI Studio on 28/11/2026 07:35]
+  console.log('\n--- 24. H-5 Privacy Architecture Regression Suite ---');
+
+  const origLocalStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  const origFetch = globalThis.fetch;
+
+  class MockBrowserStorage implements Storage {
+    private store = new Map<string, string>();
+    public throwOnSet: Error | null = null;
+
+    get length(): number {
+      return this.store.size;
+    }
+    clear(): void {
+      this.store.clear();
+    }
+    getItem(key: string): string | null {
+      return this.store.has(key) ? this.store.get(key)! : null;
+    }
+    key(index: number): string | null {
+      const keys = Array.from(this.store.keys());
+      return keys[index] ?? null;
+    }
+    removeItem(key: string): void {
+      this.store.delete(key);
+    }
+    setItem(key: string, value: string): void {
+      if (this.throwOnSet) {
+        throw this.throwOnSet;
+      }
+      this.store.set(key, String(value));
+    }
+    snapshotKeys(): string[] {
+      return Array.from(this.store.keys());
+    }
+  }
+
+  const mockStorage = new MockBrowserStorage();
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: mockStorage,
+    configurable: true,
+    writable: true,
+  });
+
+  const networkRequests: Array<{ url: string; method: string }> = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+    const method = init?.method || 'GET';
+    networkRequests.push({ url: urlStr, method });
+
+    if (urlStr.includes('/api/public/shares/share_h5_test')) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          share: {
+            id: 'share_h5_test',
+            title: 'Public Shared Topic',
+            messages: [
+              { role: 'user', content: 'Hello Cloudflare share' },
+              { role: 'ai', content: 'Shared response content', sources: [{ title: 'Docs', url: 'https://example.com' }] },
+            ],
+            created_at: '2026-11-28T00:00:00.000Z',
+            expires_at: '2026-12-28T00:00:00.000Z',
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    return new Response(JSON.stringify({ error: 'Unexpected fetch in mocked H-5 test' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }) as typeof fetch;
+
+  try {
+    // Regression 1: Regular chats saved and restored locally (guest + encrypted signed-in + locked fail-closed)
+    networkRequests.length = 0;
+    const guestChats = [
+      {
+        id: 'reg-guest-1',
+        title: 'Guest Local Note',
+        messages: [{ role: 'user' as const, content: 'Local guest prompt' }],
+        pinned: true,
+        updated: 1732750000000,
+      },
+    ];
+    const guestSaveRes = await saveRegularChatsLocally(guestChats);
+    const guestLoaded = await loadRegularChatsLocally();
+    assert(
+      guestSaveRes.success &&
+        guestLoaded.chats.length === 1 &&
+        guestLoaded.chats[0].title === 'Guest Local Note' &&
+        mockStorage.getItem(REGULAR_GUEST_CHATS_KEY)?.includes('Local guest prompt') === true &&
+        networkRequests.length === 0,
+      'H-5 Regression 1A: Guest Regular Chats Save & Restore Locally',
+      'Guest regular chats persist cleanly in nanobot_chats and restore without any network requests.'
+    );
+
+    const h5UserId = 'user-h5-001';
+    const h5Salt = generateSalt();
+    const h5Key = await deriveKeyFromPassword('SecretPass#2026', h5Salt);
+    const signedInChats = [
+      {
+        id: 'reg-user-1',
+        title: 'Private Encrypted Noodle',
+        messages: [
+          { role: 'user' as const, content: 'Confidential user prompt' },
+          { role: 'ai' as const, content: 'Confidential AI answer', reasoning: 'Local chain of thought' },
+        ],
+        pinned: false,
+        updated: 1732750001000,
+      },
+    ];
+    const encSaveRes = await saveRegularChatsLocally(signedInChats, {
+      userId: h5UserId,
+      cryptoKey: h5Key,
+      salt: h5Salt,
+    });
+    const rawCipherPayload = mockStorage.getItem(getEncryptedChatsStorageKey(h5UserId)) || '';
+    const encLoaded = await loadRegularChatsLocally({
+      userId: h5UserId,
+      cryptoKey: h5Key,
+      salt: h5Salt,
+    });
+
+    assert(
+      encSaveRes.success &&
+        rawCipherPayload.startsWith('enc:') &&
+        !rawCipherPayload.includes('Confidential user prompt') &&
+        encLoaded.chats.length === 1 &&
+        encLoaded.chats[0].messages[1]?.reasoning === 'Local chain of thought' &&
+        networkRequests.length === 0,
+      'H-5 Regression 1B: Signed-In Regular Chats Encrypted & Restored Locally',
+      'Signed-in regular chats encrypt locally in nanobot_encrypted_chats_<userId>, mask plaintext, restore on reload, and emit 0 network calls.'
+    );
+
+    // Locked session (currentUser present, cryptoKey unavailable) MUST fail closed & preserve ciphertext
+    const lockedLoad = await loadRegularChatsLocally({ userId: h5UserId, cryptoKey: null, salt: h5Salt });
+    const lockedSave = await saveRegularChatsLocally(
+      [{ id: 'downgrade-attempt', title: 'Plaintext Attempt', messages: [], pinned: false, updated: 1 }],
+      { userId: h5UserId, cryptoKey: null, salt: h5Salt }
+    );
+    const cipherStillIntact = mockStorage.getItem(getEncryptedChatsStorageKey(h5UserId)) === rawCipherPayload;
+    const guestUnchangedAfterLockedSave = !mockStorage.getItem(REGULAR_GUEST_CHATS_KEY)?.includes('Plaintext Attempt');
+
+    assert(
+      lockedLoad.locked === true &&
+        lockedLoad.hasEncryptedData === true &&
+        lockedLoad.chats.length === 0 &&
+        lockedSave.success === false &&
+        lockedSave.locked === true &&
+        cipherStillIntact &&
+        guestUnchangedAfterLockedSave,
+      'H-5 Regression 1C: Locked Signed-In History Fails Closed Without Plaintext Downgrade',
+      'Locked session refuses plaintext downgrade on load/save, preserves encrypted local payload intact, and prompts unlock.'
+    );
+
+    // One-time local upgrade from guest nanobot_chats once newly signed-in user unlocks
+    const upgradeUserId = 'user-h5-upgrade';
+    const upgradeLoad = await loadRegularChatsLocally({ userId: upgradeUserId, cryptoKey: h5Key, salt: h5Salt });
+    assert(
+      upgradeLoad.migratedLegacyGuestChats === true &&
+        upgradeLoad.chats.length === 1 &&
+        upgradeLoad.chats[0].id === 'reg-guest-1' &&
+        mockStorage.getItem(REGULAR_GUEST_CHATS_KEY) === null &&
+        (mockStorage.getItem(getEncryptedChatsStorageKey(upgradeUserId)) || '').startsWith('enc:') &&
+        networkRequests.length === 0,
+      'H-5 Regression 1D: Local-Only Guest-to-Encrypted Upgrade On Unlock',
+      'Guest nanobot_chats upgrades locally into encrypted per-user localStorage once unlocked without uploading to Supabase.'
+    );
+
+    // Regression 2: Incognito chats saved & restored locally under dedicated key & stay isolated
+    const incChats = [
+      {
+        id: 'inc-1',
+        title: 'Incognito Research',
+        messages: [{ role: 'user' as const, content: 'Private incognito question' }],
+        pinned: false,
+        updated: 1732750002000,
+      },
+    ];
+    const incSaveRes = saveIncognitoChatsLocally(incChats);
+    setIncognitoModeFlagLocally(true);
+    const restoredIncFlag = getIncognitoModeFlagLocally();
+    const restoredInc = loadIncognitoChatsLocally();
+    // Toggle incognito mode OFF -> history MUST NOT be wiped automatically!
+    setIncognitoModeFlagLocally(false);
+    const incAfterToggleOff = loadIncognitoChatsLocally();
+    const regularChatsAfterInc = await loadRegularChatsLocally({ userId: h5UserId, cryptoKey: h5Key, salt: h5Salt });
+
+    assert(
+      incSaveRes.success &&
+        mockStorage.getItem(INCOGNITO_CHATS_KEY)?.includes('Private incognito question') === true &&
+        mockStorage.getItem(INCOGNITO_MODE_KEY) === 'false' &&
+        restoredIncFlag === true &&
+        restoredInc.chats.length === 1 &&
+        incAfterToggleOff.chats.length === 1 &&
+        regularChatsAfterInc.chats.every((c) => c.id !== 'inc-1') &&
+        networkRequests.length === 0,
+      'H-5 Regression 2: Dedicated Incognito Storage Persists Across Refreshes & Toggle-Off',
+      'Incognito chats persist in nanobot_incognito_chats, stay separate from regular chats, and survive toggling incognito mode off.'
+    );
+
+    // Verify logout turns off incognito display flag without clearing nanobot_incognito_chats
+    assert(
+      onLogoutBlock.includes('setIncognitoModeFlagLocally(false)') &&
+        !onLogoutBlock.includes('clearIncognitoHistoryLocally()'),
+      'H-5 Regression 2B: Sign-Out Preserves Incognito History While Resetting Mode Display Flag',
+      'App.tsx onLogout resets incognito display mode cleanly without destroying dedicated incognito history.'
+    );
+
+    // Regression 3: Zero Supabase or Worker D1 regular-chat endpoints remain active
+    const workerClientMethodKeys = Object.keys(workerClient);
+    const removedWorkerMethods = [
+      'listConversations',
+      'createOrUpdateConversation',
+      'updateConversation',
+      'deleteConversation',
+      'clearAllConversations',
+      'getMessages',
+      'saveMessage',
+      'saveMessagesBatch',
+      'getFileOutputs',
+      'saveFileOutput',
+      'deleteFileOutput',
+    ];
+    const workerRegularChatMethodsAbsent = removedWorkerMethods.every((m) => !workerClientMethodKeys.includes(m));
+    const workerShareMethodsPresent =
+      typeof workerClient.createShare === 'function' &&
+      typeof workerClient.revokeShare === 'function' &&
+      typeof workerClient.getPublicShare === 'function';
+
+    assert(
+      workerRegularChatMethodsAbsent &&
+        workerShareMethodsPresent &&
+        !supabaseTs.includes('interface FileCodeOutput') &&
+        !supabaseTs.includes('interface RemoteConversationRow') &&
+        !supabaseTs.includes('interface RemoteMessageRow'),
+      'H-5 Regression 3: Worker Regular-Chat Methods & Supabase Chat Models Removed',
+      'workerClient removes all D1 regular-chat methods while preserving createShare/revokeShare/getPublicShare, and supabase.ts has zero chat/file-output models.'
+    );
+
+    // Regression 4: File outputs & reader_code stay strictly local (never Supabase/Worker)
+    networkRequests.length = 0;
+    const regFileRes = await saveLocalFileOutput(
+      h5UserId,
+      {
+        conversation_id: 'reg-user-1',
+        source_file_id: 'file-pdf-1',
+        file_name: 'report.pdf',
+        file_type: 'application/pdf',
+        output_type: 'reader_script',
+        reader_code: 'import pypdf\nprint("secret_pdf_code")',
+        extracted_output: 'Sensitive financial extraction text',
+      },
+      { cryptoKey: h5Key, salt: h5Salt, requireEncryption: true }
+    );
+    const rawFileOutputStorage = mockStorage.getItem(getLocalFileOutputsStorageKey(h5UserId, 'reg-user-1')) || '';
+    const loadedRegFileOutputs = await loadLocalFileOutputs(h5UserId, 'reg-user-1', h5Key);
+
+    const lockedFileSave = await saveLocalFileOutput(
+      h5UserId,
+      {
+        conversation_id: 'reg-user-1',
+        source_file_id: 'file-pdf-2',
+        file_name: 'locked.pdf',
+        file_type: 'application/pdf',
+        output_type: 'text_extraction',
+        extracted_output: 'Should fail locked',
+      },
+      { cryptoKey: null, salt: h5Salt, requireEncryption: true }
+    );
+
+    const incFileRes = await saveLocalFileOutput('incognito', {
+      conversation_id: 'inc-1',
+      source_file_id: 'file-inc-1',
+      file_name: 'inc.txt',
+      file_type: 'text/plain',
+      output_type: 'text_extraction',
+      reader_code: 'print("incognito_reader")',
+      extracted_output: 'Incognito extracted text',
+    });
+    const loadedIncFileOutputs = await loadLocalFileOutputs('incognito', 'inc-1', null);
+
+    assert(
+      regFileRes.success &&
+        !rawFileOutputStorage.includes('Sensitive financial extraction text') &&
+        !rawFileOutputStorage.includes('secret_pdf_code') &&
+        loadedRegFileOutputs.length === 1 &&
+        loadedRegFileOutputs[0].extracted_output === 'Sensitive financial extraction text' &&
+        loadedRegFileOutputs[0].reader_code === 'import pypdf\nprint("secret_pdf_code")' &&
+        lockedFileSave.success === false &&
+        lockedFileSave.locked === true &&
+        incFileRes.success &&
+        loadedIncFileOutputs.length === 1 &&
+        loadedIncFileOutputs[0].reader_code === 'print("incognito_reader")' &&
+        networkRequests.length === 0,
+      'H-5 Regression 4: File Outputs & reader_code Persist Strictly Locally',
+      'Extracted file outputs and AI reader_code encrypt locally for signed-in users, stay isolated in incognito scope, fail closed when locked, and emit 0 network calls.'
+    );
+
+    // Regression 5 & 6: Shared chats still use Cloudflare endpoints & public share retrieval/fork works
+    networkRequests.length = 0;
+    const publicShareRes = await workerClient.getPublicShare('share_h5_test');
+    const forkedFromPublic = publicShareRes.share
+      ? createForkedChatSession(
+          { id: publicShareRes.share.id, title: publicShareRes.share.title, messages: publicShareRes.share.messages },
+          () => 'fork-h5-1'
+        )
+      : null;
+
+    assert(
+      publicShareRes.success === true &&
+        publicShareRes.share?.title === 'Public Shared Topic' &&
+        networkRequests.some((r) => r.method === 'GET' && r.url.includes('/api/public/shares/share_h5_test')) &&
+        forkedFromPublic !== null &&
+        forkedFromPublic.id === 'fork-h5-1' &&
+        !('shareId' in forkedFromPublic) &&
+        workerIndexSql.includes("pathname === '/api/shares' && request.method === 'POST'") &&
+        workerIndexSql.includes("pathname === '/api/shares' && request.method === 'DELETE'") &&
+        workerIndexSql.includes('publicShareMatch') &&
+        workerIndexSql.includes('revokeShareMatch') &&
+        appContent.includes('workerClient.createShare(') &&
+        appContent.includes('?share='),
+      'H-5 Regression 5 & 6: Cloudflare Shared-Chat Endpoints, Retrieval & Local Fork Intact',
+      'GET /api/public/shares/:shareId retrieves snapshots cleanly, Worker preserves POST/DELETE/GET share routes, and App creates ?share= URLs and local forks.'
+    );
+
+    // Regression 7: Failed localStorage persistence surfaces error & triggers ZERO cloud fallback
+    networkRequests.length = 0;
+    const quotaErr = new Error('DOMException: QuotaExceededError');
+    quotaErr.name = 'QuotaExceededError';
+    mockStorage.throwOnSet = quotaErr;
+
+    const regQuotaFail = await saveRegularChatsLocally(guestChats);
+    const encQuotaFail = await saveRegularChatsLocally(signedInChats, { userId: h5UserId, cryptoKey: h5Key, salt: h5Salt });
+    const incQuotaFail = saveIncognitoChatsLocally(incChats);
+    const fileQuotaFail = await saveLocalFileOutput('guest', {
+      conversation_id: 'c1',
+      source_file_id: 'f1',
+      file_name: 'big.txt',
+      file_type: 'text/plain',
+      output_type: 'text_extraction',
+      extracted_output: 'payload',
+    });
+
+    mockStorage.throwOnSet = null;
+
+    // Also simulate missing localStorage completely
+    Object.defineProperty(globalThis, 'localStorage', { value: undefined, configurable: true, writable: true });
+    const noStorageRegFail = await saveRegularChatsLocally(guestChats);
+    const noStorageIncFail = saveIncognitoChatsLocally(incChats);
+    const noStorageFileFail = await saveLocalFileOutput('guest', {
+      conversation_id: 'c1',
+      source_file_id: 'f1',
+      file_name: 'big.txt',
+      file_type: 'text/plain',
+      output_type: 'text_extraction',
+      extracted_output: 'payload',
+    });
+    Object.defineProperty(globalThis, 'localStorage', { value: mockStorage, configurable: true, writable: true });
+
+    assert(
+      !regQuotaFail.success &&
+        regQuotaFail.isQuotaError === true &&
+        Boolean(regQuotaFail.error?.includes('quota')) &&
+        !encQuotaFail.success &&
+        encQuotaFail.isQuotaError === true &&
+        !incQuotaFail.success &&
+        incQuotaFail.isQuotaError === true &&
+        !fileQuotaFail.success &&
+        fileQuotaFail.isQuotaError === true &&
+        !noStorageRegFail.success &&
+        !noStorageIncFail.success &&
+        !noStorageFileFail.success &&
+        networkRequests.length === 0,
+      'H-5 Regression 7: Failed Local Persistence Surfacing Without Cloud Fallback',
+      'QuotaExceededError and unavailable localStorage fail explicitly with surfaced errors and trigger zero Supabase, Worker D1, or R2 fallback requests.'
+    );
+
+    // Regression 8A: Explicit incognito clear removes incognito keys while preserving regular encrypted history
+    clearIncognitoHistoryLocally();
+    const afterExplicitIncClear = loadIncognitoChatsLocally();
+    const afterExplicitIncFileOutputs = await loadLocalFileOutputs('incognito', 'inc-1', null);
+    const regularAfterIncClear = await loadRegularChatsLocally({ userId: h5UserId, cryptoKey: h5Key, salt: h5Salt });
+
+    assert(
+      afterExplicitIncClear.chats.length === 0 &&
+        mockStorage.getItem(INCOGNITO_CHATS_KEY) === null &&
+        afterExplicitIncFileOutputs.length === 0 &&
+        regularAfterIncClear.chats.length === 1,
+      'H-5 Regression 8A: Explicit Incognito Clear Isolates Regular History',
+      'clearIncognitoHistoryLocally wipes incognito chats and incognito file outputs without touching regular encrypted history.'
+    );
+
+    // Regression 8B: Account deletion local cleanup removes all regular, encrypted, incognito, legacy, and file-output keys
+    mockStorage.clear();
+    await saveRegularChatsLocally(signedInChats, { userId: h5UserId, cryptoKey: h5Key, salt: h5Salt });
+    await saveLocalFileOutput(
+      h5UserId,
+      {
+        conversation_id: 'reg-user-1',
+        source_file_id: 'file-pdf-1',
+        file_name: 'report.pdf',
+        file_type: 'application/pdf',
+        output_type: 'reader_script',
+        reader_code: 'print("del")',
+        extracted_output: 'extracted',
+      },
+      { cryptoKey: h5Key, salt: h5Salt, requireEncryption: true }
+    );
+    saveIncognitoChatsLocally(incChats);
+    setIncognitoModeFlagLocally(true);
+    mockStorage.setItem(REGULAR_GUEST_CHATS_KEY, '[]');
+    mockStorage.setItem(LEGACY_ENCRYPTED_CHATS_KEY, 'enc:legacy');
+    mockStorage.setItem('nanobot_active_user', h5UserId);
+    mockStorage.setItem(`nanobot_migration_progress_${h5UserId}`, '{}');
+    mockStorage.setItem(`nanobot_migration_lock_${h5UserId}`, '1');
+    mockStorage.setItem('nanobot_files_reg-user-1', '[]');
+    mockStorage.setItem('nanobot_r2_archive_reg-user-1', '[]');
+    await saveLocalFileOutput('incognito', {
+      conversation_id: 'inc-1',
+      source_file_id: 'f-inc',
+      file_name: 'a.txt',
+      file_type: 'text/plain',
+      output_type: 'text_extraction',
+      extracted_output: 'inc',
+    });
+
+    clearAllLocalChatAndFileData(h5UserId, { includeIncognito: true, includeGuest: true });
+    const remainingKeys = mockStorage.snapshotKeys();
+
+    assert(
+      remainingKeys.length === 0 &&
+        typeof deleteUserAccountFromSupabase === 'function' &&
+        appContent.includes('clearAllLocalChatAndFileData(deletedUserId, { includeIncognito: true, includeGuest: true })') &&
+        appContent.includes('clearAllOriginalFiles()') &&
+        workerIndexSql.includes("pathname === '/api/account' && request.method === 'DELETE'"),
+      'H-5 Regression 8B: Complete Local Cleanup on Account Deletion',
+      'clearAllLocalChatAndFileData removes regular, encrypted, incognito, migration, legacy, and file-output keys; Worker preserves legacy server cleanup.'
+    );
+
+    // Regression 8C: Accurate Privacy Disclosures in AboutModal & SettingsModal (no misleading localStorage security claims)
+    const disclosuresAccurate =
+      aboutModalContent.includes('Account &amp; authentication data (Supabase)') &&
+      aboutModalContent.includes('Shared Noodles (Cloudflare)') &&
+      aboutModalContent.includes('Regular chats (Browser localStorage)') &&
+      aboutModalContent.includes('Incognito chats (Browser localStorage)') &&
+      aboutModalContent.includes('does not protect data against malicious browser extensions, XSS, or compromise of the local browser or device') &&
+      settingsContent.includes('Account &amp; authentication data (Supabase)') &&
+      settingsContent.includes('Shared Noodles (Cloudflare)') &&
+      settingsContent.includes('Regular chats (Browser localStorage)') &&
+      settingsContent.includes('Incognito chats (Browser localStorage)') &&
+      settingsContent.includes('does not protect data against malicious browser extensions, XSS, or compromise of the local browser or device') &&
+      !aboutModalContent.includes('Cloudflare D1 / Supabase') &&
+      !aboutModalContent.includes('User dats') &&
+      !aboutModalContent.includes('Icognito');
+
+    assert(
+      disclosuresAccurate,
+      'H-5 Regression 8C: Privacy Disclosures Accurately Reflect Storage & Browser Threat Model',
+      'AboutModal and SettingsModal accurately document Supabase auth/account data, Cloudflare Shared Noodles, browser localStorage regular/incognito chats, and browser-compromise limits.'
+    );
+  } finally {
+    globalThis.fetch = origFetch;
+    if (origLocalStorageDescriptor) {
+      Object.defineProperty(globalThis, 'localStorage', origLocalStorageDescriptor);
+    } else {
+      delete (globalThis as Record<string, unknown>).localStorage;
+    }
+  }
 
   console.log('\n============================================================');
   console.log(`ALL VERIFICATION CHECKS COMPLETE: ${passCount}/${totalCount} TESTS PASSED`);

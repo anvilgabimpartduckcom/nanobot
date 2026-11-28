@@ -182,7 +182,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   className={`w-full bg-[#141414] border ${
                     usernameTakenError
                       ? 'border-red-500 focus:border-red-500'
-                      : 'border-[#333] focus:border-[#39ff14]'
+                      : 'border-[#333] accent-focus-border'
                   } rounded-xl px-4 py-2.5 text-white placeholder-neutral-500 focus:outline-none transition-colors select-text`}
                 />
               </div>
@@ -201,7 +201,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     onChange={(e) => setPassword(e.target.value)}
                     onKeyDown={handleCredentialKeyDown}
                     placeholder="Enter password (min. 6 characters)"
-                    className="w-full bg-[#141414] border border-[#333] rounded-xl pl-4 pr-10 py-2.5 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] transition-colors select-text"
+                    className="w-full bg-[#141414] border border-[#333] rounded-xl pl-4 pr-10 py-2.5 text-white placeholder-neutral-500 focus:outline-none accent-focus-border transition-colors select-text"
                   />
                   <button
                     type="button"
@@ -244,7 +244,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     onChange={(e) => setOpenrouterKey(e.target.value)}
                     onKeyDown={handleCredentialKeyDown}
                     placeholder="sk-or-v1-..."
-                    className="w-full bg-[#141414] border border-[#333] rounded-xl pl-4 pr-10 py-2.5 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] transition-colors select-text"
+                    className="w-full bg-[#141414] border border-[#333] rounded-xl pl-4 pr-10 py-2.5 text-white placeholder-neutral-500 focus:outline-none accent-focus-border transition-colors select-text"
                   />
                   <button
                     type="button"
@@ -287,7 +287,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     onChange={(e) => setTavilyKey(e.target.value)}
                     onKeyDown={handleCredentialKeyDown}
                     placeholder="tvly-..."
-                    className="w-full bg-[#141414] border border-[#333] rounded-xl pl-4 pr-10 py-2.5 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] transition-colors select-text"
+                    className="w-full bg-[#141414] border border-[#333] rounded-xl pl-4 pr-10 py-2.5 text-white placeholder-neutral-500 focus:outline-none accent-focus-border transition-colors select-text"
                   />
                   <button
                     type="button"
@@ -315,7 +315,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 px-4 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+                className="w-full accent-btn font-semibold py-3 px-4 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
               >
                 {loading ? 'Creating Account...' : 'Create Account'}
               </button>
@@ -325,7 +325,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <button
                     type="button"
                     onClick={() => handleSwitchMode('signin')}
-                    className="text-xs text-neutral-400 hover:text-emerald-400 transition-colors cursor-pointer"
+                    className="text-xs text-neutral-400 accent-hover-text transition-colors cursor-pointer"
                   >
                     Already have an account? <span className="underline font-medium">Sign In</span>
                   </button>
@@ -338,7 +338,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       href="https://tropical-chime-8c1.notion.site/How-to-set-up-nanobot-3fab104092f3801db298e6c12617a2be"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-emerald-400 hover:text-emerald-300 underline font-medium"
+                      className="accent-text hover:opacity-80 underline font-medium"
                     >
                       Visit here
                     </a>
@@ -368,7 +368,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   onChange={(e) => setUsername(e.target.value)}
                   onKeyDown={handleCredentialKeyDown}
                   placeholder="Enter username"
-                  className="w-full bg-[#141414] border border-[#333] rounded-xl px-4 py-3 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] transition-colors select-text"
+                  className="w-full bg-[#141414] border border-[#333] rounded-xl px-4 py-3 text-white placeholder-neutral-500 focus:outline-none accent-focus-border transition-colors select-text"
                 />
               </div>
 
@@ -384,7 +384,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     onChange={(e) => setPassword(e.target.value)}
                     onKeyDown={handleCredentialKeyDown}
                     placeholder="Enter password"
-                    className="w-full bg-[#141414] border border-[#333] rounded-xl pl-4 pr-10 py-3 text-white placeholder-neutral-500 focus:outline-none focus:border-[#39ff14] transition-colors select-text"
+                    className="w-full bg-[#141414] border border-[#333] rounded-xl pl-4 pr-10 py-3 text-white placeholder-neutral-500 focus:outline-none accent-focus-border transition-colors select-text"
                   />
                   <button
                     type="button"
@@ -412,7 +412,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 px-4 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+                className="w-full accent-btn font-semibold py-3 px-4 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
               >
                 {loading ? 'Signing in...' : 'Sign In'}
               </button>
@@ -421,7 +421,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <button
                   type="button"
                   onClick={() => handleSwitchMode('signup')}
-                  className="text-xs text-neutral-400 hover:text-emerald-400 transition-colors cursor-pointer"
+                  className="text-xs text-neutral-400 accent-hover-text transition-colors cursor-pointer"
                 >
                   Don't have an account? <span className="underline font-medium">Sign Up</span>
                 </button>

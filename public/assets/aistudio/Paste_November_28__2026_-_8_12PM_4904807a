@@ -1,0 +1,1294 @@
+We'll be bringing in multiple features in nanobot, so get ready!
+
+1. in the 'About nanobot' sections, in the 'Special thanks to' text, remove the name of google gemini.
+
+2. The 'About nanobot' sections need to be upgraded. Replace the entire text block with this new text block (i have provided the text inside the backticks, but you don't give the backticks in the actual code, only the text) (don't touch the 'Special thanks to' text or any text below it. the text above it needs to be upgraded):
+
+```New_Text
+
+## About nanobot
+
+AI should be a tool, which is free to use, easy to set up, and can be used in many use cases. So we created nanobot, a completely free-to-use AI chat bot that runs on the API keys provided by an user.
+
+## Understand what dats is being collected and saved to servers
+
+We do not want your data, so understand what data is backed up in the server when you use nanobot:
+
+    i. Your provided username and password.
+    ii. Your provided API keys.
+    iii. Shared Noodles for 30-days only.
+    iv. Connected Add-ons.
+    v. Code outputs which have been generated as a result for the code written by the AI model for reading your uploaded files.
+
+We never back up the following data in the server:
+
+    i. Regular chats.
+    ii. Icognito chats.
+
+## Other links you'd like to visit
+
+See nanobot's source code (this'll be a hyperlink and point to: https://github.com/anvilgabimpartduckcom/nanobot)
+
+See the latest updates in nanobot (this'll be a hyperlink and point to: https://github.com/anvilgabimpartduckcom/nanobot#-latest-updates)
+
+See our full catalog of products (this'll be a hyperlink and point to: https://github.com/anvilgabimpartduckcom)
+
+Try AI News (this'll be a hyperlink and point to: https://tropical-chime-8c1.notion.site/AI-News-3e6b104092f38092a013ff0804763a13)
+
+```
+
+3. In a new chat interface, put three buttons to the top-middle place. the buttons are to be side-by-side. name them 'Chat','Agent','Voice'. i'll give you the instructions next.
+
+4. when the 'Chat' button is clicked, the screen will open a new chat, and the button will be highlighted (this'll be the default position).
+
+5. when the 'Voice' button is clicked, the screen will change. all buttons and stuff will get slight changes. first, the chat box and it's buttons will disappear. instead, a microphone button will appear in place of it, in the middle of the screen. to the left of this button, there'll be a plus button, and clicking it, users will be able to upload files. the three ... menu button which was placed to the top-right will be as it is.
+
+to start chatting, users will have to click the microphone button. it'll get activated, and the web speech api will be used to take voice input. then, the microphone button and the plus button will move downwards (as happens with the chatbox in 'Chat' mode). then, this recorded voice input will directly sent to the ai model (the nemotron model which is being used as the main ai model for the chat) with model training turned off and no reasoning. search, scrap and all other tools will be available to the model so that it can use them to answer.
+
+next, when the model generates an answer, it'll be sent to fish-audio/s2.1-pro-free:free model. for this model, whether model training will be off or on will be decided by the user's settings configuration. this fish model will create an audio of the model's answer, and then that audio will be heard by the user.
+
+all this time, other visuals ('Searching Online for (number of queries)...' or 'Scraping (no, of websites) websites...' or whichever tool is being used (for the plugins maybe)), will be shown just like they are shown for chat mode. oh, and a live transcript will also be shown.
+
+now i'll tell you some specific instructions. fish audio has some very specific features which might improve the speech. here is how that works:
+
+# **Research Report: Fish Audio S2.1 Pro Free on OpenRouter**
+
+Free model
+
+Text-to-Speech
+
+Research updated: 28 November 2026
+
+[Fish Audio S2.1 Pro: API de Texto a Voz gratuita para desarrolladores - Fish Audio Blog](https://images.openai.com/static-rsc-4/_zU5KHopIySvT8NAuXApRv80t0fW_8-BJS22YVmpDaVfYLHP-74AXkCIbeizedQNL2dO6I3FY_OabGOOnvGPr3m1QMo5G4lZzQWpRC-hawRRUwG54q9t4FNYjBycEALgsouT5uofidwVGvo24dmJPkIMfAN4WYJtuRTPu8iC_MM?purpose=inline)
+
+[fish.audio](https://fish.audio/blog/s2-1-pro-free-api/?utm_source=chatgpt.com)
+
+**Model identifier**
+
+`fish-audio/s2.1-pro-free:free`
+
+**Provider:** Fish Audio
+
+**Platform:** OpenRouter
+
+**Task:** Text-to-speech (TTS), converting written text into generated speech.
+
+## **1. What exactly is this model?**
+
+Fish Audio S2.1 Pro is a neural speech synthesis model designed to generate natural-sounding human speech.
+
+The Free variant available through OpenRouter is described as having the same synthesis capabilities as the paid S2.1 Pro model, rather than being a smaller model with reduced speech quality.
+
+Its main capabilities include:
+
+- Natural-sounding speech generation.
+- Multilingual speech synthesis.
+- Expressive delivery and emotional variation.
+- Voice selection and voice-reference support.
+- Multi-speaker dialogue.
+- Streaming audio generation.
+
+Fish Audio advertises support for **83 languages**, including English, Japanese, Chinese, Korean, Spanish, Arabic, French, German and Portuguese.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://fish.audio\&sz=32)
+
+Fish Audio Blog+1
+
+
+
+### **What does the&#x20;**`:free`**&#x20;suffix mean?**
+
+The model identifier has two parts:
+
+| Component       | Meaning                            |
+| --------------- | ---------------------------------- |
+| `fish-audio`    | Model provider                     |
+| `s2.1-pro-free` | Model variant                      |
+| `:free`         | OpenRouter's free-tier designation |
+
+The model is available at zero listed generation cost on OpenRouter.
+
+However, free availability does not mean unlimited guaranteed access. OpenRouter applies rate limits, and Fish Audio does not guarantee production-level latency or availability for the free offering.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://openrouter.ai\&sz=32)
+
+OpenRouter+1
+
+
+
+**Important distinction:** Fish Audio's direct API and OpenRouter's free offering have separate service conditions. Fish Audio's published free-access announcement currently states an extension through November 30, 2026. Do not assume that this deadline automatically determines OpenRouter's separate availability.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://fish.audio\&sz=32)
+
+Fish Audio Blog+1
+
+
+
+## **2. How does it work?**
+
+The basic process is:
+
+**1. Text input**
+
+Your application supplies the text to be spoken.
+
+**2. Speech configuration**
+
+Voice, language, delivery instructions and output settings.
+
+**3. Fish Audio synthesis**
+
+The model generates speech audio from the supplied text.
+
+**4. Audio response**
+
+OpenRouter returns audio bytes, such as an MP3 file.
+
+The API uses:
+
+```
+POST https://openrouter.ai/api/v1/audio/speech
+```
+
+Authentication uses your OpenRouter API key:
+
+```
+Authorization: Bearer YOUR_OPENROUTER_API_KEY
+Content-Type: application/json
+```
+
+Unlike ordinary chat-completion requests, successful speech requests return raw audio bytes rather than a JSON response containing generated text.
+
+OpenRouter also supplies an `X-Generation-Id` response header, which is useful for tracking requests and troubleshooting.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://openrouter.ai\&sz=32)
+
+OpenRouter+1
+
+
+
+## **3. Available parameters and their purposes**
+
+This is one of the most important sections when integrating the model.
+
+There are two categories:
+
+1. Standard OpenRouter speech parameters.
+2. Fish Audio-specific speech controls.
+
+### **A. Standard parameters**
+
+| Parameter         | Purpose                         | Recommendation                             |
+| ----------------- | ------------------------------- | ------------------------------------------ |
+| `model`           | Selects the model               | Use the exact model ID                     |
+| `input`           | Text to synthesize              | Required                                   |
+| `voice`           | Selects a voice                 | Optional when using the documented default |
+| `response_format` | Audio output format             | `mp3`                                      |
+| `speed`           | Speaking speed                  | Start at `1.0`                             |
+| `instructions`    | Delivery instructions           | Use natural-language directions            |
+| `stream_format`   | Streaming response mode         | Use default unless needed                  |
+| `output_delivery` | Audio bytes or downloadable URL | Use `stream` by default                    |
+
+The OpenRouter model page does not publish a dedicated voice list for this model. Fish Audio's own documentation confirms that its default voice can be used without supplying a custom `reference_id`.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://openrouter.ai\&sz=32)
+
+OpenRouter+1
+
+
+
+### **B. Fish Audio-specific controls**
+
+Fish Audio supports additional controls through its speech interface.
+
+| Parameter / control | Purpose                          |
+| ------------------- | -------------------------------- |
+| `reference_id`      | Selects a saved Fish Audio voice |
+| `[whispering]`      | Requests whispering delivery     |
+| `[excited]`         | Requests excited delivery        |
+| `[sad]`             | Requests sad delivery            |
+| `[laugh]`           | Requests a laughter vocal effect |
+| `[angry]`           | Requests angry delivery          |
+| `prosody`           | Controls speech characteristics  |
+| `temperature`       | Controls generation variation    |
+| `top_p`             | Controls sampling diversity      |
+| `chunk_length`      | Controls text segmentation       |
+
+There is an important integration distinction: OpenRouter documents the bracketed delivery controls and `instructions` support directly. The additional low-level Fish parameters are documented in other Fish-compatible interfaces, but their exact forwarding and availability through this particular OpenRouter model have not all been independently confirmed.
+
+Therefore, do not assume that every Fish API parameter can be supplied directly to OpenRouter.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://openrouter.ai\&sz=32)
+
+OpenRouter Documentation+2
+
+
+
+## **4. Understanding the important parameters**
+
+Here is how I recommend approaching the controls.
+
+### **Temperature**
+
+Temperature influences variation in speech generation.
+
+- Lower values generally favour more consistent generation.
+- Higher values can produce greater variation.
+- It is not a direct speaking-speed or loudness control.
+
+Fish's published S2-Pro-compatible inference documentation lists a default temperature of `0.7` and a range of `0–1`.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://github.com\&sz=32)
+
+GitHub+1
+
+
+
+**Recommendation:** Start with the default. Only experiment with temperature if you have verified that OpenRouter forwards it correctly.
+
+### **Top P**
+
+Top P is another sampling control. It influences the range of candidate generation choices considered by the model.
+
+Fish's inference documentation lists `0.7` as its default.
+
+**Recommendation:** Leave it at `0.7` initially. Changing temperature and Top P simultaneously makes it harder to identify which setting improved or degraded the result.
+
+### **Speed**
+
+The speed parameter controls the speaking rate where supported.
+
+| Value | Intended effect   |
+| ----- | ----------------- |
+| 0.75  | Slower            |
+| 0.85  | Moderately slower |
+| 1.00  | Normal            |
+| 1.15  | Moderately faster |
+| 1.25  | Faster            |
+
+Fish's compatible speech interfaces document a speed range of 0.5–2.0. However, OpenRouter cautions that speed support varies by provider. Verify the behaviour with actual requests before relying on it.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://infron.ai\&sz=32)
+
+Infron+1
+
+
+
+### **Chunk length**
+
+Chunking divides long text into smaller segments for synthesis.
+
+For example:
+
+```
+Paragraph 1 → Audio chunk 1
+Paragraph 2 → Audio chunk 2
+Paragraph 3 → Audio chunk 3
+```
+
+Fish's compatible S2-Pro inference documentation uses a default chunk length of 200, while a third-party description of the S2.1 OpenRouter interface reports a default of 300. These are interface-specific values, not a confirmed universal OpenRouter setting.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://github.com\&sz=32)
+
+GitHub+1
+
+
+
+**Recommendation:** Let the service handle chunking initially. For long documents, split at natural paragraph or sentence boundaries rather than arbitrary character positions.
+
+### **Instructions**
+
+This is particularly useful for controlling narration.
+
+Example:
+
+```
+{
+  "instructions": "Speak clearly, naturally and calmly. Use a moderately slow pace with accurate pronunciation."
+}
+```
+
+OpenRouter specifically documents support for Fish Audio delivery instructions. It incorporates them into the text as speech directions.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://openrouter.ai\&sz=32)
+
+OpenRouter Documentation+1
+
+
+
+## **5. Voice and emotional control**
+
+One of the strongest aspects of Fish Audio is its ability to follow expressive speech directions.
+
+Instead of generating monotonous speech, you can request different delivery styles.
+
+**[whispering]**
+
+Quiet, whispered delivery
+
+**[excited]**
+
+Energetic and enthusiastic delivery
+
+**[sad]**
+
+Sad emotional delivery
+
+**[angry]**
+
+Angry or frustrated delivery
+
+**[laugh]**
+
+Laughter effect
+
+**[calm]**
+
+Calm delivery
+
+For example:
+
+```
+[calm] Welcome to today's presentation.
+
+[excited] We have something extraordinary to show you!
+
+[whispering] But first, there is something you should know.
+```
+
+These are illustrative delivery directions, not a guarantee that every descriptive tag will produce an identical result across voices.
+
+### **Custom voices**
+
+Fish Audio supports custom voice selection using a saved voice reference ID.
+
+Conceptually:
+
+```
+{
+  "model": "fish-audio/s2.1-pro-free:free",
+  "input": "Welcome to the presentation.",
+  "voice": "YOUR_FISH_VOICE_ID",
+  "response_format": "mp3"
+}
+```
+
+OpenRouter's Fish integration maps voice references to Fish Audio's `reference_id` mechanism.
+
+Fish Audio also documents voice cloning using reference audio. OpenRouter's TTS guide describes reference recordings as `input_references`, with optional transcripts. This is a different mechanism from selecting an already saved voice.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://github.com\&sz=32)
+
+GitHub+1
+
+
+
+## **6. Multiple speakers**
+
+This is another useful capability.
+
+Fish Audio models support multi-speaker synthesis, allowing different speakers to participate in the same generated dialogue.
+
+Example:
+
+```
+{
+  "model": "fish-audio/s2.1-pro-free:free",
+  "input": "<|speaker:0|>Hello!<|speaker:1|>Hello, how are you?",
+  "response_format": "mp3"
+}
+```
+
+For this type of request, OpenRouter associates each speaker with a corresponding voice reference.
+
+Conceptually:
+
+- Speaker 0 → Voice A
+- Speaker 1 → Voice B
+- Speaker 0 → Voice A again
+
+This is useful for conversations, narrated stories and educational dialogues.
+
+OpenRouter documents this integration explicitly. It also notes that the additional speaker markers and reference information contribute to the input sent to Fish Audio.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://openrouter.ai\&sz=32)
+
+OpenRouter Documentation+1
+
+
+
+## **7. Recommended configurations**
+
+These are starting configurations rather than experimentally established optimal settings.
+
+Recommended default
+
+**Natural narration**
+
+Suitable for articles, explanations, educational material and general reading.
+
+```
+{
+  "model": "fish-audio/s2.1-pro-free:free",
+  "input": "Your text goes here.",
+  "response_format": "mp3",
+  "speed": 1.0,
+  "instructions": "Speak naturally and clearly, with accurate pronunciation and smooth sentence transitions."
+}
+```
+
+Best starting point for general-purpose use.
+
+**Educational narration**
+
+```
+{
+  "model": "fish-audio/s2.1-pro-free:free",
+  "input": "Your educational text goes here.",
+  "response_format": "mp3",
+  "instructions": "Speak like a clear and experienced teacher. Explain naturally, maintain consistent pacing, and emphasize important terminology."
+}
+```
+
+Useful for lessons, study material and textbook reading.
+
+**Expressive storytelling**
+
+```
+{
+  "model": "fish-audio/s2.1-pro-free:free",
+  "input": "[excited] The adventure was about to begin! [whispering] Nobody knew what was waiting ahead.",
+  "response_format": "mp3",
+  "instructions": "Deliver an engaging story with expressive but natural emotional variation."
+}
+```
+
+Useful for stories and character-oriented narration.
+
+## **8. Output formats**
+
+OpenRouter documents the following general speech formats:
+
+| Format | Characteristics        | Best use                     |
+| ------ | ---------------------- | ---------------------------- |
+| MP3    | Compressed audio       | General playback and storage |
+| PCM    | Uncompressed audio     | Real-time audio pipelines    |
+| WAV    | Audio file with header | Editing and compatibility    |
+
+For this particular model, OpenRouter's example uses MP3.
+
+I recommend MP3 for ordinary applications because it is convenient to store, distribute and play.
+
+Do not assume that every format is supported by every model. The actual provider capabilities must be checked.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://openrouter.ai\&sz=32)
+
+OpenRouter+1
+
+
+
+### **Streaming versus complete audio**
+
+There are two different concepts:
+
+- **Streaming:** Audio can be delivered as it becomes available.
+- **Complete response:** The application waits for the generated audio response before processing the file.
+
+For real-time applications, streaming can reduce perceived waiting time. For downloadable narration, receiving the complete MP3 is generally simpler.
+
+OpenRouter supports audio streaming and documents the response handling requirements in its TTS guide.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://openrouter.ai\&sz=32)
+
+OpenRouter Documentation+1
+
+
+
+## **9. Practical API implementation**
+
+Here is a minimal Python example using the OpenAI Python SDK with OpenRouter.
+
+Install:
+
+```
+pip install openai
+```
+
+Set your API key:
+
+```
+export OPENROUTER_API_KEY="your_api_key"
+```
+
+Python implementation:
+
+```
+import osfrom openai import OpenAIclient = OpenAI(    base_url="https://openrouter.ai/api/v1",    api_key=os.environ["OPENROUTER_API_KEY"])response = client.audio.speech.create(    model="fish-audio/s2.1-pro-free:free",    input="Hello! This is a test of Fish Audio S2.1 Pro.",    response_format="mp3")response.write_to_file("output.mp3")print("Audio generated successfully.")
+```
+
+This uses OpenRouter's documented OpenAI-compatible speech endpoint.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://openrouter.ai\&sz=32)
+
+OpenRouter+1
+
+
+
+### **Important implementation detail**
+
+A normal chat-completion request looks like:
+
+```
+POST /api/v1/chat/completions
+```
+
+But Fish Audio uses:
+
+```
+POST /api/v1/audio/speech
+```
+
+Do not implement it as a normal chat model.
+
+Your application must handle binary audio responses, not expect a JSON object containing an assistant message.
+
+## **10. Best practices**
+
+Here are the practices I recommend.
+
+| Area             | Best practice                                                  |
+| ---------------- | -------------------------------------------------------------- |
+| Text preparation | Use proper punctuation and paragraph breaks                    |
+| Pronunciation    | Write unfamiliar names and abbreviations carefully             |
+| Language         | Keep language usage consistent within a segment when practical |
+| Emotion          | Use descriptive instructions sparingly                         |
+| Speed            | Begin with 1.0                                                 |
+| Temperature      | Start with the model default                                   |
+| Top P            | Start with the model default                                   |
+| Chunking         | Split long documents at paragraph boundaries                   |
+| Audio format     | Prefer MP3 for ordinary playback                               |
+| Voice            | Test several permitted voice options                           |
+| Errors           | Check HTTP status before saving audio                          |
+| Streaming        | Use streaming when low latency matters                         |
+| Reliability      | Implement retry handling for temporary failures                |
+
+### **A. Avoid excessively complicated instructions**
+
+Compare:
+
+**Less effective:**
+
+```
+Speak emotionally, professionally, enthusiastically,
+slowly, quickly, dramatically, calmly and naturally.
+```
+
+**Better:**
+
+```
+Speak naturally and clearly.
+Use a conversational pace and moderate emotional expression.
+Pronounce technical terms accurately.
+```
+
+Giving conflicting instructions makes the intended delivery less clear.
+
+### **B. Prepare long text properly**
+
+For a lengthy article, avoid sending the entire document as one enormous request.
+
+Instead:
+
+1. Divide it into logical sections.
+2. Preserve sentence boundaries.
+3. Generate each section.
+4. Maintain the same voice reference.
+5. Join the resulting audio files if a single recording is needed.
+
+This also makes failed sections easier to regenerate.
+
+### **C. Handle errors correctly**
+
+OpenRouter's documentation identifies several important considerations:
+
+| HTTP status | What to investigate                      |
+| ----------- | ---------------------------------------- |
+| 400         | Invalid request or unsupported parameter |
+| 401         | Authentication problem                   |
+| 429         | Rate limit                               |
+| 5xx         | Provider or service failure              |
+
+Use exponential backoff for temporary failures rather than repeatedly sending requests immediately. Always preserve the generation ID for troubleshooting when available.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://github.com\&sz=32)
+
+GitHub+1
+
+
+
+## **11. Limitations and potential problems**
+
+Important considerations
+
+Despite its capabilities, this model has limitations.
+
+**1. No production guarantees**
+
+The free variant is not intended to provide contractual uptime or latency guarantees.
+
+**2. Rate limits**
+
+Zero pricing does not mean unlimited request frequency. Requests may be throttled.
+
+**3. Voice availability**
+
+OpenRouter does not publish a dedicated voice list on this model's listing. Do not assume that every Fish Audio voice is supported.
+
+**4. Parameter compatibility**
+
+Not every parameter from Fish Audio's direct API is necessarily exposed through OpenRouter.
+
+**5. Pronunciation accuracy**
+
+Technical terminology, uncommon names, abbreviations and mixed-language text should be tested individually.
+
+**6. Privacy**
+
+Fish Audio's free API announcement states that requests may be used to improve model quality. Review the applicable data-handling policies before submitting confidential material, personal information or private voice recordings.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://fish.audio\&sz=32)
+
+Fish Audio Blog+1
+
+
+
+**7. Commercial use**
+
+Do not assume that free API availability automatically grants unrestricted commercial rights. Check the current provider terms and applicable usage conditions.
+
+## **12. My recommended configuration**
+
+For a general-purpose application, I would start with the following:
+
+## **Recommended baseline**
+
+Starting configuration
+
+| Setting         | Value                                                      |
+| --------------- | ---------------------------------------------------------- |
+| Model           | `fish-audio/s2.1-pro-free:free`                            |
+| Endpoint        | `/api/v1/audio/speech`                                     |
+| Response format | `mp3`                                                      |
+| Speed           | `1.0`                                                      |
+| Temperature     | Default (`0.7` in Fish-compatible inference documentation) |
+| Top P           | Default (`0.7` in Fish-compatible inference documentation) |
+| Voice           | Default initially                                          |
+| Instructions    | Clear, natural narration                                   |
+| Chunking        | Automatic initially                                        |
+| Streaming       | Optional                                                   |
+| Retry handling  | Exponential backoff                                        |
+
+Temperature and Top P defaults refer to Fish's compatible inference documentation, not independently verified OpenRouter parameter forwarding.
+
+## **13. Further research: What should be tested?**
+
+I would not declare a configuration optimal without testing actual generated audio.
+
+A useful evaluation should compare:
+
+| Test                   | What to evaluate              |
+| ---------------------- | ----------------------------- |
+| Normal English         | Naturalness and pronunciation |
+| Long paragraphs        | Consistency and pauses        |
+| Technical terminology  | Pronunciation accuracy        |
+| Indian English         | Accent and intelligibility    |
+| Hindi                  | Language handling             |
+| English-Hindi mixture  | Code-switching quality        |
+| Emotional narration    | Instruction adherence         |
+| Multi-speaker dialogue | Speaker consistency           |
+| Long-form generation   | Reliability and continuity    |
+| Different speeds       | Intelligibility and pacing    |
+
+I particularly recommend testing Indian English and Hindi separately rather than assuming the model handles both equally well.
+
+## **14. Final assessment**
+
+Worth evaluating
+
+Fish Audio S2.1 Pro Free is a strong candidate for applications requiring free, expressive speech generation.
+
+Its most interesting characteristics are:
+
+1. The same advertised synthesis capabilities as S2.1 Pro.
+2. Multilingual speech generation.
+3. Natural-language delivery instructions.
+4. Custom voice references.
+5. Multi-speaker synthesis.
+6. OpenRouter integration through a dedicated TTS endpoint.
+7. Zero listed generation cost.
+
+Its biggest trade-off is reliability: the free offering does not provide production guarantees.
+
+For a prototype, educational narration system or experimental voice-enabled application, it is worth evaluating. For an application requiring guaranteed uninterrupted service, the free tier should not be the only speech-generation option.
+
+## **15. Primary research sources**
+
+These are the most useful references for implementation and further investigation.
+
+[image](https://www.google.com/s2/favicons?domain=https://openrouter.ai\&sz=32)
+
+**OpenRouter documentation**
+
+- [S2.1 Pro Free – Official model listing](https://openrouter.ai/fish-audio/s2.1-pro-free:free?utm_source=chatgpt.com)
+- [Text-to-Speech API documentation](https://openrouter.ai/docs/guides/overview/multimodal/tts?utm_source=chatgpt.com)
+- [OpenRouter TTS tutorial](https://openrouter.ai/blog/tutorials/text-to-speech/?utm_source=chatgpt.com)
+
+  [image](https://www.google.com/s2/favicons?domain=https://fish.audio\&sz=32)
+
+  **Fish Audio documentation**
+- [S2.1 Pro Free announcement](https://fish.audio/blog/s2-1-pro-free-api/?utm_source=chatgpt.com)
+- [Fish Audio API Quick Start](https://github.com/fishaudio/docs/blob/main/developer-guide/getting-started/quickstart.mdx?utm_source=chatgpt.com)
+- [Fish Speech inference documentation](https://github.com/fishaudio/fish-speech/blob/main/docs/en/inference.md?utm_source=chatgpt.com)
+
+  [image](https://www.google.com/s2/favicons?domain=https://github.com\&sz=32)
+
+  **Additional technical references**
+- [Fish Audio inference API client](https://github.com/fishaudio/fish-speech/blob/main/tools/api_client.py?utm_source=chatgpt.com)
+- [Detailed parameter schema (third-party reference)](https://infron.ai/models/fish-audio/s2.1-pro-free/text-to-audio/api-reference?utm_source=chatgpt.com)
+
+## **Appendix – Technical terminology**
+
+- **TTS (Text-to-Speech):** Technology that converts written text into spoken audio.
+- **Neural synthesis:** Speech generation using trained artificial neural networks.
+- **API:** An interface through which software applications communicate.
+- **Endpoint:** A specific API address that accepts requests.
+- **JSON:** A structured format for exchanging data.
+- **Binary audio:** Audio data represented as bytes rather than readable text.
+- **Voice cloning:** Reproducing characteristics of a reference voice.
+- **Reference ID:** An identifier associated with a saved voice.
+- **Prosody:** The rhythm, pitch, stress and intonation of speech.
+- **Temperature:** A sampling parameter influencing generation variation.
+- **Top P:** A sampling method that restricts generation choices to a probability-defined group.
+- **Chunking:** Dividing long text into smaller processing segments.
+- **Streaming:** Delivering generated audio progressively.
+- **Latency:** The delay between making a request and receiving a response.
+- **TTFA:** Time to First Audio, measuring how long it takes for the first audio output to become available.
+- **SLA:** Service Level Agreement, a formal commitment regarding service reliability or performance.
+- **PCM:** Uncompressed digital audio representation.
+- **MP3:** A compressed digital audio format.
+- **WAV:** An audio file container commonly used for uncompressed audio.
+
+**Suggested next step:** Test this model against a small set of English, Hindi, Indian English and long-form narration samples, then establish a verified configuration before integrating it into an application.
+
+so, the model has to output it's text accordingly.
+
+next, put a 'Choose Voice' button to microphone button for new chats and running chats (for the voice mode). when this button will be clicked, a pop-up will open with the following list of voice. the text sent by the model will be sent to fish audio along with the corresponding voice id. the voice chosen by the user will be saved to cloud, and will get updated if the user updates it.
+Random [in this case, all the voice names will be sent to the model. the model will then have to output a <voice> (voice name) </voice> block, and the code will send the corresponding voice id]
+
+# **Fish Audio S2.1 Pro Free: Voices, Speech Speed and Emotion Tags**
+
+Model: `fish-audio/s2.1-pro-free:free`
+
+There are three separate controls to understand:
+
+1. **Voice ID:** Determines whose voice is generated.
+2. **Speech speed:** Determines how quickly the voice speaks.
+3. **Emotion and delivery tags:** Determine how the voice expresses the text.
+
+One important distinction: OpenRouter does not publish a complete voice catalogue for this model. Fish Audio maintains the underlying voice library, and its public voices can be selected using voice IDs.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://openrouter.ai\&sz=32)
+
+OpenRouter+2
+
+
+
+## **1. Voices and voice IDs**
+
+### **Available documented voice examples**
+
+The following eight voices and IDs are listed in a Fish Audio-compatible S2.1 Pro implementation reference. They are useful starting points, but OpenRouter does not individually certify all eight in its published catalogue.
+
+| Voice  | Voice ID                           |
+| ------ | ---------------------------------- |
+| Egirl  | `98655a12fa944e26b274c535e5e03842` |
+| Selene | `b347db033a6549378b48d00acb0d06cd` |
+| Adrian | `bf322df2096a46f18c579d0baa36f41d` |
+| Sarah  | `933563129e564b19a115bedd57b7406a` |
+| Ethan  | `536d3a5e000945adb7038665781a4aca` |
+| Laura  | `e3cd384158934cc9a01029cd7d278634` |
+| Jordan | `79d0bd3e4e5444b18f7b6d89b5927bf1` |
+| Hannah | `9a9cf47702da476aa4629e2506d4a857` |
+
+[image](https://www.google.com/s2/favicons?domain=https://runware.ai\&sz=32)
+
+Runware Docs+1
+
+### **How to use a voice ID**
+
+On OpenRouter, use the `voice` parameter:
+
+```
+{
+  "model": "fish-audio/s2.1-pro-free:free",
+  "input": "Hello! Welcome to the presentation.",
+  "voice": "bf322df2096a46f18c579d0baa36f41d",
+  "response_format": "mp3"
+}
+```
+
+This selects Adrian.
+
+**Can you use other Fish Audio voices?**
+
+Fish Audio's documentation explicitly allows you to use a voice model ID from its library as `reference_id`. OpenRouter's interface uses `voice` instead.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://github.com\&sz=32)
+
+GitHub+1
+
+
+
+The public library is not limited to those eight examples.
+
+- A public voice can be selected using its model ID.
+- A custom voice can be selected using its registered reference ID, subject to account permissions.
+- A default voice can be used by omitting `voice` if the provider supports its default.
+- Private voices belonging to other accounts should not be assumed accessible.
+
+Official voice library: [Fish Audio Voice Library](https://fish.audio/?utm_source=chatgpt.com).
+
+The ID is normally the final part of a voice's model URL:
+
+```
+https://fish.audio/m/VOICE_ID
+```
+
+For example:
+
+```
+https://fish.audio/m/9a9cf47702da476aa4629e2506d4a857
+```
+
+This is Hannah's voice ID.
+
+## **2. Speech speed**
+
+The OpenRouter TTS API has a `speed` parameter.
+
+```
+{
+  "speed": 1.0
+}
+```
+
+Its general meaning is:
+
+| Speed | Intended delivery   |
+| ----- | ------------------- |
+| 0.50  | Very slow           |
+| 0.60  | Slow                |
+| 0.70  | Slow and deliberate |
+| 0.80  | Moderately slow     |
+| 0.90  | Slightly slow       |
+| 1.00  | Normal              |
+| 1.10  | Slightly fast       |
+| 1.20  | Fast                |
+| 1.30  | Noticeably fast     |
+| 1.50  | Very fast           |
+| 2.00  | Extremely fast      |
+
+
+
+Recommended starting point
+
+`1.0`
+
+
+
+**Important compatibility warning:** OpenRouter documents `speed` as a general TTS parameter, but does not publish a speed range for S2.1 Pro Free. Its model-specific speed support is therefore not confirmed. Unsupported providers can ignore non-default speed or reject it.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://openrouter.ai\&sz=32)
+
+OpenRouter Documentation+1
+
+
+
+### **An alternative: control speed through text instructions**
+
+Fish Audio S2.1 supports natural-language delivery directions inside square brackets.
+
+For example:
+
+```
+[speaking slowly] Welcome to today's lesson.
+
+[speaking quickly] We have a lot of information to cover.
+
+[very slowly, with deliberate pauses] This... is... extremely important.
+```
+
+These are expressive instructions rather than guaranteed numerical speed multipliers.
+
+You can also use:
+
+```
+[slow, calm narration]
+```
+
+```
+[fast-paced energetic delivery]
+```
+
+```
+[measured, deliberate speech]
+```
+
+For consistent results, use a clear instruction rather than stacking several conflicting speed descriptions.
+
+## **3. Emotion tags: square brackets&#x20;**`[ ]`
+
+This is one of Fish Audio S2.1 Pro's most useful features.
+
+Unlike systems that require a fixed emotion parameter, Fish Audio S2.1 accepts natural-language descriptions inside square brackets.
+
+For example:
+
+```
+[angry] I told you not to do that!
+```
+
+The model interprets the instruction as a delivery direction. The bracketed word is not intended to be spoken aloud.
+
+**There is no requirement to use only a predefined list of emotions.** You can describe the emotion, intensity, vocal style and context in ordinary language.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://openrouter.ai\&sz=32)
+
+OpenRouter+2
+
+
+
+### **A. Basic emotions**
+
+## **Emotion reference**
+
+**[happy]**
+
+Happy
+
+**[sad]**
+
+Sad
+
+**[angry]**
+
+Angry
+
+**[excited]**
+
+Excited
+
+**[calm]**
+
+Calm
+
+**[nervous]**
+
+Nervous
+
+**[confident]**
+
+Confident
+
+**[surprised]**
+
+Surprised
+
+**[scared]**
+
+Scared
+
+**[worried]**
+
+Worried
+
+**[frustrated]**
+
+Frustrated
+
+**[empathetic]**
+
+Empathetic
+
+**[proud]**
+
+Proud
+
+**[relaxed]**
+
+Relaxed
+
+**[curious]**
+
+Curious
+
+**[sarcastic]**
+
+Sarcastic
+
+**[nostalgic]**
+
+Nostalgic
+
+**[determined]**
+
+Determined
+
+**[hopeful]**
+
+Hopeful
+
+**[bored]**
+
+Bored
+
+These are examples, not an exhaustive list.
+
+### **B. Vocal delivery and intensity**
+
+These tags influence how the voice sounds physically.
+
+| Tag                 | Intended effect     |
+| ------------------- | ------------------- |
+| `[whispering]`      | Whisper             |
+| `[shouting]`        | Shout               |
+| `[screaming]`       | Scream              |
+| `[soft tone]`       | Soft delivery       |
+| `[loud voice]`      | Louder delivery     |
+| `[breathy]`         | Breathier voice     |
+| `[hoarse]`          | Hoarse voice        |
+| `[emphasis]`        | Emphasized delivery |
+| `[speaking slowly]` | Slower delivery     |
+| `[picking up pace]` | Increasing pace     |
+| `[softly]`          | Speak softly        |
+| `[firmly]`          | Firm delivery       |
+
+### **C. More specific emotional descriptions**
+
+This is where the model becomes particularly flexible.
+
+You can combine descriptions to express nuanced emotions:
+
+```
+[quietly confident]
+```
+
+```
+[slightly disappointed]
+```
+
+```
+[cautiously optimistic]
+```
+
+```
+[angry but controlled]
+```
+
+```
+[deeply emotional, almost crying]
+```
+
+```
+[extremely excited and enthusiastic]
+```
+
+```
+[calm but authoritative]
+```
+
+```
+[serious, as if delivering important news]
+```
+
+```
+[slightly nervous, trying to remain confident]
+```
+
+These are free-form instructions, not fixed API enum values.
+
+### **D. Vocal effects and reactions**
+
+| Tag                 | Intended effect       |
+| ------------------- | --------------------- |
+| `[laughing]`        | Laughter              |
+| `[chuckling]`       | Quiet laughter        |
+| `[sighing]`         | Sigh                  |
+| `[groaning]`        | Groan                 |
+| `[panting]`         | Panting               |
+| `[gasping]`         | Gasp                  |
+| `[yawning]`         | Yawn                  |
+| `[snoring]`         | Snoring               |
+| `[clearing throat]` | Throat-clearing sound |
+| `[crying]`          | Crying-style delivery |
+| `[sobbing]`         | Sobbing               |
+| `[breathing]`       | Breathing effect      |
+
+### **E. Pauses and timing**
+
+| Tag                     | Intended effect     |
+| ----------------------- | ------------------- |
+| `[short pause]`         | Brief pause         |
+| `[long pause]`          | Longer pause        |
+| `[break]`               | Break               |
+| `[long-break]`          | Extended break      |
+| `[audience laughing]`   | Audience laughter   |
+| `[background laughter]` | Background laughter |
+
+For example:
+
+```
+Welcome to the presentation.
+
+[short pause]
+
+Today, we will discuss something important.
+
+[long pause]
+
+Let's begin.
+```
+
+[image](https://www.google.com/s2/favicons?domain=https://github.com\&sz=32)
+
+GitHub+1
+
+## **4. Combining emotion and delivery tags**
+
+You can combine multiple instructions in the same sentence.
+
+For example:
+
+```
+[whispering] [scared] Don't make a sound. Someone is nearby.
+```
+
+```
+[shouting] [angry] I WARNED YOU! This is your last chance!
+```
+
+```
+[soft tone] [sad] I really thought things would be different.
+```
+
+```
+[speaking slowly] [serious] You need to understand what happened next.
+```
+
+A useful rule is to use one primary emotion and, when necessary, one delivery instruction. Avoid stacking several competing emotions.
+
+### **Changing emotions in the middle of a passage**
+
+You do not need to assign one emotion to an entire audio generation.
+
+You can change delivery at different points:
+
+```
+[calm] Everything seemed normal that morning.
+
+[curious] But then, something strange happened.
+
+[surprised] Nobody expected what came next!
+
+[serious] This changed everything.
+
+[whispering] And nobody knew the truth.
+```
+
+The model can interpret these as changing performance directions.
+
+You can also put a tag in the middle of a sentence:
+
+```
+I thought everything was fine, but [suddenly angry] why would you do that?
+```
+
+[image](https://www.google.com/s2/favicons?domain=https://github.com\&sz=32)
+
+GitHub+1
+
+## **5. Recommended complete OpenRouter request**
+
+Here is an example combining voice selection, normal speed and emotional delivery.
+
+```
+{
+  "model": "fish-audio/s2.1-pro-free:free",
+  "input": "[calm] Welcome to today's presentation. [curious] Have you ever wondered how artificial intelligence works? [excited] Today, we are going to find out!",
+  "voice": "bf322df2096a46f18c579d0baa36f41d",
+  "response_format": "mp3",
+  "speed": 1.0
+}
+```
+
+Remember that `speed: 1.0` is the baseline; do not assume non-default speed values work with this model without testing.
+
+## **6. My recommended practices**
+
+For natural and expressive narration:
+
+1. Select one consistent voice ID.
+2. Start with normal speech speed.
+3. Use square-bracket instructions before the relevant sentence.
+4. Use one primary emotion per sentence.
+5. Add vocal delivery instructions only when necessary.
+6. Use pauses to separate important ideas.
+7. Avoid excessive emotional instructions.
+8. Test different voices because the same instruction can sound different depending on the voice.
+
+## **7. Quick reference**
+
+## **Fish Audio S2.1 Pro cheat sheet**
+
+**Voice**
+
+`voice: "YOUR_VOICE_ID"`
+
+**Normal speed**
+
+`speed: 1.0`
+
+**Emotion**
+
+`[angry]`
+
+**Speech delivery**
+
+`[whispering]`
+
+**Pacing**
+
+`[speaking slowly]`
+
+**Combined**
+
+`[whispering] [scared] Don't move.`
+
+**Custom emotion**
+
+`[calm but authoritative] Listen carefully.`
+
+Square-bracket instructions belong inside the input text. Voice and speed are separate API fields.
+
+### **Official references**
+
+- [OpenRouter – Text-to-Speech API](https://openrouter.ai/docs/guides/overview/multimodal/tts?utm_source=chatgpt.com)
+- [OpenRouter – S2.1 Pro Free](https://openrouter.ai/fish-audio/s2.1-pro-free:free?utm_source=chatgpt.com)
+- [Fish Audio – Voice selection and API examples](https://github.com/fishaudio/docs/blob/main/developer-guide/getting-started/quickstart.mdx?utm_source=chatgpt.com)
+- [OpenRouter – TTS model collection](https://openrouter.ai/collections/text-to-speech-models?utm_source=chatgpt.com)
+- [Fish Audio emotion-tag examples](https://github.com/Comfy-Org/workflow_templates/blob/main/templates/api_fishaudio_text_to_speech.json?utm_source=chatgpt.com)
+
+**One important conclusion:** Fish Audio S2.1 Pro's square-bracket emotion system is open-ended. You are not restricted to `[angry]`, `[happy]` or `[sad]`. Descriptive instructions such as `[angry but trying to remain calm]` and `[excited, speaking rapidly]` are also valid ways to direct its performance.
+
+6. We'll have to bring a lot of changes to the colour. currently, everything is green coloured. but we'er going to change it.
+in the settings section, remove the 'Neon Black' and 'Minimalist Light' options from the 'Account' section. instead, add a section 'Theme and Colour' in between the sections 'Account' and 'AI Configuration'. when this section will be clicked, the right window will two sections. the first section will be two buttons to choose from, 'Minimalist Light' and 'Neon Black' the second section will show side by side 7 coloured button in the given order: White [if Neon Black is selected] / Black [if Minimalist Light is selected], Violet, Indigo, Blue, Green, Yellow, Orange, Red. when a colour will be selected, a dropdown will open, and that dropdown will contain a colour palette of that colour from the lightest to the darkest shade of it. the colour choosen by the user will change the green colour wherever used.

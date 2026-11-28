@@ -3,12 +3,21 @@
 
 :root {
   --aura-color: #39ff14;
+  --accent-color: #10b981;
+  --accent-hover: #34d399;
+  --accent-contrast: #ffffff;
+  --accent-text: #34d399;
+  --accent-border: rgba(16, 185, 129, 0.45);
+  --accent-border-strong: #047857;
+  --accent-soft: rgba(16, 185, 129, 0.16);
+  --accent-soft-strong: rgba(16, 185, 129, 0.28);
 }
 
 /* Added Minimalist Light theme variables, background, typography, and scrollbar definitions [Commented by: Google AI Studio on 20/10/2026 11:27 PM] */
 html[data-theme="light"],
 .theme-light {
   --aura-color: #059669;
+  --accent-text: #047857;
 }
 
 html[data-theme="light"] body,
@@ -104,14 +113,14 @@ html[data-theme="light"] pre code.hljs,
   border: 1px solid #e2e8f0;
 }
 
-/* Added green track and white circular thumb styles for the 3-stop OpenRouter Effort slider [Commented by: Google AI Studio at 22/11/2026 11:51] */
+/* Dynamic accent-colored 3-stop OpenRouter Effort slider powered by user-chosen Theme & Colour [Commented by: Google AI Studio on 28/11/2026 06:48] */
 input[type="range"].effort-slider {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
   height: 6px;
   border-radius: 9999px;
-  background: #10b981;
+  background: var(--accent-color);
   outline: none;
   cursor: pointer;
 }
@@ -119,7 +128,7 @@ input[type="range"].effort-slider {
 input[type="range"].effort-slider::-webkit-slider-runnable-track {
   height: 6px;
   border-radius: 9999px;
-  background: #10b981;
+  background: var(--accent-color);
 }
 
 input[type="range"].effort-slider::-webkit-slider-thumb {
@@ -129,7 +138,7 @@ input[type="range"].effort-slider::-webkit-slider-thumb {
   height: 15px;
   border-radius: 9999px;
   background: #ffffff;
-  border: 2px solid #047857;
+  border: 2px solid var(--accent-border-strong);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
   margin-top: -4.5px;
   cursor: pointer;
@@ -143,7 +152,7 @@ input[type="range"].effort-slider::-webkit-slider-thumb:hover {
 input[type="range"].effort-slider::-moz-range-track {
   height: 6px;
   border-radius: 9999px;
-  background: #10b981;
+  background: var(--accent-color);
 }
 
 input[type="range"].effort-slider::-moz-range-thumb {
@@ -151,9 +160,59 @@ input[type="range"].effort-slider::-moz-range-thumb {
   height: 15px;
   border-radius: 9999px;
   background: #ffffff;
-  border: 2px solid #047857;
+  border: 2px solid var(--accent-border-strong);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
   cursor: pointer;
   transition: transform 0.12s ease;
+}
+
+/* Global accent helper classes replacing hardcoded emerald/green theme utilities across all components [Commented by: Google AI Studio on 28/11/2026 06:48] */
+.accent-btn {
+  background-color: var(--accent-color);
+  color: var(--accent-contrast);
+}
+
+.accent-btn:hover:not(:disabled) {
+  background-color: var(--accent-hover);
+}
+
+.accent-solid-bg {
+  background-color: var(--accent-color);
+}
+
+.accent-text {
+  color: var(--accent-text);
+}
+
+.accent-hover-text:hover {
+  color: var(--accent-text);
+}
+
+.accent-border {
+  border-color: var(--accent-color);
+}
+
+.accent-border-soft {
+  border-color: var(--accent-border);
+}
+
+.accent-focus-border:focus {
+  border-color: var(--accent-color);
+}
+
+.accent-soft-box {
+  background-color: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent-text);
+}
+
+.accent-highlight-mark {
+  background-color: var(--accent-soft-strong);
+  color: var(--accent-text);
+}
+
+.accent-spinner {
+  border-color: var(--accent-color);
+  border-top-color: transparent;
 }
 

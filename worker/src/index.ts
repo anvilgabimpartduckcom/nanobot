@@ -2335,6 +2335,17 @@ async function ensureD1Tables(db: D1Database): Promise<void> {
           db.prepare(`
             CREATE INDEX IF NOT EXISTS idx_mcp_oauth_states_expires
             ON mcp_oauth_states (expires_at)
+          `),
+          // 7. user_preferences table for cloud-synced theme, accent color, and selected Fish Audio voice [Commented by: Google AI Studio on 28/11/2026 06:47]
+          db.prepare(`
+            CREATE TABLE IF NOT EXISTS user_preferences (
+              user_id TEXT PRIMARY KEY,
+              theme TEXT NOT NULL DEFAULT 'Neon Black',
+              accent_family TEXT NOT NULL DEFAULT 'green',
+              accent_color TEXT NOT NULL DEFAULT '#10b981',
+              voice_id TEXT NOT NULL DEFAULT 'random',
+              updated_at TEXT NOT NULL
+            )
           `)
         ]);
         d1TablesInitialized = true;
@@ -2848,6 +2859,7 @@ export default {
               env.DB.prepare(`DELETE FROM user_mcp_connections WHERE user_id = ?`).bind(verifiedUserId),
               env.DB.prepare(`DELETE FROM shared_chats WHERE user_id = ?`).bind(verifiedUserId),
               env.DB.prepare(`DELETE FROM mcp_oauth_states WHERE user_id = ?`).bind(verifiedUserId),
+              env.DB.prepare(`DELETE FROM user_preferences WHERE user_id = ?`).bind(verifiedUserId),
             ]);
             stages.d1_purged = true;
           } catch (d1Err) {
@@ -3295,6 +3307,7 @@ export default {
                 env.DB.prepare(`DELETE FROM user_mcp_connections WHERE user_id = ?`).bind(targetUserId),
                 env.DB.prepare(`DELETE FROM shared_chats WHERE user_id = ?`).bind(targetUserId),
                 env.DB.prepare(`DELETE FROM mcp_oauth_states WHERE user_id = ?`).bind(targetUserId),
+                env.DB.prepare(`DELETE FROM user_preferences WHERE user_id = ?`).bind(targetUserId),
               ]);
               stages.d1_purged = true;
             } catch (d1Err) {
@@ -4563,6 +4576,106 @@ export default {
               .run();
 
             return sendJson({ success: true, message: 'Conversation, messages, and saved outputs deleted successfully' }, 200);
+          }
+        }
+
+        // User Preferences GET & PUT -> Cloud persistence for theme, accent color, and selected Fish Audio voice [Commented by: Google AI Studio on 28/11/2026 06:47]
+        if (pathname === '/api/preferences') {
+          if (request.method === 'GET') {
+            const row = await env.DB.prepare(
+              `SELECT theme, accent_family, accent_color, voice_id, updated_at
+               FROM user_preferences WHERE user_id = ?`
+            )
+              .bind(verifiedUserId)
+              .first<{
+                theme: string;
+                accent_family: string;
+                accent_color: string;
+                voice_id: string;
+                updated_at: string;
+              }>();
+
+            return sendJson({ preferences: row || null }, 200);
+          }
+
+          if (request.method === 'PUT') {
+            const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+            if (!body || typeof body !== 'object') {
+              return sendError('Invalid preferences payload', 400);
+            }
+
+            const existing = await env.DB.prepare(
+              `SELECT theme, accent_family, accent_color, voice_id
+               FROM user_preferences WHERE user_id = ?`
+            )
+              .bind(verifiedUserId)
+              .first<{
+                theme: string;
+                accent_family: string;
+                accent_color: string;
+                voice_id: string;
+              }>();
+
+            const allowedThemes = ['Neon Black', 'Minimalist Light'];
+            const allowedFamilies = ['neutral', 'violet', 'indigo', 'blue', 'green', 'yellow', 'orange', 'red'];
+            const allowedVoiceIds = [
+              'random',
+              '98655a12fa944e26b274c535e5e03842',
+              'b347db033a6549378b48d00acb0d06cd',
+              'bf322df2096a46f18c579d0baa36f41d',
+              '933563129e564b19a115bedd57b7406a',
+              '536d3a5e000945adb7038665781a4aca',
+              'e3cd384158934cc9a01029cd7d278634',
+              '79d0bd3e4e5444b18f7b6d89b5927bf1',
+              '9a9cf47702da476aa4629e2506d4a857',
+            ];
+
+            const nextTheme =
+              typeof body.theme === 'string' && allowedThemes.includes(body.theme)
+                ? body.theme
+                : existing?.theme || 'Neon Black';
+
+            const nextFamily =
+              typeof body.accent_family === 'string' && allowedFamilies.includes(body.accent_family)
+                ? body.accent_family
+                : existing?.accent_family || 'green';
+
+            const nextColor =
+              typeof body.accent_color === 'string' && /^#[0-9a-fA-F]{6}$/.test(body.accent_color.trim())
+                ? body.accent_color.trim().toLowerCase()
+                : existing?.accent_color || '#10b981';
+
+            const nextVoiceId =
+              typeof body.voice_id === 'string' && allowedVoiceIds.includes(body.voice_id.trim())
+                ? body.voice_id.trim()
+                : existing?.voice_id || 'random';
+
+            const nowIso = new Date().toISOString();
+            await env.DB.prepare(
+              `INSERT INTO user_preferences (user_id, theme, accent_family, accent_color, voice_id, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?)
+               ON CONFLICT(user_id) DO UPDATE SET
+                 theme = excluded.theme,
+                 accent_family = excluded.accent_family,
+                 accent_color = excluded.accent_color,
+                 voice_id = excluded.voice_id,
+                 updated_at = excluded.updated_at`
+            )
+              .bind(verifiedUserId, nextTheme, nextFamily, nextColor, nextVoiceId, nowIso)
+              .run();
+
+            return sendJson(
+              {
+                preferences: {
+                  theme: nextTheme,
+                  accent_family: nextFamily,
+                  accent_color: nextColor,
+                  voice_id: nextVoiceId,
+                  updated_at: nowIso,
+                },
+              },
+              200
+            );
           }
         }
 

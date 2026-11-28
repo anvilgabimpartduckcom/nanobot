@@ -11,11 +11,11 @@
   status = 200
 
 # Security and cache headers
-# Refined Stage 2 Content-Security-Policy-Report-Only header with style-src-elem/style-src-attr, frame-src 'none', and worker-src 'none' [Commented by: Google AI Studio at 23/11/2026 23:13]
+# Refined Stage 2 Content-Security-Policy-Report-Only header with media-src blob:/data: for Fish Audio TTS playback [Commented by: Google AI Studio on 28/11/2026 06:47]
 [[headers]]
   for = "/*"
   [headers.values]
     X-Frame-Options = "SAMEORIGIN"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Content-Security-Policy-Report-Only = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; style-src-elem 'self'; style-src-attr 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https://www.cloudflare.com https://github.githubassets.com https://www.netlify.com https://supabase.com https://ssl.gstatic.com https://www.firecrawl.dev https://tavily.com https://www.notion.so https://a.slack-edge.com; connect-src 'self' https://kyluvwlbdtovuwpmakep.supabase.co https://nanobot-api.mud-amiable-tweed.workers.dev https://openrouter.ai https://api.tavily.com; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self';"
+    Content-Security-Policy-Report-Only = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; style-src-elem 'self'; style-src-attr 'unsafe-inline'; font-src 'self' data:; media-src 'self' blob: data:; img-src 'self' data: https://www.cloudflare.com https://github.githubassets.com https://www.netlify.com https://supabase.com https://ssl.gstatic.com https://www.firecrawl.dev https://tavily.com https://www.notion.so https://a.slack-edge.com; connect-src 'self' https://kyluvwlbdtovuwpmakep.supabase.co https://nanobot-api.mud-amiable-tweed.workers.dev https://openrouter.ai https://api.tavily.com; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self';"
